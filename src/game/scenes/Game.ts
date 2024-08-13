@@ -40,7 +40,7 @@ export class Game extends Scene
             const baseX = (block.x - 1) * blockWidth + OFFSET_X, baseY = (block.y - 1) * blockHeight + OFFSET_Y
             graph.lineStyle(2, 0xCCCCCC);
 
-            if ( ! block.enter) {
+            if ( ! block.enter || block.fog === 1) {
                 graph.fillRect(baseX, baseY, blockWidth, blockHeight).strokeRect(baseX, baseY, blockWidth, blockHeight)
                 continue;
             }

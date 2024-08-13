@@ -60,10 +60,12 @@ class Rect {
 
 export class DungeonMap {
   private _map: integer[];
+  private _mapFog: integer[];
   private _width: integer;
   private _height: integer;
 
   private _minRoomLength: integer = 3;
+  private _viewRange: integer = 3;
 
   private _rooms: Rect[];
   private _roomsWithCorridors: {
@@ -77,14 +79,17 @@ export class DungeonMap {
     direction: integer,
   };
 
-  constructor (width: integer, height: integer) {
+  constructor (width: integer, height: integer, viewRange = 3) {
     this._map = [];
+    this._mapFog = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
     this._width = width + 2;
     this._height = height + 2;
+    this._viewRange = viewRange;
     for (let i = 0; i < this._width * this._height; i++) {
       this._map[i] = -1;
+      this._mapFog[i] = 1;
     }
     this._player = {
       x: 0,
@@ -101,6 +106,18 @@ export class DungeonMap {
   public getAt(x: integer, y: integer): integer {
     const pos = this._calcPos(x, y);
     return pos === undefined ? -1 : this._map[pos];
+  }
+
+  public getFogAt(x: integer, y: integer): integer {
+    const pos = this._calcPos(x, y);
+    return pos === undefined ? 1 : this._mapFog[pos];
+  }
+
+  public setFogAt(x: integer, y: integer, value: integer): void {
+    const pos = this._calcPos(x, y);
+    if (pos !== undefined) {
+      this._mapFog[pos] = value;
+    }
   }
 
   public setAt(x: integer, y: integer, value: integer): void {
@@ -643,6 +660,121 @@ export class DungeonMap {
     this.setPlayerRandom();
   }
 
+  public clearFogWithinPlayer (): void {
+    const direction = this._player.direction;
+
+    let x = this._player.x, y = this._player.y;
+    for (let i = 0; i < this._viewRange; i++) {
+      this.setFogAt(x, y, 0);
+      const value = this.getAt(x, y);
+
+      switch (direction) {
+        case 0:
+          if ( ! (value & 2)) {
+            this.setFogAt(x, y + 1, 0);
+            if ( ! (this.getAt(x, y + 1) & 1)) {
+              this.setFogAt(x + 1, y + 1, 0);
+            }
+          } else if (value & 32) {
+            this.setFogAt(x, y + 1, 0);
+          }
+          if ( ! (value & 8)) {
+            this.setFogAt(x, y - 1, 0);
+            if ( ! (this.getAt(x, y - 1) & 1)) {
+              this.setFogAt(x + 1, y - 1, 0);
+            }
+          } else if (value & 128) {
+            this.setFogAt(x, y - 1, 0);
+          }
+          x += 1;
+          if (value & 1) {
+            if (value & 16) {
+              this.setFogAt(x, y, 0);
+            }
+            return;
+          }
+          break;
+        case 1:
+          if ( ! (value & 4)) {
+            this.setFogAt(x - 1, y, 0);
+            if ( ! (this.getAt(x - 1, y) & 2)) {
+              this.setFogAt(x - 1, y + 1, 0);
+            }
+          } else if (value & 64) {
+            this.setFogAt(x - 1, y, 0);
+          }
+          if ( ! (value & 1)) {
+            this.setFogAt(x + 1, y, 0);
+            if ( ! (this.getAt(x + 1, y) & 2)) {
+              this.setFogAt(x + 1, y + 1, 0);
+            }
+          } else if (value & 16) {
+            this.setFogAt(x + 1, y, 0);
+          }
+          y += 1;
+          if (value & 2) {
+            if (value & 32) {
+              this.setFogAt(x, y, 0);
+            }
+            return;
+          }
+          break;
+        case 2:
+          if ( ! (value & 8)) {
+            this.setFogAt(x, y - 1, 0);
+            if ( ! (this.getAt(x, y - 1) & 4)) {
+              this.setFogAt(x - 1, y - 1, 0);
+            }
+          } else if (value & 128) {
+            this.setFogAt(x, y - 1, 0);
+          }
+          if ( ! (value & 2)) {
+            this.setFogAt(x, y + 1, 0);
+            if (! (this.getAt(x, y + 1) & 4)) {
+              this.setFogAt(x - 1, y + 1, 0);
+            }
+          } else if (value & 32)  {
+            this.setFogAt(x, y + 1, 0);
+          }
+          x -= 1;
+          if (value & 4) {
+            if (value & 64) {
+              this.setFogAt(x, y, 0);
+            }
+            return;
+          }
+          break;
+        case 3:
+          if ( ! (value & 1)) {
+            this.setFogAt(x + 1, y, 0);
+            if ( ! (this.getAt(x + 1, y) & 8)) {
+              this.setFogAt(x + 1, y - 1, 0);
+            }
+          } else if (value & 16) {
+            this.setFogAt(x + 1, y, 0);
+          }
+          if ( ! (value & 4)) {
+            this.setFogAt(x - 1, y, 0);
+            if (  ! (this.getAt(x - 1, y) & 8)) {
+              this.setFogAt(x - 1, y - 1, 0);
+            }
+          } else if (value & 64) {
+            this.setFogAt(x - 1, y, 0);
+          }
+          y -= 1;
+          if (value & 8) {
+            if (value & 128) {
+              this.setFogAt(x, y, 0);
+            }
+            return;
+          }
+          break;
+      }
+      
+      this.setFogAt(x, y, 0);
+    }
+  }
+
   /**
    * setPlayerRandom
    */
@@ -662,7 +794,7 @@ export class DungeonMap {
       this._player.x = x;
       this._player.y = y;
       this._player.direction = getRandomInt(0, 4);
-      console.log(this._player)
+      this.clearFogWithinPlayer();
       return true;
     }
   }
@@ -691,6 +823,7 @@ export class DungeonMap {
     }
     
     this._player.direction = direction;
+    this.clearFogWithinPlayer();
     return 1;
   }
 
@@ -709,18 +842,21 @@ export class DungeonMap {
   public turnRightPlayer(): boolean {
     const now = this._player.direction;
     this._player.direction = (now + 1) % 4;
+    this.clearFogWithinPlayer();
     return true;
   }
 
   public turnLeftPlayer(): boolean {
     const now = this._player.direction;
     this._player.direction = (now + 3) % 4;
+    this.clearFogWithinPlayer();
     return true;
   }
 
   public turnBackPlayer(): boolean {
     const now = this._player.direction;
     this._player.direction = (now + 2) % 4;
+    this.clearFogWithinPlayer();
     return true;
   }
 
@@ -760,6 +896,7 @@ export class DungeonMap {
           x,
           y,
           wallState,
+          fog: this.getFogAt(x, y),
           enter: value !== -1,
         }
       }
