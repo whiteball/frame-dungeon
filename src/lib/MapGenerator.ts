@@ -58,6 +58,16 @@ class Rect {
   }
 }
 
+type ObjectEvent = (dungeon: DungeonMap, object: MapObject) => void;
+export class MapObject {
+  public mark: string = 'o';
+  public color: integer = 0xFFFFFF;
+  public alpha: integer = 1;
+  public event: null | ObjectEvent = null;
+  public x: integer = -1;
+  public y: integer = -1;
+}
+
 export class DungeonMap {
   private _map: integer[];
   private _mapFog: integer[];
@@ -79,14 +89,21 @@ export class DungeonMap {
     direction: integer,
   };
 
+  private _objects: MapObject[];
+
   constructor (width: integer, height: integer, viewRange = 3) {
+    this._width = width + 2;
+    this._height = height + 2;
+    this._viewRange = viewRange;
+    this.init();
+  }
+
+  public init () {
     this._map = [];
     this._mapFog = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
-    this._width = width + 2;
-    this._height = height + 2;
-    this._viewRange = viewRange;
+    this._objects = [];
     for (let i = 0; i < this._width * this._height; i++) {
       this._map[i] = -1;
       this._mapFog[i] = 1;
@@ -156,7 +173,6 @@ export class DungeonMap {
     }
     
     const minRoomLength = this._minRoomLength;
-    console.log(minRoomLength)
 
     const hMax = Math.floor((this._height - 3) / (minRoomLength + 1))
     const vMax = Math.floor((this._width - 3) / (minRoomLength + 1))
@@ -775,37 +791,56 @@ export class DungeonMap {
     }
   }
 
-  /**
-   * setPlayerRandom
-   */
-  public setPlayerRandom() {
+  public getRandomPos(withoutCorridor: boolean = false): integer[] {
     let x: integer = 0, y: integer = 0, pos = -1;
     const limit = 1000;
     for (let i = 0; i < limit && pos === -1; i++) {
       x = getRandomInt(1, this._width - 1);
       y = getRandomInt(1, this._height - 1);
       pos = this.getAt(x, y);
+      if (withoutCorridor) {
+        for (const roomWithCorridor of this._roomsWithCorridors) {
+          for (const corridor of roomWithCorridor.corridors) {
+            if (corridor.x1 <= x && x <= corridor.x2 && corridor.y1 <= y && y <= corridor.y2) {
+              // 通路内をキャンセル
+              pos = -1;
+            }
+          }
+        }
+      }
     }
 
     if (pos === -1) {
+      console.error('fault random pos');
+      return [];
+    } else {
+      return [x, y];
+    }
+  }
+
+  /**
+   * setPlayerRandom
+   */
+  public setPlayerRandom() {
+    const pos = this.getRandomPos();
+    if (pos.length === 0) {
       console.error('fault player set');
       return false;
     } else {
-      this._player.x = x;
-      this._player.y = y;
+      this._player.x = pos[0];
+      this._player.y = pos[1];
       this._player.direction = getRandomInt(0, 4);
       this.clearFogWithinPlayer();
       return true;
     }
   }
 
-  public movePlayer(direction: integer = -1): integer {
+  public movePlayer(direction: integer): integer {
     const value = this.getAt(this._player.x, this._player.y)
     if (value & (2 ** direction)) {
       if ( ! (value & (2 ** (direction + 4)))) {
         return 0;
       }
-      
     }
     switch (direction) {
       case 0:
@@ -824,6 +859,9 @@ export class DungeonMap {
     
     this._player.direction = direction;
     this.clearFogWithinPlayer();
+    for (const object of this._objects) {
+      object.event && object.event(this, object);
+    }
     return 1;
   }
 
@@ -901,6 +939,30 @@ export class DungeonMap {
         }
       }
     }
-    
+  }
+
+  public getObjects() {
+    return this._objects;
+  }
+
+  public getObject(x: integer, y: integer) {
+    const list: MapObject[] = [];
+    for (const object of this._objects) {
+      if (object.x === x && object.y === y) {
+        list.push(object)
+      }
+    }
+    return list;
+  }
+
+  public addObject(x: integer, y: integer, mark: string, event: ObjectEvent, color: integer = 0xFFFFFF, alpha: integer = 1) {
+    const obj = new MapObject()
+    obj.x = x;
+    obj.y = y;
+    obj.mark = mark;
+    obj.event = event;
+    obj.color = color;
+    obj.alpha = alpha;
+    this._objects.push(obj)
   }
 }

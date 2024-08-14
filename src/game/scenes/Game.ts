@@ -1,6 +1,6 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
-import { DungeonMap } from '../../lib/MapGenerator';
+import { DungeonMap, MapObject } from '../../lib/MapGenerator';
 
 export class Game extends Scene
 {
@@ -17,6 +17,7 @@ export class Game extends Scene
     };
     dungeon: DungeonMap;
     graph: Phaser.GameObjects.Graphics;
+    floor: integer = 1;
 
     constructor ()
     {
@@ -35,6 +36,7 @@ export class Game extends Scene
         const blockWidth = (WIDTH / dun.getWidth()),blockHeight = (HEIGHT / dun.getHeight());
         graph.fillRectShape(rect);
 
+        // マス描画
         graph.fillStyle(0xCCCCCC);
         for (const block of dun.mapIterator()) {
             const baseX = (block.x - 1) * blockWidth + OFFSET_X, baseY = (block.y - 1) * blockHeight + OFFSET_Y
@@ -75,11 +77,25 @@ export class Game extends Scene
                 graph.lineBetween(baseX, baseY, baseX + blockWidth, baseY)
                 graph.lineBetween(baseX + blockWidth / 2, baseY, baseX + blockWidth / 2, baseY + blockHeight / 6)
             }
+
+            for (const object of dun.getObject(block.x, block.y)) {
+                switch(object.mark) {
+                    case 'o':
+                    default:
+                        graph.fillStyle(object.color, object.alpha);
+                        graph.lineStyle(1, 0xFFFFFF);
+                        graph.fillCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3);
+                        graph.strokeCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3);
+                        graph.fillStyle(0xCCCCCC);
+                        break;
+                }
+            }
         }
 
         graph.lineStyle(4, 0xFFFFFF);
         graph.strokeRectShape(rect);
 
+        // プレイヤー描画
         graph.lineStyle(1, 0xFFFFFF);
         graph.fillStyle(0xFFFFFF);
         const playerPos = dun.getPlayerPos();
@@ -118,7 +134,7 @@ export class Game extends Scene
         graph.fillStyle(0x0);
 
         const player = dun.getPlayerPos();
-        const blockList: integer[][] = [];
+        const blockList: integer[][][] = [];
         const RANGE = 4, RANGE_SIDE = 3;
 
         const rotateRight = (value: integer, shiftAmount: integer) => {
@@ -130,40 +146,40 @@ export class Game extends Scene
         switch(player.direction) {
             case 0:
                 for (let i = RANGE; i >= 0; i--) {
-                    const buf = [rotateRight(dun.getAt(player.x + i, player.y), 1)];
+                    const buf = [[rotateRight(dun.getAt(player.x + i, player.y), 1), player.x + i, player.y]];
                     for (let j = 1; j <= RANGE_SIDE; j++) {
-                        buf.push(rotateRight(dun.getAt(player.x + i, player.y + j), 1));
-                        buf.push(rotateRight(dun.getAt(player.x + i, player.y - j), 1));
+                        buf.push([rotateRight(dun.getAt(player.x + i, player.y + j), 1), player.x + i, player.y + j]);
+                        buf.push([rotateRight(dun.getAt(player.x + i, player.y - j), 1), player.x + i, player.y - j]);
                     }
                     blockList.push(buf);
                 }
                 break;
             case 1:
                 for (let i = RANGE; i >= 0; i--) {
-                    const buf = [rotateRight(dun.getAt(player.x, player.y + i), 2)];
+                    const buf = [[rotateRight(dun.getAt(player.x, player.y + i), 2), player.x, player.y + i]];
                     for (let j = 1; j <= RANGE_SIDE; j++) {
-                        buf.push(rotateRight(dun.getAt(player.x - j, player.y + i), 2));
-                        buf.push(rotateRight(dun.getAt(player.x + j, player.y + i), 2));
+                        buf.push([rotateRight(dun.getAt(player.x - j, player.y + i), 2), player.x - j, player.y + i]);
+                        buf.push([rotateRight(dun.getAt(player.x + j, player.y + i), 2), player.x + j, player.y + i]);
                     }
                     blockList.push(buf);
                 }
                 break;
             case 2:
                 for (let i = RANGE; i >= 0; i--) {
-                    const buf = [rotateRight(dun.getAt(player.x - i, player.y), 3)];
+                    const buf = [[rotateRight(dun.getAt(player.x - i, player.y), 3), player.x - i, player.y]];
                     for (let j = 1; j <= RANGE_SIDE; j++) {
-                        buf.push(rotateRight(dun.getAt(player.x - i, player.y - j), 3));
-                        buf.push(rotateRight(dun.getAt(player.x - i, player.y + j), 3));
+                        buf.push([rotateRight(dun.getAt(player.x - i, player.y - j), 3), player.x - i, player.y - j]);
+                        buf.push([rotateRight(dun.getAt(player.x - i, player.y + j), 3), player.x - i, player.y + j]);
                     }
                     blockList.push(buf);
                 }
                 break;
             case 3:
                 for (let i = RANGE; i >= 0; i--) {
-                    const buf = [dun.getAt(player.x, player.y - i)];
+                    const buf = [[dun.getAt(player.x, player.y - i), player.x, player.y - i]];
                     for (let j = 1; j <= RANGE_SIDE; j++) {
-                        buf.push(dun.getAt(player.x + j, player.y - i));
-                        buf.push(dun.getAt(player.x - j, player.y - i));
+                        buf.push([dun.getAt(player.x + j, player.y - i), player.x + j, player.y - i]);
+                        buf.push([dun.getAt(player.x - j, player.y - i), player.x - j, player.y - i]);
                     }
                     blockList.push(buf);
                 }
@@ -180,36 +196,40 @@ export class Game extends Scene
 
             const slope = (y1 - y2) / (x1 - x2);
             if (x1 - x2 < 0) {
-                if (y1 - y2 < 0){
+                if (y1 - y2 < 0) {
                     // 左上
                     if ((slope * (frame.left - x2) + y2) > frame.top) {
                         return frame.left;
                     } else {
                         return (1 / slope * (frame.top - y2) + x2);
                     }
-                } else {
+                } else if (y1 - y2 > 0) {
                     // 左下
                     if ((slope * (frame.left - x2) + y2) < frame.bottom) {
                         return frame.left;
                     } else {
                         return (1 / slope * (frame.bottom - y2) + x2);
                     }
+                } else {
+                    return frame.left
                 }
             } else {
-                if (y1 - y2 < 0){
+                if (y1 - y2 < 0) {
                     // 右上
                     if ((slope * (frame.right - x2) + y2) > frame.top) {
                         return frame.right;
                     } else {
                         return (1 / slope * (frame.top - y2) + x2);
                     }
-                } else {
+                } else if (y1 - y2 > 0) {
                     // 右下
                     if ((slope * (frame.right - x2) + y2) < frame.bottom) {
                         return frame.right;
                     } else {
                         return (1 / slope * (frame.bottom - y2) + x2);
                     }
+                } else {
+                    return frame.right
                 }
             }
         }
@@ -220,36 +240,50 @@ export class Game extends Scene
 
             const slope = (y1 - y2) / (x1 - x2);
             if (x1 - x2 < 0) {
-                if (y1 - y2 < 0){
+                if (y1 - y2 < 0) {
                     // 左上
                     if ((slope * (frame.left - x2) + y2) > frame.top) {
                         return (slope * (frame.left - x2) + y2);
                     } else {
                         return frame.top;
                     }
-                } else {
+                } else if (y1 - y2 > 0) {
                     // 左下
                     if ((slope * (frame.left - x2) + y2) < frame.bottom) {
                         return (slope * (frame.left - x2) + y2);
                     } else {
                         return frame.bottom;
                     }
+                } else {
+                    if (y2 < frame.top) {
+                        return frame.top;
+                    } else if (y2 > frame.bottom) {
+                        return frame.bottom;
+                    }
+                    return y2;
                 }
             } else {
-                if (y1 - y2 < 0){
+                if (y1 - y2 < 0) {
                     // 右上
                     if ((slope * (frame.right - x2) + y2) > frame.top) {
                         return (slope * (frame.right - x2) + y2);
                     } else {
                         return frame.top;
                     }
-                } else {
+                } else if (y1 - y2 > 0) {
                     // 右下
                     if ((slope * (frame.right - x2) + y2) < frame.bottom) {
                         return (slope * (frame.right - x2) + y2);
                     } else {
                         return frame.bottom;
                     }
+                } else {
+                    if (y2 < frame.top) {
+                        return frame.top;
+                    } else if (y2 > frame.bottom) {
+                        return frame.bottom;
+                    }
+                    return y2;
                 }
             }
         }
@@ -257,30 +291,29 @@ export class Game extends Scene
             if ( ! frame.contains(upInsideX, upInsideY)){
                 return [];
             }
-            const upOutsideYCalc = frameCutForY(upOutsideX, upOutsideY, upInsideX, upInsideY);
+
+            const upOutsideYCalc = frameCutForY(upOutsideX, upOutsideY, upInsideX, upInsideY),
+            downOutsideXCalc = frameCutForX(downOutsideX, downOutsideY, downInsideX, downInsideY), downOutsideYCalc = frameCutForY(downOutsideX, downOutsideY, downInsideX, downInsideY);
+            const result = [
+                frameCutForX(upOutsideX, upOutsideY, upInsideX, upInsideY),
+                upOutsideYCalc,
+                upInsideX, upInsideY,
+                frameCutForX(downInsideX, downInsideY, upInsideX, upInsideY),
+                frameCutForY(downInsideX, downInsideY, upInsideX, upInsideY),
+                //downInsideX, downInsideY,
+                downOutsideXCalc,
+                downOutsideYCalc,
+            ];
             if (upOutsideYCalc === frame.top) {
-                return [
-                    upOutsideX < upInsideX ? frame.left : frame.right,
-                    frame.top,
-                    frameCutForX(upOutsideX, upOutsideY, upInsideX, upInsideY),
-                    upOutsideYCalc,
-                    upInsideX, upInsideY,
-                    downInsideX, downInsideY,
-                    frameCutForX(downOutsideX, downOutsideY, downInsideX, downInsideY),
-                    frameCutForY(downOutsideX, downOutsideY, downInsideX, downInsideY),
-                    downOutsideX < downInsideX ? frame.left : frame.right,
-                    frame.bottom,
-                ]
-            } else {
-                return [
-                    frameCutForX(upOutsideX, upOutsideY, upInsideX, upInsideY),
-                    upOutsideYCalc,
-                    upInsideX, upInsideY,
-                    downInsideX, downInsideY,
-                    frameCutForX(downOutsideX, downOutsideY, downInsideX, downInsideY),
-                    frameCutForY(downOutsideX, downOutsideY, downInsideX, downInsideY),
-                ]
+                result.unshift(upOutsideX < upInsideX ? frame.left : frame.right, frame.top);
             }
+            if (downOutsideYCalc === frame.bottom) {
+                result.push(downOutsideX < downInsideX ? frame.left : frame.right, frame.bottom);
+            } else if (downOutsideXCalc === frame.right || downOutsideXCalc === frame.left) {
+                result.push(downOutsideXCalc, frameCutForY(downOutsideX, downOutsideY, upOutsideX, upOutsideY));
+            }
+
+            return result;
         }
 
         // 背景ベース
@@ -311,12 +344,12 @@ export class Game extends Scene
                     farOutside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j + 0.5)) / targetDistance,
                     nearOutside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j + 0.5)) / targetDistanceNear;
                 // 右側
-                if (blockList[i][order] & 8) {
+                if (blockList[i][order][0] & 8) {
                     const pointList: number[] = preparePoints(CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + farOutside, CENTER_Y + far)
                     if (pointList.length > 0) {
                         const pol = new Phaser.Geom.Polygon(pointList);
                         graph.strokePoints(pol.points, true)
-                        if (blockList[i][order] & (8 << 4)) {
+                        if (blockList[i][order][0] & (8 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
                         } else {
                             graph.fillStyle(0xFFFFFF);
@@ -324,12 +357,12 @@ export class Game extends Scene
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if (blockList[i][order] & 1) {
+                if (blockList[i][order][0] & 1) {
                     const pointList: number[] = preparePoints(CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farOutside, CENTER_Y + far, CENTER_X + nearOutside, CENTER_Y + near)
                     if (pointList.length > 0) {
                         const pol = new Phaser.Geom.Polygon(pointList);
                         graph.strokePoints(pol.points, true)
-                        if (blockList[i][order] & (1 << 4)) {
+                        if (blockList[i][order][0] & (1 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
                         } else {
                             graph.fillStyle(0xFFFFFF);
@@ -337,12 +370,20 @@ export class Game extends Scene
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if (blockList[i][order] & 2) {
+                for (const object of dun.getObject(blockList[i][order][1], blockList[i][order][2])) {
+                    const pointList: number[] = preparePoints(CENTER_X + farOutside, CENTER_Y + far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
+                    if (pointList.length > 0) {
+                        const pol = new Phaser.Geom.Polygon(pointList);
+                        graph.fillStyle(object.color, object.alpha);
+                        graph.fillPoints(pol.points, true)
+                    }
+                }
+                if (blockList[i][order][0] & 2) {
                     const pointList: number[] = preparePoints(CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + nearInside, CENTER_Y - near, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
                     if (pointList.length > 0) {
                         const pol = new Phaser.Geom.Polygon(pointList);
                         graph.strokePoints(pol.points, true)
-                        if (blockList[i][order] & (2 << 4)) {
+                        if (blockList[i][order][0] & (2 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
                         } else {
                             graph.fillStyle(0xFFFFFF);
@@ -352,12 +393,12 @@ export class Game extends Scene
                 }
 
                 // 左側
-                if (blockList[i][order + 1] & 8) {
+                if (blockList[i][order + 1][0] & 8) {
                     const pointList: number[] = preparePoints(CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - farOutside, CENTER_Y + far)
                     if (pointList.length > 0) {
                         const pol = new Phaser.Geom.Polygon(pointList);
                         graph.strokePoints(pol.points, true)
-                        if (blockList[i][order + 1] & (8 << 4)) {
+                        if (blockList[i][order + 1][0] & (8 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
                         } else {
                             graph.fillStyle(0xFFFFFF);
@@ -365,12 +406,12 @@ export class Game extends Scene
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if (blockList[i][order + 1] & 4) {
+                if (blockList[i][order + 1][0] & 4) {
                     const pointList: number[] = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farOutside, CENTER_Y + far, CENTER_X - nearOutside, CENTER_Y + near)
                     if (pointList.length > 0) {
                         const pol = new Phaser.Geom.Polygon(pointList);
                         graph.strokePoints(pol.points, true)
-                        if (blockList[i][order + 1] & (4 << 4)) {
+                        if (blockList[i][order + 1][0] & (4 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
                         } else {
                             graph.fillStyle(0xFFFFFF);
@@ -378,12 +419,20 @@ export class Game extends Scene
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if (blockList[i][order + 1] & 2) {
+                for (const object of dun.getObject(blockList[i][order + 1][1], blockList[i][order + 1][2])) {
+                    const pointList: number[] = preparePoints(CENTER_X - farOutside, CENTER_Y + far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
+                    if (pointList.length > 0) {
+                        const pol = new Phaser.Geom.Polygon(pointList);
+                        graph.fillStyle(object.color, object.alpha);
+                        graph.fillPoints(pol.points, true)
+                    }
+                }
+                if (blockList[i][order + 1][0] & 2) {
                     const pointList: number[] = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - nearInside, CENTER_Y - near, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
                     if (pointList.length > 0) {
                         const pol = new Phaser.Geom.Polygon(pointList);
                         graph.strokePoints(pol.points, true)
-                        if (blockList[i][order + 1] & (2 << 4)) {
+                        if (blockList[i][order + 1][0] & (2 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
                         } else {
                             graph.fillStyle(0xFFFFFF);
@@ -395,12 +444,12 @@ export class Game extends Scene
             
 
             // 真ん中
-            if (blockList[i][0] & 1) {
+            if (blockList[i][0][0] & 1) {
                 const pointList: number[] = preparePoints(CENTER_X + near, CENTER_Y - near, CENTER_X + far, CENTER_Y - far, CENTER_X + far, CENTER_Y + far, CENTER_X + near, CENTER_Y + near);
                 if (pointList.length > 0) {
                     const pol = new Phaser.Geom.Polygon(pointList);
                     graph.strokePoints(pol.points, true)
-                    if (blockList[i][0] & (1 << 4)) {
+                    if (blockList[i][0][0] & (1 << 4)) {
                         graph.fillStyle(0xFFFFFF, 0.5);
                     } else {
                         graph.fillStyle(0xFFFFFF);
@@ -408,12 +457,12 @@ export class Game extends Scene
                     graph.fillPoints(pol.points, true)
                 }
             }
-            if (blockList[i][0] & 4) {
+            if (blockList[i][0][0] & 4) {
                 const pointList: number[] = preparePoints(CENTER_X - near, CENTER_Y - near, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near);
                 if (pointList.length > 0) {
                     const pol = new Phaser.Geom.Polygon(pointList);
                     graph.strokePoints(pol.points, true)
-                    if (blockList[i][0] & (4 << 4)) {
+                    if (blockList[i][0][0] & (4 << 4)) {
                         graph.fillStyle(0xFFFFFF, 0.5);
                     } else {
                         graph.fillStyle(0xFFFFFF);
@@ -421,16 +470,24 @@ export class Game extends Scene
                     graph.fillPoints(pol.points, true)
                 }
             }
-            if (blockList[i][0] & 8) {
+            if (blockList[i][0][0] & 8) {
                 const pointList: number[] = [CENTER_X + far, CENTER_Y + far, CENTER_X + far, CENTER_Y - far, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, ];
                 if (pointList.length > 0) {
                     const pol = new Phaser.Geom.Polygon(pointList);
                     graph.strokePoints(pol.points, true)
-                    if (blockList[i][0] & (8 << 4)) {
+                    if (blockList[i][0][0] & (8 << 4)) {
                         graph.fillStyle(0xFFFFFF, 0.5);
                     } else {
                         graph.fillStyle(0xFFFFFF);
                     }
+                    graph.fillPoints(pol.points, true)
+                }
+            }
+            for (const object of dun.getObject(blockList[i][0][1], blockList[i][0][2])) {
+                const pointList: number[] = preparePoints(CENTER_X + near, CENTER_Y + near, CENTER_X + far, CENTER_Y + far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near)
+                if (pointList.length > 0) {
+                    const pol = new Phaser.Geom.Polygon(pointList);
+                    graph.fillStyle(object.color, object.alpha);
                     graph.fillPoints(pol.points, true)
                 }
             }
@@ -440,8 +497,23 @@ export class Game extends Scene
     create ()
     {
         const dun = new DungeonMap(15, 15);
-        dun.build();
-        dun.dump();
+        const init = () => {
+            dun.build();
+            // dun.dump();
+            const step = dun.getRandomPos(true);
+            if (step.length >= 2) {
+                dun.addObject(step[0], step[1], 'o', (dungeon: DungeonMap, object: MapObject) => {
+                    const player = dungeon.getPlayerPos()
+                    if (player.x === object.x && player.y === object.y) {
+                        this.floor++;
+                        console.log('go to ' + this.floor);
+                        dungeon.init();
+                        init();
+                    }
+                }, 0x00FF00)
+            }
+        }
+        init();
 
         const graph = this.add.graphics({
             lineStyle: { width: 2, color: 0xCCCCCC, alpha: 1 },
