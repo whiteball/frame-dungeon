@@ -24,6 +24,12 @@ export class Game extends Scene
         super('Game');
     }
 
+    redrawAll ()
+    {
+        this.redrawMiniMap()
+        this.redrawMainView()
+    }
+
     redrawMiniMap ()
     {
         const dun = this.dungeon;
@@ -120,9 +126,6 @@ export class Game extends Scene
         
         graph.strokeTriangleShape(tri)
         graph.fillTriangleShape(tri)
-
-        this.redrawMainView()
-
     }
 
     redrawMainView()
@@ -544,32 +547,32 @@ export class Game extends Scene
         
         this.keys.keyW?.on('down', () => {
             if (this.dungeon.goPlayer() > 0) {
-                this.redrawMiniMap()
+                this.redrawAll()
             }
         })
         this.keys.keyA?.on('down', () => {
             if (this.dungeon.turnLeftPlayer()) {
-                this.redrawMiniMap()
+                this.redrawAll()
             }
         })
         this.keys.keyS?.on('down', () => {
             if (this.dungeon.turnBackPlayer()) {
-                this.redrawMiniMap()
+                this.redrawAll()
             }
         })
         this.keys.keyD?.on('down', () => {
             if (this.dungeon.turnRightPlayer()) {
-                this.redrawMiniMap()
+                this.redrawAll()
             }
         })
         // this.keys.keyE?.on('down', () => {
         //     if (this.dungeon.turnRightPlayer()) {
-        //         this.redrawMiniMap()
+        //         this.redrawAll()
         //     }
         // })
         // this.keys.keyQ?.on('down', () => {
         //     if (this.dungeon.turnLeftPlayer()) {
-        //         this.redrawMiniMap()
+        //         this.redrawAll()
         //     }
         // })
 
@@ -578,7 +581,7 @@ export class Game extends Scene
 
         this.dungeon = dun;
 
-        this.redrawMiniMap()
+        this.redrawAll()
     }
 
     // update(time: number, delta: number): void {
