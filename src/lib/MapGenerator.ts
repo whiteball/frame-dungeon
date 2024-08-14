@@ -68,6 +68,44 @@ export class MapObject {
   public y: integer = -1;
 }
 
+export const MapDirection = {
+  EAST: 0,
+  SOUTH: 1,
+  WEST: 2,
+  NORTH: 3,
+} as const;
+export type MapDirection = typeof MapDirection[keyof typeof MapDirection]
+export const getRandomDirection = (): MapDirection => {
+  switch (getRandomInt(0, 4)) {
+    case 0:
+      return MapDirection.EAST;
+    case 1:
+      return MapDirection.SOUTH;
+    case 2:
+      return MapDirection.WEST;
+    case 3:
+      return MapDirection.NORTH;
+  }
+
+  return MapDirection.EAST;
+}
+export const rotateDirection = (direction: MapDirection, value: number) => {
+  switch ((Number(direction) + value) % 4) {
+    case 0:
+      return MapDirection.EAST;
+    case 1:
+      return MapDirection.SOUTH;
+    case 2:
+      return MapDirection.WEST;
+    case 3:
+      return MapDirection.NORTH;
+  }
+
+  console.error('rotateDirection');
+  return direction;
+}
+
+
 export class DungeonMap {
   private _map: integer[];
   private _mapFog: integer[];
@@ -86,7 +124,7 @@ export class DungeonMap {
   private _player: {
     x: integer,
     y: integer,
-    direction: integer,
+    direction: MapDirection,
   };
 
   private _objects: MapObject[];
@@ -111,7 +149,7 @@ export class DungeonMap {
     this._player = {
       x: 0,
       y: 0,
-      direction: 0,
+      direction: MapDirection.EAST,
     };
   }
 
@@ -159,7 +197,7 @@ export class DungeonMap {
     }
   }
 
-  public getPlayerPos() : {x: integer, y: integer, direction: integer} {
+  public getPlayerPos() : {x: integer, y: integer, direction: MapDirection} {
     return {
       x: this._player.x,
       y: this._player.y,
@@ -258,7 +296,7 @@ export class DungeonMap {
       const corNum = [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4][getRandomInt(0, 24)];
       //console.log(room)
       //console.log(corNum)
-      const directionArray = arrayShuffle([0, 1, 2, 3].slice())
+      const directionArray = arrayShuffle([MapDirection.EAST, MapDirection.SOUTH, MapDirection.WEST, MapDirection.NORTH].slice())
       for (let i = 0; i < corNum; i++) {
         let cond = true;
         let corridor;
@@ -274,7 +312,7 @@ export class DungeonMap {
           const tempRoom = new Rect(room)
           switch (direction) {
             // 東
-            case 0:
+            case MapDirection.EAST:
               if (room.x2 === this._width - 2 || room.x2 - room.x1 <= this._minRoomLength) {
                 continue;
               }
@@ -283,7 +321,7 @@ export class DungeonMap {
               cond = isConflict({ x: room.x2, y: room.y1 }, 'x');
               break;
             // 南
-            case 1:
+            case MapDirection.SOUTH:
               if (room.y2 === this._height - 2 || room.y2 - room.y1 <= this._minRoomLength) {
                 continue;
               }
@@ -292,7 +330,7 @@ export class DungeonMap {
               cond = isConflict({ x: room.x1, y: room.y2 }, 'y');
               break;
             // 西
-            case 2:
+            case MapDirection.WEST:
               if (room.x1 === 1 || room.x2 - room.x1 <= this._minRoomLength) {
                 continue;
               }
@@ -301,7 +339,7 @@ export class DungeonMap {
               cond = isConflict({ x: room.x1, y: room.y1 }, 'x');
               break;
             // 北
-            case 3:
+            case MapDirection.NORTH:
               if (room.y1 === 1 || room.y2 - room.y1 <= this._minRoomLength) {
                 continue;
               }
@@ -373,18 +411,18 @@ export class DungeonMap {
       }
     for (let i = 0; i < roomsWithCorridors.length; i++) {
       const temp = getRandomInt(0, roomsWithCorridors.length),
-        direction = getRandomInt(0, 4);
+        direction = getRandomDirection();
       if (blocked.some(v => v === temp)) {
         continue;
       }
       const room = roomsWithCorridors[temp].room
-      if (direction === 0) {
+      if (direction === MapDirection.EAST) {
         // 東
         if (temp + 1 < roomsWithCorridors.length && room.isContact(roomsWithCorridors[temp + 1].room) && !blocked.some(v => v === (temp + 1))) {
           _addConnected(temp, 1);
           _addConnected(temp + 1, 4);
         }
-      } else if (direction === 1) {
+      } else if (direction === MapDirection.SOUTH) {
         // 南
         for (let j = temp + 2; j < roomsWithCorridors.length; j++) {
           if (roomsWithCorridors[j].room.y1 < room.y2) {
@@ -398,13 +436,13 @@ export class DungeonMap {
             _addConnected(j, 8);
           }
         }
-      } else if (direction === 2) {
+      } else if (direction === MapDirection.WEST) {
         // 西
         if (temp - 1 >= 0 && room.isContact(roomsWithCorridors[temp - 1].room) && !blocked.some(v => v === (temp - 1))) {
           _addConnected(temp, 4);
           _addConnected(temp - 1, 1);
         }
-      } else if (direction === 3) {
+      } else if (direction === MapDirection.NORTH) {
         // 北
         for (let j = temp - 2; j >= 0; j--) {
           if (roomsWithCorridors[j].room.y2 < room.y1) {
@@ -685,7 +723,7 @@ export class DungeonMap {
       const value = this.getAt(x, y);
 
       switch (direction) {
-        case 0:
+        case MapDirection.EAST:
           if ( ! (value & 2)) {
             this.setFogAt(x, y + 1, 0);
             if ( ! (this.getAt(x, y + 1) & 1)) {
@@ -710,7 +748,7 @@ export class DungeonMap {
             return;
           }
           break;
-        case 1:
+        case MapDirection.SOUTH:
           if ( ! (value & 4)) {
             this.setFogAt(x - 1, y, 0);
             if ( ! (this.getAt(x - 1, y) & 2)) {
@@ -735,7 +773,7 @@ export class DungeonMap {
             return;
           }
           break;
-        case 2:
+        case MapDirection.WEST:
           if ( ! (value & 8)) {
             this.setFogAt(x, y - 1, 0);
             if ( ! (this.getAt(x, y - 1) & 4)) {
@@ -760,7 +798,7 @@ export class DungeonMap {
             return;
           }
           break;
-        case 3:
+        case MapDirection.NORTH:
           if ( ! (value & 1)) {
             this.setFogAt(x + 1, y, 0);
             if ( ! (this.getAt(x + 1, y) & 8)) {
@@ -829,13 +867,13 @@ export class DungeonMap {
     } else {
       this._player.x = pos[0];
       this._player.y = pos[1];
-      this._player.direction = getRandomInt(0, 4);
+      this._player.direction = getRandomDirection();
       this.clearFogWithinPlayer();
       return true;
     }
   }
 
-  public movePlayer(direction: integer): integer {
+  public movePlayer(direction: MapDirection): integer {
     const value = this.getAt(this._player.x, this._player.y)
     if (value & (2 ** direction)) {
       if ( ! (value & (2 ** (direction + 4)))) {
@@ -843,16 +881,16 @@ export class DungeonMap {
       }
     }
     switch (direction) {
-      case 0:
+      case MapDirection.EAST:
         this._player.x += 1;
         break;
-      case 1:
+      case MapDirection.SOUTH:
         this._player.y += 1;
         break;
-      case 2:
+      case MapDirection.WEST:
         this._player.x -= 1;
         break;
-      case 3:
+      case MapDirection.NORTH:
         this._player.y -= 1;
         break;
     }
@@ -870,30 +908,30 @@ export class DungeonMap {
   }
 
   public goRightPlayer(): integer {
-    return this.movePlayer((this._player.direction + 1) % 4)
+    return this.movePlayer(rotateDirection(this._player.direction, 1))
   }
 
   public goLeftPlayer(): integer {
-    return this.movePlayer((this._player.direction + 3) % 4)
+    return this.movePlayer(rotateDirection(this._player.direction, 3))
   }
 
   public turnRightPlayer(): boolean {
     const now = this._player.direction;
-    this._player.direction = (now + 1) % 4;
+    this._player.direction = rotateDirection(now, 1);
     this.clearFogWithinPlayer();
     return true;
   }
 
   public turnLeftPlayer(): boolean {
     const now = this._player.direction;
-    this._player.direction = (now + 3) % 4;
+    this._player.direction = rotateDirection(now, 3);
     this.clearFogWithinPlayer();
     return true;
   }
 
   public turnBackPlayer(): boolean {
     const now = this._player.direction;
-    this._player.direction = (now + 2) % 4;
+    this._player.direction = rotateDirection(now, 2);
     this.clearFogWithinPlayer();
     return true;
   }
@@ -907,28 +945,28 @@ export class DungeonMap {
           door: [false, false, false, false],
         }
         if (value & 1) {
-          wallState.wall[0] = true;
+          wallState.wall[MapDirection.EAST] = true;
         }
         if (value & 2) {
-          wallState.wall[1] = true;
+          wallState.wall[MapDirection.SOUTH] = true;
         }
         if (value & 4) {
-          wallState.wall[2] = true;
+          wallState.wall[MapDirection.WEST] = true;
         }
         if (value & 8) {
-          wallState.wall[3] = true;
+          wallState.wall[MapDirection.NORTH] = true;
         }
         if (value & 16) {
-          wallState.door[0] = true;
+          wallState.door[MapDirection.EAST] = true;
         }
         if (value & 32) {
-          wallState.door[1] = true;
+          wallState.door[MapDirection.SOUTH] = true;
         }
         if (value & 64) {
-          wallState.door[2] = true;
+          wallState.door[MapDirection.WEST] = true;
         }
         if (value & 128) {
-          wallState.door[3] = true;
+          wallState.door[MapDirection.NORTH] = true;
         }
         yield {
           x,

@@ -1,6 +1,6 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
-import { DungeonMap, MapObject } from '../../lib/MapGenerator';
+import { DungeonMap, MapDirection, MapObject } from '../../lib/MapGenerator';
 
 export class Game extends Scene
 {
@@ -47,33 +47,33 @@ export class Game extends Scene
                 continue;
             }
 
-            if (block.wallState.wall[0]) {
+            if (block.wallState.wall[MapDirection.EAST]) {
                 graph.lineBetween(baseX + blockWidth, baseY, baseX + blockWidth, baseY + blockHeight)
             }
-            if (block.wallState.wall[1]) {
+            if (block.wallState.wall[MapDirection.SOUTH]) {
                 graph.lineBetween(baseX, baseY + blockHeight, baseX + blockWidth, baseY + blockHeight)
             }
-            if (block.wallState.wall[2]) {
+            if (block.wallState.wall[MapDirection.WEST]) {
                 graph.lineBetween(baseX, baseY, baseX, baseY + blockHeight)
             }
-            if (block.wallState.wall[3]) {
+            if (block.wallState.wall[MapDirection.NORTH]) {
                 graph.lineBetween(baseX, baseY, baseX + blockWidth, baseY)
             }
             
             graph.lineStyle(2, 0xCC0000);
-            if (block.wallState.door[0]) {
+            if (block.wallState.door[MapDirection.EAST]) {
                 graph.lineBetween(baseX + blockWidth, baseY, baseX + blockWidth, baseY + blockHeight)
                 graph.lineBetween(baseX + blockWidth - blockWidth / 6, baseY + blockHeight / 2, baseX + blockWidth, baseY + blockHeight / 2)
             }
-            if (block.wallState.door[1]) {
+            if (block.wallState.door[MapDirection.SOUTH]) {
                 graph.lineBetween(baseX, baseY + blockHeight, baseX + blockWidth, baseY + blockHeight)
                 graph.lineBetween(baseX + blockWidth / 2, baseY + blockHeight - blockHeight / 6, baseX + blockWidth / 2, baseY + blockHeight)
             }
-            if (block.wallState.door[2]) {
+            if (block.wallState.door[MapDirection.WEST]) {
                 graph.lineBetween(baseX, baseY, baseX, baseY + blockHeight)
                 graph.lineBetween(baseX, baseY + blockHeight / 2, baseX + blockWidth / 6, baseY + blockHeight / 2)
             }
-            if (block.wallState.door[3]) {
+            if (block.wallState.door[MapDirection.NORTH]) {
                 graph.lineBetween(baseX, baseY, baseX + blockWidth, baseY)
                 graph.lineBetween(baseX + blockWidth / 2, baseY, baseX + blockWidth / 2, baseY + blockHeight / 6)
             }
@@ -103,16 +103,16 @@ export class Game extends Scene
         const playerWidth = blockWidth - blockWidth / 5 * 2, playerHeight = blockHeight - blockHeight / 5 * 2;
         let tri : Phaser.Geom.Triangle;
         switch (playerPos.direction) {
-            case 0:
+            case MapDirection.EAST:
                 tri = new Phaser.Geom.Triangle(baseX, baseY, baseX, baseY + playerHeight, baseX + playerWidth, baseY + playerHeight / 2);
                 break;
-            case 1:
+            case MapDirection.SOUTH:
                 tri = new Phaser.Geom.Triangle(baseX, baseY, baseX + playerWidth, baseY, baseX + playerWidth / 2, baseY + playerHeight);
                 break;
-            case 2:
+            case MapDirection.WEST:
                 tri = new Phaser.Geom.Triangle(baseX + playerWidth, baseY, baseX + playerWidth, baseY + playerHeight, baseX, baseY + playerHeight / 2);
                 break;
-            case 3:
+            case MapDirection.NORTH:
             default:
                 tri = new Phaser.Geom.Triangle(baseX, baseY + playerHeight, baseX + playerWidth, baseY + playerHeight, baseX + playerWidth / 2, baseY);
                 break;
@@ -144,7 +144,7 @@ export class Game extends Scene
         }
 
         switch(player.direction) {
-            case 0:
+            case MapDirection.EAST:
                 for (let i = RANGE; i >= 0; i--) {
                     const buf = [[rotateRight(dun.getAt(player.x + i, player.y), 1), player.x + i, player.y]];
                     for (let j = 1; j <= RANGE_SIDE; j++) {
@@ -154,7 +154,7 @@ export class Game extends Scene
                     blockList.push(buf);
                 }
                 break;
-            case 1:
+            case MapDirection.SOUTH:
                 for (let i = RANGE; i >= 0; i--) {
                     const buf = [[rotateRight(dun.getAt(player.x, player.y + i), 2), player.x, player.y + i]];
                     for (let j = 1; j <= RANGE_SIDE; j++) {
@@ -164,7 +164,7 @@ export class Game extends Scene
                     blockList.push(buf);
                 }
                 break;
-            case 2:
+            case MapDirection.WEST:
                 for (let i = RANGE; i >= 0; i--) {
                     const buf = [[rotateRight(dun.getAt(player.x - i, player.y), 3), player.x - i, player.y]];
                     for (let j = 1; j <= RANGE_SIDE; j++) {
@@ -174,7 +174,7 @@ export class Game extends Scene
                     blockList.push(buf);
                 }
                 break;
-            case 3:
+            case MapDirection.NORTH:
                 for (let i = RANGE; i >= 0; i--) {
                     const buf = [[dun.getAt(player.x, player.y - i), player.x, player.y - i]];
                     for (let j = 1; j <= RANGE_SIDE; j++) {
