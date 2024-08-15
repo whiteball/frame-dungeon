@@ -503,7 +503,7 @@ export class Game extends Scene
         const init = () => {
             dun.build();
             // dun.dump();
-            const step = dun.getRandomPos(true);
+            const step = dun.getRandomPos(true, true);
             if (step.length >= 2) {
                 dun.addObject(step[0], step[1], 'o', (dungeon: DungeonMap, object: MapObject) => {
                     const player = dungeon.getPlayerPos()

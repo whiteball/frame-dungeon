@@ -829,14 +829,14 @@ export class DungeonMap {
     }
   }
 
-  public getRandomPos(withoutCorridor: boolean = false): integer[] {
+  public getRandomPos(withoutCorridor: boolean = false, withoutDoor: boolean = false): integer[] {
     let x: integer = 0, y: integer = 0, pos = -1;
     const limit = 1000;
     for (let i = 0; i < limit && pos === -1; i++) {
       x = getRandomInt(1, this._width - 1);
       y = getRandomInt(1, this._height - 1);
       pos = this.getAt(x, y);
-      if (withoutCorridor) {
+      if (pos !== -1 && withoutCorridor) {
         for (const roomWithCorridor of this._roomsWithCorridors) {
           for (const corridor of roomWithCorridor.corridors) {
             if (corridor.x1 <= x && x <= corridor.x2 && corridor.y1 <= y && y <= corridor.y2) {
@@ -844,6 +844,12 @@ export class DungeonMap {
               pos = -1;
             }
           }
+        }
+      }
+      if (pos !== -1 && withoutDoor) {
+        if (pos & 0xF0) {
+          // ドア横をキャンセル
+          pos = -1;
         }
       }
     }
