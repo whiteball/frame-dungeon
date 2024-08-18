@@ -19,6 +19,13 @@ export class Game extends Scene
     graph: Phaser.GameObjects.Graphics;
     floor: integer = 1;
 
+    polygonList: (Phaser.Geom.Polygon | null)[][][];
+    mainViewFrame: (Phaser.Geom.Rectangle | null);
+    mainViewCeil: (Phaser.Geom.Rectangle | null);
+    mainViewFloor: (Phaser.Geom.Rectangle | null);
+    mainViewRange:integer = 4;
+    mainViewRangeSide: integer = 3;
+
     constructor ()
     {
         super('Game');
@@ -26,8 +33,8 @@ export class Game extends Scene
 
     redrawAll ()
     {
-        this.redrawMiniMap()
-        this.redrawMainView()
+        this.redrawMiniMap();
+        this.redrawMainView();
     }
 
     redrawMiniMap ()
@@ -128,69 +135,14 @@ export class Game extends Scene
         graph.fillTriangleShape(tri)
     }
 
-    redrawMainView()
+    prepareDrawPoints ()
     {
-        const dun = this.dungeon;
-        const graph = this.graph;
+        const polygonList: typeof this.polygonList = [];
 
-        graph.lineStyle(4, 0xFFFFFF);
-        graph.fillStyle(0x0);
+        const RANGE = this.mainViewRange, RANGE_SIDE = this.mainViewRangeSide;
+        const BLOCK_BASE_SIZE = 560, SCREEN_WIDTH = 760, SCREEN_HEIGHT = 520, OFFSET_X = 10, OFFSET_Y = 10,  ANGLE = 60 / 180 * Math.PI;
+        const CENTER_X = SCREEN_WIDTH / 2 + OFFSET_X, CENTER_Y = SCREEN_HEIGHT / 2 + OFFSET_Y, SCREEN_DISTANCE = BLOCK_BASE_SIZE / 2, CAMERA_SCREEN_DISTANCE = SCREEN_WIDTH / 2 / Math.tan(ANGLE / 2), AB = CAMERA_SCREEN_DISTANCE * BLOCK_BASE_SIZE / 2;
 
-        const player = dun.getPlayerPos();
-        const blockList: integer[][][] = [];
-        const RANGE = 4, RANGE_SIDE = 3;
-
-        const rotateRight = (value: integer, shiftAmount: integer) => {
-            const wall = value & 0xF, door = value & 0xF0;
-            return (((wall >> shiftAmount) | (wall << (4 - shiftAmount))) & 0xF)
-                | (((door >> shiftAmount) | (door << (4 - shiftAmount))) & 0xF0);
-        }
-
-        switch(player.direction) {
-            case MapDirection.EAST:
-                for (let i = RANGE; i >= 0; i--) {
-                    const buf = [[rotateRight(dun.getAt(player.x + i, player.y), 1), player.x + i, player.y]];
-                    for (let j = 1; j <= RANGE_SIDE; j++) {
-                        buf.push([rotateRight(dun.getAt(player.x + i, player.y + j), 1), player.x + i, player.y + j]);
-                        buf.push([rotateRight(dun.getAt(player.x + i, player.y - j), 1), player.x + i, player.y - j]);
-                    }
-                    blockList.push(buf);
-                }
-                break;
-            case MapDirection.SOUTH:
-                for (let i = RANGE; i >= 0; i--) {
-                    const buf = [[rotateRight(dun.getAt(player.x, player.y + i), 2), player.x, player.y + i]];
-                    for (let j = 1; j <= RANGE_SIDE; j++) {
-                        buf.push([rotateRight(dun.getAt(player.x - j, player.y + i), 2), player.x - j, player.y + i]);
-                        buf.push([rotateRight(dun.getAt(player.x + j, player.y + i), 2), player.x + j, player.y + i]);
-                    }
-                    blockList.push(buf);
-                }
-                break;
-            case MapDirection.WEST:
-                for (let i = RANGE; i >= 0; i--) {
-                    const buf = [[rotateRight(dun.getAt(player.x - i, player.y), 3), player.x - i, player.y]];
-                    for (let j = 1; j <= RANGE_SIDE; j++) {
-                        buf.push([rotateRight(dun.getAt(player.x - i, player.y - j), 3), player.x - i, player.y - j]);
-                        buf.push([rotateRight(dun.getAt(player.x - i, player.y + j), 3), player.x - i, player.y + j]);
-                    }
-                    blockList.push(buf);
-                }
-                break;
-            case MapDirection.NORTH:
-                for (let i = RANGE; i >= 0; i--) {
-                    const buf = [[dun.getAt(player.x, player.y - i), player.x, player.y - i]];
-                    for (let j = 1; j <= RANGE_SIDE; j++) {
-                        buf.push([dun.getAt(player.x + j, player.y - i), player.x + j, player.y - i]);
-                        buf.push([dun.getAt(player.x - j, player.y - i), player.x - j, player.y - i]);
-                    }
-                    blockList.push(buf);
-                }
-                break;
-        }
-
-
-        const BLOCK_BASE_SIZE = 560, SCREEN_WIDTH = 760, SCREEN_HEIGHT = 520, OFFSET_X = 10, OFFSET_Y = 10, CENTER_X = SCREEN_WIDTH / 2 + OFFSET_X, CENTER_Y = SCREEN_HEIGHT / 2 + OFFSET_Y, ANGLE = 60 / 180 * Math.PI, SCREEN_DISTANCE = BLOCK_BASE_SIZE / 2, CAMERA_SCREEN_DISTANCE = SCREEN_WIDTH / 2 / Math.tan(ANGLE / 2), AB = CAMERA_SCREEN_DISTANCE * BLOCK_BASE_SIZE / 2;
         const frame = new Phaser.Geom.Rectangle(OFFSET_X, OFFSET_Y, SCREEN_WIDTH, SCREEN_HEIGHT);
         const frameCutForX = (x1: number, y1: number, x2: number, y2: number, ): number => {
             if (frame.contains(x1, y1)) {
@@ -303,7 +255,6 @@ export class Game extends Scene
                 upInsideX, upInsideY,
                 frameCutForX(downInsideX, downInsideY, upInsideX, upInsideY),
                 frameCutForY(downInsideX, downInsideY, upInsideX, upInsideY),
-                //downInsideX, downInsideY,
                 downOutsideXCalc,
                 downOutsideYCalc,
             ];
@@ -319,27 +270,13 @@ export class Game extends Scene
             return result;
         }
 
-        // 背景ベース
-        graph.lineStyle(4, 0xFFFFFF);
-        graph.strokeRectShape(frame);
-        graph.fillStyle(0x0);
-        graph.fillRectShape(frame);
-        // 背景天井
-        graph.fillStyle(0xCCCCCC);
-        graph.fillRect(frame.left, frame.top, frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE));
-        // 背景床
-        graph.fillStyle(0x3F3F3F);
-        graph.fillRect(frame.left, frame.top + frame.height / 2 + AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE), frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE));
-        // ブロックベース
-        graph.lineStyle(1, 0x0);
-        graph.fillStyle(0xFFFFFF);
-        for (let i = 0; i < blockList.length; i++) {
-            // デバッグ用描画距離によって枠線を色分け
-            // graph.lineStyle(2, [0x0000FF,0x00FFFF,0x00FF00,0xFFFF00,0xFF0000,0xFF00FF][i%6]);
-            const targetDistance = (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * (RANGE - i)),
-                targetDistanceNear = (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * (RANGE - i - 1));
+        for (let i = 0; i <= RANGE; i++) {
+            const targetDistance = (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * (i)),
+                targetDistanceNear = (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * (i - 1));
             const far = AB / targetDistance,
                 near = AB / targetDistanceNear;
+            const polygonListLine: (Phaser.Geom.Polygon | null) [][] = [];
+            let pointList: number[] = [];
             for (let j = RANGE_SIDE; j >= 1; j--) {
                 const order = 2 * j - 1;
                 const farInside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j - 1 + 0.5)) / targetDistance,
@@ -347,10 +284,140 @@ export class Game extends Scene
                     farOutside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j + 0.5)) / targetDistance,
                     nearOutside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j + 0.5)) / targetDistanceNear;
                 // 右側
-                if (blockList[i][order][0] & 8) {
-                    const pointList: number[] = preparePoints(CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + farOutside, CENTER_Y + far)
-                    if (pointList.length > 0) {
-                        const pol = new Phaser.Geom.Polygon(pointList);
+                polygonListLine[order] = [];
+                pointList = preparePoints(CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + farOutside, CENTER_Y + far)
+                polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+                pointList = preparePoints(CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farOutside, CENTER_Y + far, CENTER_X + nearOutside, CENTER_Y + near)
+                polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+                pointList = preparePoints(CENTER_X + farOutside, CENTER_Y + far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
+                polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+                pointList = preparePoints(CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + nearInside, CENTER_Y - near, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
+                polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+
+                // 左側
+                polygonListLine[order + 1] = [];
+                pointList = preparePoints(CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - farOutside, CENTER_Y + far)
+                polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+                pointList = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farOutside, CENTER_Y + far, CENTER_X - nearOutside, CENTER_Y + near)
+                polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+                pointList = preparePoints(CENTER_X - farOutside, CENTER_Y + far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
+                polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+                pointList = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - nearInside, CENTER_Y - near, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
+                polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+            }
+            
+
+            // 真ん中
+            polygonListLine[0] = [];
+            pointList = preparePoints(CENTER_X + near, CENTER_Y - near, CENTER_X + far, CENTER_Y - far, CENTER_X + far, CENTER_Y + far, CENTER_X + near, CENTER_Y + near);
+            polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+            pointList = preparePoints(CENTER_X - near, CENTER_Y - near, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near);
+            polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+            pointList = preparePoints(CENTER_X + near, CENTER_Y + near, CENTER_X + far, CENTER_Y + far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near)
+            polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+            pointList = [CENTER_X + far, CENTER_Y + far, CENTER_X + far, CENTER_Y - far, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, ];
+            polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+
+            polygonList.push(polygonListLine);
+        }
+
+        this.polygonList = polygonList;
+        this.mainViewFrame = frame;
+        this.mainViewCeil = new Phaser.Geom.Rectangle(frame.left, frame.top, frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE))
+        this.mainViewFloor = new Phaser.Geom.Rectangle(frame.left, frame.top + frame.height / 2 + AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE), frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE))
+    }
+
+    redrawMainView()
+    {
+        const dun = this.dungeon;
+        const graph = this.graph;
+
+        graph.lineStyle(4, 0xFFFFFF);
+        graph.fillStyle(0x0);
+
+        const player = dun.getPlayerPos();
+        const blockList: integer[][][] = [];
+        const RANGE = this.mainViewRange, RANGE_SIDE = this.mainViewRangeSide;
+
+        const rotateRight = (value: integer, shiftAmount: integer) => {
+            const wall = value & 0xF, door = value & 0xF0;
+            return (((wall >> shiftAmount) | (wall << (4 - shiftAmount))) & 0xF)
+                | (((door >> shiftAmount) | (door << (4 - shiftAmount))) & 0xF0);
+        }
+
+        switch(player.direction) {
+            case MapDirection.EAST:
+                for (let i = RANGE; i >= 0; i--) {
+                    const buf = [[rotateRight(dun.getAt(player.x + i, player.y), 1), player.x + i, player.y]];
+                    for (let j = 1; j <= RANGE_SIDE; j++) {
+                        buf.push([rotateRight(dun.getAt(player.x + i, player.y + j), 1), player.x + i, player.y + j]);
+                        buf.push([rotateRight(dun.getAt(player.x + i, player.y - j), 1), player.x + i, player.y - j]);
+                    }
+                    blockList.push(buf);
+                }
+                break;
+            case MapDirection.SOUTH:
+                for (let i = RANGE; i >= 0; i--) {
+                    const buf = [[rotateRight(dun.getAt(player.x, player.y + i), 2), player.x, player.y + i]];
+                    for (let j = 1; j <= RANGE_SIDE; j++) {
+                        buf.push([rotateRight(dun.getAt(player.x - j, player.y + i), 2), player.x - j, player.y + i]);
+                        buf.push([rotateRight(dun.getAt(player.x + j, player.y + i), 2), player.x + j, player.y + i]);
+                    }
+                    blockList.push(buf);
+                }
+                break;
+            case MapDirection.WEST:
+                for (let i = RANGE; i >= 0; i--) {
+                    const buf = [[rotateRight(dun.getAt(player.x - i, player.y), 3), player.x - i, player.y]];
+                    for (let j = 1; j <= RANGE_SIDE; j++) {
+                        buf.push([rotateRight(dun.getAt(player.x - i, player.y - j), 3), player.x - i, player.y - j]);
+                        buf.push([rotateRight(dun.getAt(player.x - i, player.y + j), 3), player.x - i, player.y + j]);
+                    }
+                    blockList.push(buf);
+                }
+                break;
+            case MapDirection.NORTH:
+                for (let i = RANGE; i >= 0; i--) {
+                    const buf = [[dun.getAt(player.x, player.y - i), player.x, player.y - i]];
+                    for (let j = 1; j <= RANGE_SIDE; j++) {
+                        buf.push([dun.getAt(player.x + j, player.y - i), player.x + j, player.y - i]);
+                        buf.push([dun.getAt(player.x - j, player.y - i), player.x - j, player.y - i]);
+                    }
+                    blockList.push(buf);
+                }
+                break;
+        }
+
+        const frame = this.mainViewFrame;
+        const ceil = this.mainViewCeil;
+        const floor = this.mainViewFloor;
+        if ( ! frame || ! ceil || ! floor) {
+            return;
+        }
+
+        // 背景ベース
+        graph.lineStyle(4, 0xFFFFFF);
+        graph.strokeRectShape(frame);
+        graph.fillStyle(0x0);
+        graph.fillRectShape(frame);
+        // 背景天井
+        graph.fillStyle(0xCCCCCC);
+        graph.fillRectShape(ceil);
+        // 背景床
+        graph.fillStyle(0x3F3F3F);
+        graph.fillRectShape(floor);
+        // ブロックベース
+        graph.lineStyle(1, 0x0);
+        graph.fillStyle(0xFFFFFF);
+        for (let i = 0; i < blockList.length; i++) {
+            // デバッグ用描画距離によって枠線を色分け
+            // graph.lineStyle(2, [0x0000FF,0x00FFFF,0x00FF00,0xFFFF00,0xFF0000,0xFF00FF][i%6]);
+            for (let j = RANGE_SIDE; j >= 1; j--) {
+                const order = 2 * j - 1;
+                // 右側
+                if ((blockList[i][order][0] & 8) && this.polygonList[RANGE - i][order][0]) {
+                    const pol = this.polygonList[RANGE - i][order][0];
+                    if (pol) {
                         graph.strokePoints(pol.points, true)
                         if (blockList[i][order][0] & (8 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
@@ -360,10 +427,9 @@ export class Game extends Scene
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if (blockList[i][order][0] & 1) {
-                    const pointList: number[] = preparePoints(CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farOutside, CENTER_Y + far, CENTER_X + nearOutside, CENTER_Y + near)
-                    if (pointList.length > 0) {
-                        const pol = new Phaser.Geom.Polygon(pointList);
+                if ((blockList[i][order][0] & 1) && this.polygonList[RANGE - i][order][1]) {
+                    const pol = this.polygonList[RANGE - i][order][1];
+                    if (pol) {
                         graph.strokePoints(pol.points, true)
                         if (blockList[i][order][0] & (1 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
@@ -374,17 +440,15 @@ export class Game extends Scene
                     }
                 }
                 for (const object of dun.getObject(blockList[i][order][1], blockList[i][order][2])) {
-                    const pointList: number[] = preparePoints(CENTER_X + farOutside, CENTER_Y + far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
-                    if (pointList.length > 0) {
-                        const pol = new Phaser.Geom.Polygon(pointList);
+                    const pol = this.polygonList[RANGE - i][order][2];
+                    if (pol) {
                         graph.fillStyle(object.color, object.alpha);
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if (blockList[i][order][0] & 2) {
-                    const pointList: number[] = preparePoints(CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + nearInside, CENTER_Y - near, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
-                    if (pointList.length > 0) {
-                        const pol = new Phaser.Geom.Polygon(pointList);
+                if ((blockList[i][order][0] & 2) && this.polygonList[RANGE - i][order][3]) {
+                    const pol = this.polygonList[RANGE - i][order][3];
+                    if (pol) {
                         graph.strokePoints(pol.points, true)
                         if (blockList[i][order][0] & (2 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
@@ -396,10 +460,9 @@ export class Game extends Scene
                 }
 
                 // 左側
-                if (blockList[i][order + 1][0] & 8) {
-                    const pointList: number[] = preparePoints(CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - farOutside, CENTER_Y + far)
-                    if (pointList.length > 0) {
-                        const pol = new Phaser.Geom.Polygon(pointList);
+                if ((blockList[i][order + 1][0] & 8) && this.polygonList[RANGE - i][order + 1][0]) {
+                    const pol = this.polygonList[RANGE - i][order + 1][0];
+                    if (pol) {
                         graph.strokePoints(pol.points, true)
                         if (blockList[i][order + 1][0] & (8 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
@@ -409,10 +472,9 @@ export class Game extends Scene
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if (blockList[i][order + 1][0] & 4) {
-                    const pointList: number[] = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farOutside, CENTER_Y + far, CENTER_X - nearOutside, CENTER_Y + near)
-                    if (pointList.length > 0) {
-                        const pol = new Phaser.Geom.Polygon(pointList);
+                if ((blockList[i][order + 1][0] & 4) && this.polygonList[RANGE - i][order + 1][1]) {
+                    const pol = this.polygonList[RANGE - i][order + 1][1];
+                    if (pol) {
                         graph.strokePoints(pol.points, true)
                         if (blockList[i][order + 1][0] & (4 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
@@ -423,17 +485,15 @@ export class Game extends Scene
                     }
                 }
                 for (const object of dun.getObject(blockList[i][order + 1][1], blockList[i][order + 1][2])) {
-                    const pointList: number[] = preparePoints(CENTER_X - farOutside, CENTER_Y + far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
-                    if (pointList.length > 0) {
-                        const pol = new Phaser.Geom.Polygon(pointList);
+                    const pol = this.polygonList[RANGE - i][order + 1][2];
+                    if (pol) {
                         graph.fillStyle(object.color, object.alpha);
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if (blockList[i][order + 1][0] & 2) {
-                    const pointList: number[] = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - nearInside, CENTER_Y - near, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
-                    if (pointList.length > 0) {
-                        const pol = new Phaser.Geom.Polygon(pointList);
+                if ((blockList[i][order + 1][0] & 2) && this.polygonList[RANGE - i][order + 1][3]) {
+                    const pol = this.polygonList[RANGE - i][order + 1][3];
+                    if (pol) {
                         graph.strokePoints(pol.points, true)
                         if (blockList[i][order + 1][0] & (2 << 4)) {
                             graph.fillStyle(0xFFFFFF, 0.5);
@@ -447,10 +507,9 @@ export class Game extends Scene
             
 
             // 真ん中
-            if (blockList[i][0][0] & 1) {
-                const pointList: number[] = preparePoints(CENTER_X + near, CENTER_Y - near, CENTER_X + far, CENTER_Y - far, CENTER_X + far, CENTER_Y + far, CENTER_X + near, CENTER_Y + near);
-                if (pointList.length > 0) {
-                    const pol = new Phaser.Geom.Polygon(pointList);
+            if ((blockList[i][0][0] & 1) && this.polygonList[RANGE - i][0][0]) {
+                const pol = this.polygonList[RANGE - i][0][0];
+                if (pol) {
                     graph.strokePoints(pol.points, true)
                     if (blockList[i][0][0] & (1 << 4)) {
                         graph.fillStyle(0xFFFFFF, 0.5);
@@ -460,10 +519,9 @@ export class Game extends Scene
                     graph.fillPoints(pol.points, true)
                 }
             }
-            if (blockList[i][0][0] & 4) {
-                const pointList: number[] = preparePoints(CENTER_X - near, CENTER_Y - near, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near);
-                if (pointList.length > 0) {
-                    const pol = new Phaser.Geom.Polygon(pointList);
+            if ((blockList[i][0][0] & 4) && this.polygonList[RANGE - i][0][1]) {
+                const pol = this.polygonList[RANGE - i][0][1];
+                if (pol) {
                     graph.strokePoints(pol.points, true)
                     if (blockList[i][0][0] & (4 << 4)) {
                         graph.fillStyle(0xFFFFFF, 0.5);
@@ -473,10 +531,9 @@ export class Game extends Scene
                     graph.fillPoints(pol.points, true)
                 }
             }
-            if (blockList[i][0][0] & 8) {
-                const pointList: number[] = [CENTER_X + far, CENTER_Y + far, CENTER_X + far, CENTER_Y - far, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, ];
-                if (pointList.length > 0) {
-                    const pol = new Phaser.Geom.Polygon(pointList);
+            if ((blockList[i][0][0] & 8) && this.polygonList[RANGE - i][0][3]) {
+                const pol = this.polygonList[RANGE - i][0][3];
+                if (pol) {
                     graph.strokePoints(pol.points, true)
                     if (blockList[i][0][0] & (8 << 4)) {
                         graph.fillStyle(0xFFFFFF, 0.5);
@@ -487,9 +544,8 @@ export class Game extends Scene
                 }
             }
             for (const object of dun.getObject(blockList[i][0][1], blockList[i][0][2])) {
-                const pointList: number[] = preparePoints(CENTER_X + near, CENTER_Y + near, CENTER_X + far, CENTER_Y + far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near)
-                if (pointList.length > 0) {
-                    const pol = new Phaser.Geom.Polygon(pointList);
+                const pol = this.polygonList[RANGE - i][0][2];
+                if (pol) {
                     graph.fillStyle(object.color, object.alpha);
                     graph.fillPoints(pol.points, true)
                 }
@@ -580,6 +636,8 @@ export class Game extends Scene
         EventBus.emit('current-scene-ready', this);
 
         this.dungeon = dun;
+
+        this.prepareDrawPoints()
 
         this.redrawAll()
     }
