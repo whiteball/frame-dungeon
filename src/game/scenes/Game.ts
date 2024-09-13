@@ -35,6 +35,7 @@ export class Game extends Scene
     {
         this.redrawMiniMap();
         this.redrawMainView();
+        this.redrawInfo();
     }
 
     redrawMiniMap ()
@@ -527,9 +528,35 @@ export class Game extends Scene
         }
     }
 
+    static fontFamily = '\'BIZ UDゴシック\', Consolas, monospace';
+    playerInfo: Map<string, number>;
+    floorText: Phaser.GameObjects.Text;
+    playerTextLabel: Phaser.GameObjects.Text;
+    playerTextValue: Phaser.GameObjects.Text;
+    redrawInfo ()
+    {
+        this.floorText.setText(this.floor + 'F');
+        let buf = '', buf2 = '';
+        this.playerInfo.forEach((value, key) => {
+            buf += key + ' : ' + '\n';
+            buf2 += value +'\n';
+        })
+        this.playerTextLabel.setText(buf);
+        this.playerTextValue.setText(buf2);
+    }
+
     create ()
     {
         const dun = new DungeonMap(15, 15);
+        this.floorText = this.add.text(this.game.canvas.width - 200, 220, this.floor + 'F').setFontFamily(Game.fontFamily)
+        this.playerTextLabel = this.add.text(this.game.canvas.width - 200, 250, '').setFontFamily(Game.fontFamily).style.setAlign('left')
+        this.playerTextValue = this.add.text(this.game.canvas.width - 100, 250, '').setFontFamily(Game.fontFamily).style.setAlign('right')
+        this.playerInfo = new Map([
+            ['HP', 100],
+            ['MP', 50],
+            ['POW', 10],
+            ['あ', 10],
+        ])
         const init = () => {
             dun.build();
             // dun.dump();
@@ -539,9 +566,9 @@ export class Game extends Scene
                     const player = dungeon.getPlayerPos()
                     if (player.x === object.x && player.y === object.y) {
                         this.floor++;
-                        console.log('go to ' + this.floor);
                         dungeon.init();
                         init();
+                        EventBus.emit('update-view')
                     }
                 }, 0x00FF00)
             }
@@ -606,14 +633,17 @@ export class Game extends Scene
         //     }
         // })
 
-
-        EventBus.emit('current-scene-ready', this);
-
         this.dungeon = dun;
 
         this.prepareDrawPoints()
 
         this.redrawAll()
+
+        EventBus.on('update-view', () => {
+            this.redrawAll();
+        })
+
+        EventBus.emit('current-scene-ready', this);
     }
 
     // update(time: number, delta: number): void {
