@@ -291,8 +291,6 @@ export class Game extends Scene
                 polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
                 pointList = preparePoints(CENTER_X + farOutside, CENTER_Y + far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
                 polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
-                pointList = preparePoints(CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + nearInside, CENTER_Y - near, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
-                polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
 
                 // 左側
                 polygonListLine[order + 1] = [];
@@ -301,8 +299,6 @@ export class Game extends Scene
                 pointList = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farOutside, CENTER_Y + far, CENTER_X - nearOutside, CENTER_Y + near)
                 polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
                 pointList = preparePoints(CENTER_X - farOutside, CENTER_Y + far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
-                polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
-                pointList = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - nearInside, CENTER_Y - near, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
                 polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
             }
             
@@ -414,6 +410,7 @@ export class Game extends Scene
             // graph.lineStyle(2, [0x0000FF,0x00FFFF,0x00FF00,0xFFFF00,0xFF0000,0xFF00FF][i%6]);
             for (let j = RANGE_SIDE; j >= 1; j--) {
                 const order = 2 * j - 1;
+                // graph.lineStyle(2, [0x0000FF,0x00FF00,0xFF0000][j%3]);
                 // 右側
                 if ((blockList[i][order][0] & 8) && this.polygonList[RANGE - i][order][0]) {
                     const pol = this.polygonList[RANGE - i][order][0];
@@ -443,18 +440,6 @@ export class Game extends Scene
                     const pol = this.polygonList[RANGE - i][order][2];
                     if (pol) {
                         graph.fillStyle(object.color, object.alpha);
-                        graph.fillPoints(pol.points, true)
-                    }
-                }
-                if ((blockList[i][order][0] & 2) && this.polygonList[RANGE - i][order][3]) {
-                    const pol = this.polygonList[RANGE - i][order][3];
-                    if (pol) {
-                        graph.strokePoints(pol.points, true)
-                        if (blockList[i][order][0] & (2 << 4)) {
-                            graph.fillStyle(0xFFFFFF, 0.5);
-                        } else {
-                            graph.fillStyle(0xFFFFFF);
-                        }
                         graph.fillPoints(pol.points, true)
                     }
                 }
@@ -491,22 +476,11 @@ export class Game extends Scene
                         graph.fillPoints(pol.points, true)
                     }
                 }
-                if ((blockList[i][order + 1][0] & 2) && this.polygonList[RANGE - i][order + 1][3]) {
-                    const pol = this.polygonList[RANGE - i][order + 1][3];
-                    if (pol) {
-                        graph.strokePoints(pol.points, true)
-                        if (blockList[i][order + 1][0] & (2 << 4)) {
-                            graph.fillStyle(0xFFFFFF, 0.5);
-                        } else {
-                            graph.fillStyle(0xFFFFFF);
-                        }
-                        graph.fillPoints(pol.points, true)
-                    }
-                }
             }
             
 
             // 真ん中
+            // graph.lineStyle(2, 0);
             if ((blockList[i][0][0] & 1) && this.polygonList[RANGE - i][0][0]) {
                 const pol = this.polygonList[RANGE - i][0][0];
                 if (pol) {
