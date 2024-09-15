@@ -16,7 +16,8 @@ export class Game extends Scene
         keyQ: Phaser.Input.Keyboard.Key | undefined,
     };
     dungeon: DungeonMap;
-    graph: Phaser.GameObjects.Graphics;
+    graphMainView: Phaser.GameObjects.Graphics;
+    graphMiniMap: Phaser.GameObjects.Graphics;
     floor: integer = 1;
 
     polygonList: (Phaser.Geom.Polygon | null)[][][];
@@ -41,19 +42,19 @@ export class Game extends Scene
     redrawMiniMap ()
     {
         const dun = this.dungeon;
-        const graph = this.graph;
+        const graph = this.graphMiniMap;
 
         graph.lineStyle(2, 0xCCCCCC);
         graph.fillStyle(0x0);
-        const WIDTH = 200, HEIGHT = 200, OFFSET_X = this.game.canvas.width - 10 - WIDTH , OFFSET_Y = 10;
-        const rect = new Phaser.Geom.Rectangle(OFFSET_X, OFFSET_Y, WIDTH, HEIGHT);
+        const WIDTH = Number(graph.getData('width')), HEIGHT = Number(graph.getData('height'));
+        const rect = new Phaser.Geom.Rectangle(0, 0, WIDTH, HEIGHT);
         const blockWidth = (WIDTH / dun.getWidth()),blockHeight = (HEIGHT / dun.getHeight());
         graph.fillRectShape(rect);
 
         // マス描画
         graph.fillStyle(0xCCCCCC);
         for (const block of dun.mapIterator()) {
-            const baseX = (block.x - 1) * blockWidth + OFFSET_X, baseY = (block.y - 1) * blockHeight + OFFSET_Y
+            const baseX = (block.x - 1) * blockWidth, baseY = (block.y - 1) * blockHeight;
             graph.lineStyle(2, 0xCCCCCC);
 
             if ( ! block.enter || block.fog === 1) {
@@ -113,7 +114,7 @@ export class Game extends Scene
         graph.lineStyle(1, 0xFFFFFF);
         graph.fillStyle(0xFFFFFF);
         const playerPos = dun.getPlayerPos();
-        const baseX = (playerPos.x - 1) * blockWidth + OFFSET_X + blockWidth / 5, baseY = (playerPos.y - 1) * blockHeight + OFFSET_Y + blockHeight / 5;
+        const baseX = (playerPos.x - 1) * blockWidth + blockWidth / 5, baseY = (playerPos.y - 1) * blockHeight + blockHeight / 5;
         const playerWidth = blockWidth - blockWidth / 5 * 2, playerHeight = blockHeight - blockHeight / 5 * 2;
         let tri : Phaser.Geom.Triangle;
         switch (playerPos.direction) {
@@ -141,135 +142,10 @@ export class Game extends Scene
         const polygonList: typeof this.polygonList = [];
 
         const RANGE = this.mainViewRange, RANGE_SIDE = this.mainViewRangeSide;
-        const BLOCK_BASE_SIZE = 560, SCREEN_WIDTH = 760, SCREEN_HEIGHT = 520, OFFSET_X = 10, OFFSET_Y = 10,  ANGLE = 60 / 180 * Math.PI;
-        const CENTER_X = SCREEN_WIDTH / 2 + OFFSET_X, CENTER_Y = SCREEN_HEIGHT / 2 + OFFSET_Y, SCREEN_DISTANCE = BLOCK_BASE_SIZE / 2, CAMERA_SCREEN_DISTANCE = SCREEN_WIDTH / 2 / Math.tan(ANGLE / 2), AB = CAMERA_SCREEN_DISTANCE * BLOCK_BASE_SIZE / 2;
+        const BLOCK_BASE_SIZE = 560, SCREEN_WIDTH = Number(this.graphMainView.getData('width')), SCREEN_HEIGHT = Number(this.graphMainView.getData('height')), ANGLE = 60 / 180 * Math.PI;
+        const CENTER_X = SCREEN_WIDTH / 2, CENTER_Y = SCREEN_HEIGHT / 2, SCREEN_DISTANCE = BLOCK_BASE_SIZE / 2, CAMERA_SCREEN_DISTANCE = SCREEN_WIDTH / 2 / Math.tan(ANGLE / 2), AB = CAMERA_SCREEN_DISTANCE * BLOCK_BASE_SIZE / 2;
 
-        const frame = new Phaser.Geom.Rectangle(OFFSET_X, OFFSET_Y, SCREEN_WIDTH, SCREEN_HEIGHT);
-        const frameCutForX = (x1: number, y1: number, x2: number, y2: number, ): number => {
-            if (frame.contains(x1, y1)) {
-                return x1;
-            }
-
-            const slope = (y1 - y2) / (x1 - x2);
-            if (x1 - x2 < 0) {
-                if (y1 - y2 < 0) {
-                    // 左上
-                    if ((slope * (frame.left - x2) + y2) > frame.top) {
-                        return frame.left;
-                    } else {
-                        return (1 / slope * (frame.top - y2) + x2);
-                    }
-                } else if (y1 - y2 > 0) {
-                    // 左下
-                    if ((slope * (frame.left - x2) + y2) < frame.bottom) {
-                        return frame.left;
-                    } else {
-                        return (1 / slope * (frame.bottom - y2) + x2);
-                    }
-                } else {
-                    return frame.left
-                }
-            } else {
-                if (y1 - y2 < 0) {
-                    // 右上
-                    if ((slope * (frame.right - x2) + y2) > frame.top) {
-                        return frame.right;
-                    } else {
-                        return (1 / slope * (frame.top - y2) + x2);
-                    }
-                } else if (y1 - y2 > 0) {
-                    // 右下
-                    if ((slope * (frame.right - x2) + y2) < frame.bottom) {
-                        return frame.right;
-                    } else {
-                        return (1 / slope * (frame.bottom - y2) + x2);
-                    }
-                } else {
-                    return frame.right
-                }
-            }
-        }
-        const frameCutForY = (x1: number, y1: number, x2: number, y2: number, ): number => {
-            if (frame.contains(x1, y1)) {
-                return y1;
-            }
-
-            const slope = (y1 - y2) / (x1 - x2);
-            if (x1 - x2 < 0) {
-                if (y1 - y2 < 0) {
-                    // 左上
-                    if ((slope * (frame.left - x2) + y2) > frame.top) {
-                        return (slope * (frame.left - x2) + y2);
-                    } else {
-                        return frame.top;
-                    }
-                } else if (y1 - y2 > 0) {
-                    // 左下
-                    if ((slope * (frame.left - x2) + y2) < frame.bottom) {
-                        return (slope * (frame.left - x2) + y2);
-                    } else {
-                        return frame.bottom;
-                    }
-                } else {
-                    if (y2 < frame.top) {
-                        return frame.top;
-                    } else if (y2 > frame.bottom) {
-                        return frame.bottom;
-                    }
-                    return y2;
-                }
-            } else {
-                if (y1 - y2 < 0) {
-                    // 右上
-                    if ((slope * (frame.right - x2) + y2) > frame.top) {
-                        return (slope * (frame.right - x2) + y2);
-                    } else {
-                        return frame.top;
-                    }
-                } else if (y1 - y2 > 0) {
-                    // 右下
-                    if ((slope * (frame.right - x2) + y2) < frame.bottom) {
-                        return (slope * (frame.right - x2) + y2);
-                    } else {
-                        return frame.bottom;
-                    }
-                } else {
-                    if (y2 < frame.top) {
-                        return frame.top;
-                    } else if (y2 > frame.bottom) {
-                        return frame.bottom;
-                    }
-                    return y2;
-                }
-            }
-        }
-        const preparePoints = (upOutsideX: number, upOutsideY: number, upInsideX: number, upInsideY: number, downInsideX: number, downInsideY: number, downOutsideX: number, downOutsideY: number): number[] => {
-            if ( ! frame.contains(upInsideX, upInsideY)){
-                return [];
-            }
-
-            const upOutsideYCalc = frameCutForY(upOutsideX, upOutsideY, upInsideX, upInsideY),
-            downOutsideXCalc = frameCutForX(downOutsideX, downOutsideY, downInsideX, downInsideY), downOutsideYCalc = frameCutForY(downOutsideX, downOutsideY, downInsideX, downInsideY);
-            const result = [
-                frameCutForX(upOutsideX, upOutsideY, upInsideX, upInsideY),
-                upOutsideYCalc,
-                upInsideX, upInsideY,
-                frameCutForX(downInsideX, downInsideY, upInsideX, upInsideY),
-                frameCutForY(downInsideX, downInsideY, upInsideX, upInsideY),
-                downOutsideXCalc,
-                downOutsideYCalc,
-            ];
-            if (upOutsideYCalc === frame.top) {
-                result.unshift(upOutsideX < upInsideX ? frame.left : frame.right, frame.top);
-            }
-            if (downOutsideYCalc === frame.bottom) {
-                result.push(downOutsideX < downInsideX ? frame.left : frame.right, frame.bottom);
-            } else if (downOutsideXCalc === frame.right || downOutsideXCalc === frame.left) {
-                result.push(downOutsideXCalc, frameCutForY(downOutsideX, downOutsideY, upOutsideX, upOutsideY));
-            }
-
-            return result;
-        }
+        const frame = new Phaser.Geom.Rectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
         for (let i = 0; i <= RANGE; i++) {
             const targetDistance = (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * (i)),
@@ -286,31 +162,31 @@ export class Game extends Scene
                     nearOutside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j + 0.5)) / targetDistanceNear;
                 // 右側
                 polygonListLine[order] = [];
-                pointList = preparePoints(CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + farOutside, CENTER_Y + far)
+                pointList = [CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y - far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + farOutside, CENTER_Y + far];
                 polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
-                pointList = preparePoints(CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farOutside, CENTER_Y + far, CENTER_X + nearOutside, CENTER_Y + near)
+                pointList = [CENTER_X + nearOutside, CENTER_Y - near, CENTER_X + farOutside, CENTER_Y - far, CENTER_X + farOutside, CENTER_Y + far, CENTER_X + nearOutside, CENTER_Y + near];
                 polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
-                pointList = preparePoints(CENTER_X + farOutside, CENTER_Y + far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near)
+                pointList = [CENTER_X + farOutside, CENTER_Y + far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near];
                 polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
 
                 // 左側
                 polygonListLine[order + 1] = [];
-                pointList = preparePoints(CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - farOutside, CENTER_Y + far)
+                pointList = [CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y - far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - farOutside, CENTER_Y + far];
                 polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
-                pointList = preparePoints(CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farOutside, CENTER_Y + far, CENTER_X - nearOutside, CENTER_Y + near)
+                pointList = [CENTER_X - nearOutside, CENTER_Y - near, CENTER_X - farOutside, CENTER_Y - far, CENTER_X - farOutside, CENTER_Y + far, CENTER_X - nearOutside, CENTER_Y + near];
                 polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
-                pointList = preparePoints(CENTER_X - farOutside, CENTER_Y + far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near)
+                pointList = [CENTER_X - farOutside, CENTER_Y + far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near];
                 polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
             }
             
 
             // 真ん中
             polygonListLine[0] = [];
-            pointList = preparePoints(CENTER_X + near, CENTER_Y - near, CENTER_X + far, CENTER_Y - far, CENTER_X + far, CENTER_Y + far, CENTER_X + near, CENTER_Y + near);
+            pointList = [CENTER_X + near, CENTER_Y - near, CENTER_X + far, CENTER_Y - far, CENTER_X + far, CENTER_Y + far, CENTER_X + near, CENTER_Y + near];
             polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
-            pointList = preparePoints(CENTER_X - near, CENTER_Y - near, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near);
+            pointList = [CENTER_X - near, CENTER_Y - near, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near];
             polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
-            pointList = preparePoints(CENTER_X + near, CENTER_Y + near, CENTER_X + far, CENTER_Y + far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near)
+            pointList = [CENTER_X + near, CENTER_Y + near, CENTER_X + far, CENTER_Y + far, CENTER_X - far, CENTER_Y + far, CENTER_X - near, CENTER_Y + near];
             polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
             pointList = [CENTER_X + far, CENTER_Y + far, CENTER_X + far, CENTER_Y - far, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far, ];
             polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
@@ -327,7 +203,7 @@ export class Game extends Scene
     redrawMainView()
     {
         const dun = this.dungeon;
-        const graph = this.graph;
+        const graph = this.graphMainView;
 
         graph.lineStyle(4, 0xFFFFFF);
         graph.fillStyle(0x0);
@@ -393,8 +269,6 @@ export class Game extends Scene
         }
 
         // 背景ベース
-        graph.lineStyle(4, 0xFFFFFF);
-        graph.strokeRectShape(frame);
         graph.fillStyle(0x0);
         graph.fillRectShape(frame);
         // 背景天井
@@ -526,6 +400,12 @@ export class Game extends Scene
                 }
             }
         }
+
+        // 枠線の描画
+        graph.lineStyle(4, 0);
+        graph.strokeRectShape(frame);
+        graph.lineStyle(2, 0xFFFFFF);
+        graph.strokeRectShape(frame);
     }
 
     static fontFamily = '\'BIZ UDゴシック\', Consolas, monospace';
@@ -577,21 +457,29 @@ export class Game extends Scene
 
         const graph = this.add.graphics({
             lineStyle: { width: 2, color: 0xCCCCCC, alpha: 1 },
-            fillStyle: { color: 0x0, alpha: 1 }
+            fillStyle: { color: 0x0, alpha: 1 },
+            x: 10,
+            y: 10,
         });
-        this.graph = graph;
+        graph.setData('width', 760).setData('height', 520)
 
-        // this.camera = this.cameras.main;
-        // this.camera.setBackgroundColor(0x00ff00);
+        const mask = this.add.graphics({fillStyle: { color: 0xffffff, alpha: 0 }});
+        mask.fillRect(10 - 2, 10 - 2, 760 + 4, 520 + 4)
+        graph.setMask(mask.createGeometryMask())
+        this.graphMainView = graph;
 
-        // this.background = this.add.image(512, 384, 'background');
-        // this.background.setAlpha(0.5);
+        const graphMini = this.add.graphics({
+            lineStyle: { width: 2, color: 0xCCCCCC, alpha: 1 },
+            fillStyle: { color: 0x0, alpha: 1 },
+            x: this.game.canvas.width - 10 - 200,
+            y: 10,
+        });
+        graphMini.setData('width', 200).setData('height', 200)
 
-        // this.gameText = this.add.text(512, 384, 'Make something fun!\nand share it with us:\nsupport@phaser.io', {
-        //     fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
-        //     stroke: '#000000', strokeThickness: 8,
-        //     align: 'center'
-        // }).setOrigin(0.5).setDepth(100);
+        const maskMini = this.add.graphics({fillStyle: { color: 0xffffff, alpha: 0 }});
+        maskMini.fillRect(graphMini.x - 1, graphMini.y - 1, 200 + 2, 200 + 2)
+        graphMini.setMask(maskMini.createGeometryMask())
+        this.graphMiniMap = graphMini;
 
         this.keys = {
             keyW: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W),
