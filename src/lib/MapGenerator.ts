@@ -106,6 +106,14 @@ export const rotateDirection = (direction: MapDirection, value: number) => {
 }
 
 
+/**
+ * ダンジョンマップ
+ * 
+ * 管理する物
+ * - ダンジョンの部屋と通路、扉の位置
+ * - プレイヤーの位置と移動
+ * - 配置しているオブジェクトの位置とイベント呼び出し
+ */
 export class DungeonMap {
   private _map: integer[];
   private _mapFog: integer[];
