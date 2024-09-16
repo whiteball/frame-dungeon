@@ -3,6 +3,7 @@ import { Scene } from 'phaser';
 import { DungeonMap, MapObject } from '../../lib/MapGenerator';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
+import { InfoView } from '../../lib/InfoView';
 
 export class Game extends Scene {
     keys: {
@@ -18,15 +19,18 @@ export class Game extends Scene {
 
     mainView: MainView;
     miniMapView: MiniMapView;
+    infoView: InfoView;
+
+    params: Map<string, number | string>;
 
     constructor() {
         super('Game');
     }
 
-    redrawAll() {
+    render() {
         this.miniMapView.render(this.dungeon);
         this.mainView.render(this.dungeon);
-        this.redrawInfo();
+        this.infoView.render(this.floor, this.params);
     }
 
     static fontFamily = '\'BIZ UDゴシック\', Consolas, monospace';
@@ -47,15 +51,6 @@ export class Game extends Scene {
 
     create() {
         const dun = new DungeonMap(15, 15);
-        this.floorText = this.add.text(this.game.canvas.width - 200, 220, this.floor + 'F').setFontFamily(Game.fontFamily)
-        this.playerTextLabel = this.add.text(this.game.canvas.width - 200, 250, '').setFontFamily(Game.fontFamily).style.setAlign('left')
-        this.playerTextValue = this.add.text(this.game.canvas.width - 100, 250, '').setFontFamily(Game.fontFamily).style.setAlign('right')
-        this.playerInfo = new Map([
-            ['HP', 100],
-            ['MP', 50],
-            ['POW', 10],
-            ['あ', 10],
-        ])
 
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
             dungeon.build();
@@ -74,8 +69,16 @@ export class Game extends Scene {
             EventBus.emit('update-view')
         })
 
+        this.params = new Map([
+            ['HP', 100],
+            ['MP', 50],
+            ['POW', 10],
+            ['EXP', 0],
+        ]);
+
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         this.miniMapView = new MiniMapView(this.add, this.game.canvas.width - 10 - 200, 10, 200, 200);
+        this.infoView = new InfoView(this.add, this.game.canvas.width - 10 - 200, 220, 200, 400);
 
         this.keys = {
             keyW: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -88,39 +91,39 @@ export class Game extends Scene {
 
         this.keys.keyW?.on('down', () => {
             if (this.dungeon.goPlayer() > 0) {
-                this.redrawAll()
+                this.render()
             }
         })
         this.keys.keyA?.on('down', () => {
             if (this.dungeon.turnLeftPlayer()) {
-                this.redrawAll()
+                this.render()
             }
         })
         this.keys.keyS?.on('down', () => {
             if (this.dungeon.turnBackPlayer()) {
-                this.redrawAll()
+                this.render()
             }
         })
         this.keys.keyD?.on('down', () => {
             if (this.dungeon.turnRightPlayer()) {
-                this.redrawAll()
+                this.render()
             }
         })
         // this.keys.keyE?.on('down', () => {
         //     if (this.dungeon.turnRightPlayer()) {
-        //         this.redrawAll()
+        //         this.render()
         //     }
         // })
         // this.keys.keyQ?.on('down', () => {
         //     if (this.dungeon.turnLeftPlayer()) {
-        //         this.redrawAll()
+        //         this.render()
         //     }
         // })
 
         this.dungeon = dun;
 
         EventBus.on('update-view', () => {
-            this.redrawAll();
+            this.render();
         })
 
         EventBus.emit('go-to-next-floor', this.dungeon);
