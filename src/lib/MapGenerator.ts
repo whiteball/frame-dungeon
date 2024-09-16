@@ -66,6 +66,7 @@ export class MapObject {
   public event: null | ObjectEvent = null;
   public x: integer = -1;
   public y: integer = -1;
+  public sphere: boolean = false;
 }
 
 export const MapDirection = {
@@ -1007,7 +1008,7 @@ export class DungeonMap {
     return list;
   }
 
-  public addObject(x: integer, y: integer, mark: string, event: ObjectEvent, color: integer = 0xFFFFFF, alpha: integer = 1) {
+  public addObject(x: integer, y: integer, mark: string, event: ObjectEvent, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false) {
     const obj = new MapObject()
     obj.x = x;
     obj.y = y;
@@ -1015,6 +1016,7 @@ export class DungeonMap {
     obj.event = event;
     obj.color = color;
     obj.alpha = alpha;
+    obj.sphere = sphere;
     this._objects.push(obj)
   }
 }

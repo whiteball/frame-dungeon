@@ -5,6 +5,7 @@ export class MainView {
   private graph: Phaser.GameObjects.Graphics;
 
   private polygonList: (Phaser.Geom.Polygon | null)[][][];
+  private centerList: (Phaser.Geom.Circle | null)[][];
   private frame: (Phaser.Geom.Rectangle | null);
   private ceil: (Phaser.Geom.Rectangle | null);
   private floor: (Phaser.Geom.Rectangle | null);
@@ -37,6 +38,7 @@ export class MainView {
 
   private prepareDrawPoints() {
     const polygonList: typeof this.polygonList = [];
+    const centerList: typeof this.centerList = [];
 
     const RANGE = this.range, RANGE_SIDE = this.rangeSide;
     const BLOCK_BASE_SIZE = this.blockSize, SCREEN_WIDTH = this.width, SCREEN_HEIGHT = this.height, ANGLE = this.angle / 180 * Math.PI;
@@ -46,15 +48,19 @@ export class MainView {
 
     for (let i = 0; i <= RANGE; i++) {
       const targetDistance = (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * (i)),
+        targetDistanceMiddle = (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * (i - 0.5)),
         targetDistanceNear = (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * (i - 1));
       const far = AB / targetDistance,
+        middle = AB / targetDistanceMiddle,
         near = AB / targetDistanceNear;
       const polygonListLine: (Phaser.Geom.Polygon | null)[][] = [];
+      const centerListLine: (Phaser.Geom.Circle | null)[] = [];
       let pointList: number[] = [];
       for (let j = RANGE_SIDE; j >= 1; j--) {
         const order = 2 * j - 1;
         const farInside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j - 1 + 0.5)) / targetDistance,
           nearInside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j - 1 + 0.5)) / targetDistanceNear,
+          middleCenter = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * j) / targetDistanceMiddle,
           farOutside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j + 0.5)) / targetDistance,
           nearOutside = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * (j + 0.5)) / targetDistanceNear;
         // 右側
@@ -65,6 +71,7 @@ export class MainView {
         polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
         pointList = [CENTER_X + farOutside, CENTER_Y + far, CENTER_X + farInside, CENTER_Y + far, CENTER_X + nearInside, CENTER_Y + near, CENTER_X + nearOutside, CENTER_Y + near];
         polygonListLine[order].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+        centerListLine[order] = new Phaser.Geom.Circle(CENTER_X + middleCenter, CENTER_Y, middle / 2);
 
         // 左側
         polygonListLine[order + 1] = [];
@@ -74,8 +81,8 @@ export class MainView {
         polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
         pointList = [CENTER_X - farOutside, CENTER_Y + far, CENTER_X - farInside, CENTER_Y + far, CENTER_X - nearInside, CENTER_Y + near, CENTER_X - nearOutside, CENTER_Y + near];
         polygonListLine[order + 1].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+        centerListLine[order + 1] = new Phaser.Geom.Circle(CENTER_X - middleCenter, CENTER_Y, middle / 2);
       }
-
 
       // 真ん中
       polygonListLine[0] = [];
@@ -87,11 +94,14 @@ export class MainView {
       polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
       pointList = [CENTER_X + far, CENTER_Y + far, CENTER_X + far, CENTER_Y - far, CENTER_X - far, CENTER_Y - far, CENTER_X - far, CENTER_Y + far,];
       polygonListLine[0].push(pointList.length > 0 ? new Phaser.Geom.Polygon(pointList) : null);
+      centerListLine[0] = new Phaser.Geom.Circle(CENTER_X, CENTER_Y, middle / 2);
 
       polygonList.push(polygonListLine);
+      centerList.push(centerListLine);
     }
 
     this.polygonList = polygonList;
+    this.centerList = centerList;
     this.frame = frame;
     this.ceil = new Phaser.Geom.Rectangle(frame.left, frame.top, frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE))
     this.floor = new Phaser.Geom.Rectangle(frame.left, frame.top + frame.height / 2 + AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE), frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE))
@@ -175,6 +185,27 @@ export class MainView {
     // ブロックベース
     graph.lineStyle(1, 0x0);
     graph.fillStyle(0xFFFFFF);
+
+    const drawSphere = (circle: Phaser.Geom.Circle, alpha: number) => {
+      // 球の本体
+      graph.strokeCircleShape(circle).fillCircleShape(circle);
+
+      // 光の反射
+      const offsetX = circle.x + circle.radius * 0.5, offsetY = circle.y - circle.radius * 0.5
+      graph.translateCanvas(offsetX, offsetY).rotateCanvas(Math.PI / 4);
+      graph.fillStyle(0xFFFFFF, alpha / 3).fillEllipse(0, 0, circle.radius / 2, circle.radius / 6)
+      graph.rotateCanvas(-Math.PI / 4).translateCanvas(-offsetX, -offsetY)
+
+      // 影
+      graph.fillStyle(0, alpha / 5);
+      graph.beginPath()
+        .arc(circle.x, circle.y, circle.radius, Math.PI / 4 * 2, Math.PI / 4 * 4.5)
+        .closePath().fill();
+      graph.beginPath()
+        .arc(circle.x, circle.y, circle.radius, Math.PI / 4 * 1.5, Math.PI / 4 * 4)
+        .closePath().fill();
+    }
+
     for (let i = 0; i < blockList.length; i++) {
       // デバッグ用描画距離によって枠線を色分け
       // graph.lineStyle(2, [0x0000FF,0x00FFFF,0x00FF00,0xFFFF00,0xFF0000,0xFF00FF][i%6]);
@@ -209,8 +240,13 @@ export class MainView {
         for (const object of dun.getObject(blockList[i][order][1], blockList[i][order][2])) {
           const pol = this.polygonList[RANGE - i][order][2];
           if (pol) {
+            graph.strokePoints(pol.points, true)
             graph.fillStyle(object.color, object.alpha);
             graph.fillPoints(pol.points, true)
+            const center = this.centerList[RANGE - i][order];
+            if (object.sphere && center) {
+              drawSphere(center, object.alpha);
+            }
           }
         }
 
@@ -242,12 +278,16 @@ export class MainView {
         for (const object of dun.getObject(blockList[i][order + 1][1], blockList[i][order + 1][2])) {
           const pol = this.polygonList[RANGE - i][order + 1][2];
           if (pol) {
+            graph.strokePoints(pol.points, true)
             graph.fillStyle(object.color, object.alpha);
             graph.fillPoints(pol.points, true)
+            const center = this.centerList[RANGE - i][order + 1];
+            if (object.sphere && center) {
+              drawSphere(center, object.alpha);
+            }
           }
         }
       }
-
 
       // 真ん中
       // graph.lineStyle(2, 0);
@@ -290,8 +330,13 @@ export class MainView {
       for (const object of dun.getObject(blockList[i][0][1], blockList[i][0][2])) {
         const pol = this.polygonList[RANGE - i][0][2];
         if (pol) {
+          graph.strokePoints(pol.points, true)
           graph.fillStyle(object.color, object.alpha);
           graph.fillPoints(pol.points, true)
+          const center = this.centerList[RANGE - i][0];
+          if (object.sphere && center) {
+            drawSphere(center, object.alpha);
+          }
         }
       }
     }
