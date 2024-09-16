@@ -120,6 +120,7 @@ export class DungeonMap {
   private _mapFog: integer[];
   private _width: integer;
   private _height: integer;
+  private _enableFog: boolean = true;
 
   private _minRoomLength: integer = 3;
   private _viewRange: integer = 3;
@@ -142,16 +143,16 @@ export class DungeonMap {
     this._width = width + 2;
     this._height = height + 2;
     this._viewRange = viewRange;
-    this.init(enableFog);
+    this._enableFog = enableFog;
   }
 
-  public init(enableFog = true) {
+  public init() {
     this._map = [];
     this._mapFog = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
     this._objects = [];
-    const fog = enableFog ? 1 : 0;
+    const fog = this._enableFog ? 1 : 0;
     for (let i = 0; i < this._width * this._height; i++) {
       this._map[i] = -1;
       this._mapFog[i] = fog;
@@ -718,6 +719,7 @@ export class DungeonMap {
   }
 
   public build() {
+    this.init();
     this.makeRoom();
     this.makeCorridor();
     this.setWall();

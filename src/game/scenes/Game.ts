@@ -56,23 +56,23 @@ export class Game extends Scene {
             ['POW', 10],
             ['あ', 10],
         ])
-        const init = () => {
-            dun.build();
-            // dun.dump();
-            const step = dun.getRandomPos(true, true);
+
+        EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
+            dungeon.build();
+            // dungeon.dump();
+            const step = dungeon.getRandomPos(true, true);
             if (step.length >= 2) {
-                dun.addObject(step[0], step[1], 'o', (dungeon: DungeonMap, object: MapObject) => {
+                // 階段の追加
+                dungeon.addObject(step[0], step[1], 'o', (dungeon: DungeonMap, object: MapObject) => {
                     const player = dungeon.getPlayerPos()
                     if (player.x === object.x && player.y === object.y) {
                         this.floor++;
-                        dungeon.init();
-                        init();
-                        EventBus.emit('update-view')
+                        EventBus.emit('go-to-next-floor', dungeon)
                     }
                 }, 0x00FF00)
             }
-        }
-        init();
+            EventBus.emit('update-view')
+        })
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         this.miniMapView = new MiniMapView(this.add, this.game.canvas.width - 10 - 200, 10, 200, 200);
@@ -119,12 +119,11 @@ export class Game extends Scene {
 
         this.dungeon = dun;
 
-        this.redrawAll()
-
         EventBus.on('update-view', () => {
             this.redrawAll();
         })
 
+        EventBus.emit('go-to-next-floor', this.dungeon);
         EventBus.emit('current-scene-ready', this);
     }
 
