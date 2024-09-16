@@ -18,7 +18,7 @@ export class MainView {
 
   private blockSize: integer;
 
-  constructor(factory: Phaser.GameObjects.GameObjectFactory, x: integer, y: integer, width: integer, height: integer) {
+  constructor(factory: Phaser.GameObjects.GameObjectFactory, x: integer, y: integer, width: integer, height: integer, angle = 70, blockSize = 0) {
     const mask = factory.graphics({ fillStyle: { color: 0xffffff, alpha: 0 } });
     mask.fillRect(x - 2, y - 2, width + 4, height + 4);
 
@@ -30,8 +30,8 @@ export class MainView {
     }).setMask(mask.createGeometryMask());
     this.width = width;
     this.height = height;
-    this.angle = 60;
-    this.blockSize = 560;
+    this.angle = angle;
+    this.blockSize = blockSize === 0 ? Math.floor(width / 2 / (0.75 - Math.tan(angle / 2) / 2)) : blockSize;
 
     this.prepareDrawPoints();
   }
