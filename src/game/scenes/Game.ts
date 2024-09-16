@@ -60,7 +60,7 @@ export class Game extends Scene {
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
             dungeon.build();
             // dungeon.dump();
-            const step = dungeon.getRandomPos(true, true);
+            const step = dungeon.getRandomPos(true, true, true);
             if (step.length >= 2) {
                 // 階段の追加
                 dungeon.addObject(step[0], step[1], 'o', (dungeon: DungeonMap, object: MapObject) => {
