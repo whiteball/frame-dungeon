@@ -73,16 +73,74 @@ export class MiniMapView {
       }
 
       for (const object of dun.getObject(block.x, block.y)) {
+        graph.fillStyle(object.color, object.alpha);
+        graph.lineStyle(1, 0xFFFFFF);
         switch (object.mark) {
           case 'o':
-          default:
-            graph.fillStyle(object.color, object.alpha);
-            graph.lineStyle(1, 0xFFFFFF);
             graph.fillCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3);
             graph.strokeCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3);
-            graph.fillStyle(0xCCCCCC);
+            break;
+          case '*':
+            {
+              const r = blockWidth * 4 / 5 / 2;
+              graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
+                .beginPath()
+                .moveTo(r * Math.cos(Math.PI * 0 / 5 - Math.PI / 10), r * Math.sin(Math.PI * 0 / 5 - Math.PI / 10));
+              for (let i = 1; i < 10; i++) {
+                if (i % 2 === 1) {
+                  graph.lineTo(r / 2 * Math.cos(Math.PI * i / 5 - Math.PI / 10), r / 2 * Math.sin(Math.PI * i / 5 - Math.PI / 10));
+                } else {
+                  graph.lineTo(r * Math.cos(Math.PI * i / 5 - Math.PI / 10), r * Math.sin(Math.PI * i / 5 - Math.PI / 10));
+                }
+              }
+              graph.closePath().fill().stroke()
+                .translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2)
+            }
+            break;
+          case '<>':
+            graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
+              .rotateCanvas(Math.PI / 4)
+              .fillRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2, blockWidth / 2)
+              .strokeRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2, blockWidth / 2)
+              .rotateCanvas(-Math.PI / 4)
+              .translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2);
+            break;
+          case '+':
+            {
+              const r = blockWidth * 4 / 5 / 2;
+              graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
+                .beginPath()
+                .moveTo(r * Math.cos(Math.PI * 0 / 2 - Math.PI / 10), r * Math.sin(Math.PI * 0 / 2 - Math.PI / 10));
+              for (let i = 0; i < 4; i++) {
+                graph.lineTo(r * Math.cos(Math.PI * i / 2 + Math.PI / 10), r * Math.sin(Math.PI * i / 2 + Math.PI / 10));
+                graph.lineTo(r / 3 * Math.cos(Math.PI * (i + 1) / 2 - Math.PI / 4), r / 3 * Math.sin(Math.PI * (i + 1) / 2 - Math.PI / 4));
+                graph.lineTo(r * Math.cos(Math.PI * (i + 1) / 2 - Math.PI / 10), r * Math.sin(Math.PI * (i + 1) / 2 - Math.PI / 10));
+              }
+              graph.closePath().fill().stroke()
+                .translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2)
+            }
+            break;
+          case 'x':
+            {
+              const r = blockWidth * 4 / 5 / 2;
+              graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2).rotateCanvas(Math.PI / 4)
+                .beginPath()
+                .moveTo(r * Math.cos(Math.PI * 0 / 2 - Math.PI / 10), r * Math.sin(Math.PI * 0 / 2 - Math.PI / 10));
+              for (let i = 0; i < 4; i++) {
+                graph.lineTo(r * Math.cos(Math.PI * i / 2 + Math.PI / 10), r * Math.sin(Math.PI * i / 2 + Math.PI / 10));
+                graph.lineTo(r / 3 * Math.cos(Math.PI * (i + 1) / 2 - Math.PI / 4), r / 3 * Math.sin(Math.PI * (i + 1) / 2 - Math.PI / 4));
+                graph.lineTo(r * Math.cos(Math.PI * (i + 1) / 2 - Math.PI / 10), r * Math.sin(Math.PI * (i + 1) / 2 - Math.PI / 10));
+              }
+              graph.closePath().fill().stroke()
+                .rotateCanvas(-Math.PI / 4).translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2)
+            }
+            break;
+          default:
+            graph.fillRect(baseX + blockWidth / 5, baseY + blockWidth / 5, blockWidth * 3 / 5, blockWidth * 3 / 5)
+              .strokeRect(baseX + blockWidth / 5, baseY + blockWidth / 5, blockWidth * 3 / 5, blockWidth * 3 / 5);
             break;
         }
+        graph.fillStyle(0xCCCCCC);
       }
     }
 
