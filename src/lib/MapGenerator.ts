@@ -1,6 +1,6 @@
 'use strict';
 
-function getRandomInt(min: integer, max:integer):integer {
+function getRandomInt(min: integer, max: integer): integer {
   min = Math.ceil(min);
   max = Math.floor(max);
   return Math.floor(Math.random() * (max - min) + min); //The maximum is exclusive and the minimum is inclusive
@@ -138,14 +138,14 @@ export class DungeonMap {
 
   private _objects: MapObject[];
 
-  constructor (width: integer, height: integer, viewRange = 3, enableFog = true) {
+  constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
     this._width = width + 2;
     this._height = height + 2;
     this._viewRange = viewRange;
     this.init(enableFog);
   }
 
-  public init (enableFog = true) {
+  public init(enableFog = true) {
     this._map = [];
     this._mapFog = [];
     this._rooms = [];
@@ -207,7 +207,7 @@ export class DungeonMap {
     }
   }
 
-  public getPlayerPos() : {x: integer, y: integer, direction: MapDirection} {
+  public getPlayerPos(): { x: integer, y: integer, direction: MapDirection } {
     return {
       x: this._player.x,
       y: this._player.y,
@@ -219,12 +219,12 @@ export class DungeonMap {
     if (this._map.length <= 0) {
       return
     }
-    
+
     const minRoomLength = this._minRoomLength;
 
     const hMax = Math.floor((this._height - 3) / (minRoomLength + 1))
     const vMax = Math.floor((this._width - 3) / (minRoomLength + 1))
-  
+
     // 横方向に切る
     const horizontalLines: integer[] = [];
     const hLines: integer[] = [];
@@ -233,7 +233,7 @@ export class DungeonMap {
     }
     arrayShuffle(hLines);
     for (let i = 0; i < hMax; i++) {
-      let temp: integer|undefined = 0, line = 0;
+      let temp: integer | undefined = 0, line = 0;
       do {
         temp = hLines.pop()
         if (temp !== undefined) {
@@ -243,12 +243,12 @@ export class DungeonMap {
           break;
         }
       } while (horizontalLines.some(val => (line - minRoomLength <= val && line + minRoomLength >= val)));
-  
+
       if ((line !== -1)) {
         horizontalLines.push(line);
       }
     }
-  
+
     // 縦方向に切る
     const verticalLines: integer[] = [];
     const vLines: integer[] = [];
@@ -311,7 +311,7 @@ export class DungeonMap {
         let cond = true;
         let corridor;
         for (let j = 0; j < 4 && cond && directionArray.length !== 0; j++) {
-          const isConflict = (pos: {x: integer, y: integer}, direction: string) => newRooms.some(val =>
+          const isConflict = (pos: { x: integer, y: integer }, direction: string) => newRooms.some(val =>
             val.corridors.some(v =>
               (pos[direction as keyof typeof pos] + 1 === v[(direction + '1') as keyof Rect] || pos[direction as keyof typeof pos] - 1 === v[(direction + '2') as keyof Rect])
               && (direction === 'x' ? (v.y2 - pos.y) : (v.x2 - pos.x)) > 1
@@ -380,7 +380,7 @@ export class DungeonMap {
    */
   public setWall() {
     const roomsWithCorridors = this._roomsWithCorridors
-    const _set = function (x: integer, y:integer, rect: Rect) {
+    const _set = function (x: integer, y: integer, rect: Rect) {
       let val = 0;
       if (x === rect.x1) {
         val += 4;
@@ -394,7 +394,7 @@ export class DungeonMap {
       if (y === rect.y2) {
         val += 2;
       }
-  
+
       return val
     }
     // 適当な部屋を進入禁止にする
@@ -410,7 +410,7 @@ export class DungeonMap {
     }
     // ランダムに部屋を繋げる
     const connected = new Map<integer, Set<integer>>(),
-      _addConnected = (roomNumber: integer, direction:integer) => {
+      _addConnected = (roomNumber: integer, direction: integer) => {
         if (connected.has(roomNumber)) {
           connected.get(roomNumber)?.add(direction)
         } else {
@@ -469,7 +469,7 @@ export class DungeonMap {
       }
       //console.log(connected)
     }
-  
+
     // 壁を作る
     let roomCount = 0;
     const allCorridors = [];
@@ -483,7 +483,7 @@ export class DungeonMap {
         }
       }
       connect = ~connect;
-  
+
       for (let i = roomWithCorridors.room.x1; i <= roomWithCorridors.room.x2; i++) {
         for (let j = roomWithCorridors.room.y1; j <= roomWithCorridors.room.y2; j++) {
           this.setAt(i, j, block ? -1 : (_set(i, j, roomWithCorridors.room) & connect))
@@ -586,7 +586,7 @@ export class DungeonMap {
         }
       }
     }
-  
+
     // 扉
     const existsDoor = (direction: integer, x1: integer, y1: integer, x2: integer, y2: integer) => {
       for (let i = x1; i <= x2; i++) {
@@ -724,7 +724,7 @@ export class DungeonMap {
     this.setPlayerRandom();
   }
 
-  public clearFogWithinPlayer (): void {
+  public clearFogWithinPlayer(): void {
     const direction = this._player.direction;
 
     let x = this._player.x, y = this._player.y;
@@ -734,17 +734,17 @@ export class DungeonMap {
 
       switch (direction) {
         case MapDirection.EAST:
-          if ( ! (value & 2)) {
+          if (!(value & 2)) {
             this.setFogAt(x, y + 1, 0);
-            if ( ! (this.getAt(x, y + 1) & 1)) {
+            if (!(this.getAt(x, y + 1) & 1)) {
               this.setFogAt(x + 1, y + 1, 0);
             }
           } else if (value & 32) {
             this.setFogAt(x, y + 1, 0);
           }
-          if ( ! (value & 8)) {
+          if (!(value & 8)) {
             this.setFogAt(x, y - 1, 0);
-            if ( ! (this.getAt(x, y - 1) & 1)) {
+            if (!(this.getAt(x, y - 1) & 1)) {
               this.setFogAt(x + 1, y - 1, 0);
             }
           } else if (value & 128) {
@@ -759,17 +759,17 @@ export class DungeonMap {
           }
           break;
         case MapDirection.SOUTH:
-          if ( ! (value & 4)) {
+          if (!(value & 4)) {
             this.setFogAt(x - 1, y, 0);
-            if ( ! (this.getAt(x - 1, y) & 2)) {
+            if (!(this.getAt(x - 1, y) & 2)) {
               this.setFogAt(x - 1, y + 1, 0);
             }
           } else if (value & 64) {
             this.setFogAt(x - 1, y, 0);
           }
-          if ( ! (value & 1)) {
+          if (!(value & 1)) {
             this.setFogAt(x + 1, y, 0);
-            if ( ! (this.getAt(x + 1, y) & 2)) {
+            if (!(this.getAt(x + 1, y) & 2)) {
               this.setFogAt(x + 1, y + 1, 0);
             }
           } else if (value & 16) {
@@ -784,20 +784,20 @@ export class DungeonMap {
           }
           break;
         case MapDirection.WEST:
-          if ( ! (value & 8)) {
+          if (!(value & 8)) {
             this.setFogAt(x, y - 1, 0);
-            if ( ! (this.getAt(x, y - 1) & 4)) {
+            if (!(this.getAt(x, y - 1) & 4)) {
               this.setFogAt(x - 1, y - 1, 0);
             }
           } else if (value & 128) {
             this.setFogAt(x, y - 1, 0);
           }
-          if ( ! (value & 2)) {
+          if (!(value & 2)) {
             this.setFogAt(x, y + 1, 0);
-            if (! (this.getAt(x, y + 1) & 4)) {
+            if (!(this.getAt(x, y + 1) & 4)) {
               this.setFogAt(x - 1, y + 1, 0);
             }
-          } else if (value & 32)  {
+          } else if (value & 32) {
             this.setFogAt(x, y + 1, 0);
           }
           x -= 1;
@@ -809,17 +809,17 @@ export class DungeonMap {
           }
           break;
         case MapDirection.NORTH:
-          if ( ! (value & 1)) {
+          if (!(value & 1)) {
             this.setFogAt(x + 1, y, 0);
-            if ( ! (this.getAt(x + 1, y) & 8)) {
+            if (!(this.getAt(x + 1, y) & 8)) {
               this.setFogAt(x + 1, y - 1, 0);
             }
           } else if (value & 16) {
             this.setFogAt(x + 1, y, 0);
           }
-          if ( ! (value & 4)) {
+          if (!(value & 4)) {
             this.setFogAt(x - 1, y, 0);
-            if (  ! (this.getAt(x - 1, y) & 8)) {
+            if (!(this.getAt(x - 1, y) & 8)) {
               this.setFogAt(x - 1, y - 1, 0);
             }
           } else if (value & 64) {
@@ -834,7 +834,7 @@ export class DungeonMap {
           }
           break;
       }
-      
+
       this.setFogAt(x, y, 0);
     }
   }
@@ -892,7 +892,7 @@ export class DungeonMap {
   public movePlayer(direction: MapDirection): integer {
     const value = this.getAt(this._player.x, this._player.y)
     if (value & (2 ** direction)) {
-      if ( ! (value & (2 ** (direction + 4)))) {
+      if (!(value & (2 ** (direction + 4)))) {
         return 0;
       }
     }
@@ -910,7 +910,7 @@ export class DungeonMap {
         this._player.y -= 1;
         break;
     }
-    
+
     this._player.direction = direction;
     this.clearFogWithinPlayer();
     for (const object of this._objects) {

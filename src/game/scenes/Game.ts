@@ -4,8 +4,7 @@ import { DungeonMap, MapObject } from '../../lib/MapGenerator';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 
-export class Game extends Scene
-{
+export class Game extends Scene {
     keys: {
         keyW: Phaser.Input.Keyboard.Key | undefined,
         keyS: Phaser.Input.Keyboard.Key | undefined,
@@ -20,13 +19,11 @@ export class Game extends Scene
     mainView: MainView;
     miniMapView: MiniMapView;
 
-    constructor ()
-    {
+    constructor() {
         super('Game');
     }
 
-    redrawAll ()
-    {
+    redrawAll() {
         this.miniMapView.render(this.dungeon);
         this.mainView.render(this.dungeon);
         this.redrawInfo();
@@ -37,20 +34,18 @@ export class Game extends Scene
     floorText: Phaser.GameObjects.Text;
     playerTextLabel: Phaser.GameObjects.Text;
     playerTextValue: Phaser.GameObjects.Text;
-    redrawInfo ()
-    {
+    redrawInfo() {
         this.floorText.setText(this.floor + 'F');
         let buf = '', buf2 = '';
         this.playerInfo.forEach((value, key) => {
             buf += key + ' : ' + '\n';
-            buf2 += value +'\n';
+            buf2 += value + '\n';
         })
         this.playerTextLabel.setText(buf);
         this.playerTextValue.setText(buf2);
     }
 
-    create ()
-    {
+    create() {
         const dun = new DungeonMap(15, 15);
         this.floorText = this.add.text(this.game.canvas.width - 200, 220, this.floor + 'F').setFontFamily(Game.fontFamily)
         this.playerTextLabel = this.add.text(this.game.canvas.width - 200, 250, '').setFontFamily(Game.fontFamily).style.setAlign('left')
@@ -90,7 +85,7 @@ export class Game extends Scene
             keyE: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E),
             keyQ: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
         };
-        
+
         this.keys.keyW?.on('down', () => {
             if (this.dungeon.goPlayer() > 0) {
                 this.redrawAll()
@@ -153,8 +148,7 @@ export class Game extends Scene
     //     }
     // }
 
-    changeScene ()
-    {
+    changeScene() {
         this.scene.start('GameOver');
     }
 }
