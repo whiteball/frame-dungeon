@@ -138,22 +138,23 @@ export class DungeonMap {
 
   private _objects: MapObject[];
 
-  constructor (width: integer, height: integer, viewRange = 3) {
+  constructor (width: integer, height: integer, viewRange = 3, enableFog = true) {
     this._width = width + 2;
     this._height = height + 2;
     this._viewRange = viewRange;
-    this.init();
+    this.init(enableFog);
   }
 
-  public init () {
+  public init (enableFog = true) {
     this._map = [];
     this._mapFog = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
     this._objects = [];
+    const fog = enableFog ? 1 : 0;
     for (let i = 0; i < this._width * this._height; i++) {
       this._map[i] = -1;
-      this._mapFog[i] = 1;
+      this._mapFog[i] = fog;
     }
     this._player = {
       x: 0,
