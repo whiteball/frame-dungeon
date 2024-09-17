@@ -31,14 +31,19 @@ export class MiniMapView {
     graph.fillRectShape(rect);
 
     // マス描画
-    graph.fillStyle(0xCCCCCC);
     for (const block of dun.mapIterator()) {
       const baseX = (block.x - 1) * blockWidth, baseY = (block.y - 1) * blockHeight;
       graph.lineStyle(2, 0xCCCCCC);
 
       if (!block.enter || block.fog === 1) {
+        graph.fillStyle(0xCCCCCC);
         graph.fillRect(baseX, baseY, blockWidth, blockHeight).strokeRect(baseX, baseY, blockWidth, blockHeight)
         continue;
+      }
+
+      if (block.walked === 1) {
+        graph.fillStyle(0x3333FF);
+        graph.fillRect(baseX, baseY, blockWidth, blockHeight);
       }
 
       if (block.wallState.wall[MapDirection.EAST]) {
@@ -140,7 +145,6 @@ export class MiniMapView {
               .strokeRect(baseX + blockWidth / 5, baseY + blockWidth / 5, blockWidth * 3 / 5, blockWidth * 3 / 5);
             break;
         }
-        graph.fillStyle(0xCCCCCC);
       }
     }
 

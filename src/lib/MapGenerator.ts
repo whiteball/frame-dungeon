@@ -118,6 +118,7 @@ export const rotateDirection = (direction: MapDirection, value: number) => {
 export class DungeonMap {
   private _map: integer[];
   private _mapFog: integer[];
+  private _mapWalked: integer[];
   private _width: integer;
   private _height: integer;
   private _enableFog: boolean = true;
@@ -149,6 +150,7 @@ export class DungeonMap {
   public init() {
     this._map = [];
     this._mapFog = [];
+    this._mapWalked = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
     this._objects = [];
@@ -156,6 +158,7 @@ export class DungeonMap {
     for (let i = 0; i < this._width * this._height; i++) {
       this._map[i] = -1;
       this._mapFog[i] = fog;
+      this._mapWalked[i] = 0;
     }
     this._player = {
       x: 0,
@@ -183,6 +186,18 @@ export class DungeonMap {
     const pos = this._calcPos(x, y);
     if (pos !== undefined) {
       this._mapFog[pos] = value;
+    }
+  }
+
+  public getWalkedAt(x: integer, y: integer): integer {
+    const pos = this._calcPos(x, y);
+    return pos === undefined ? 1 : this._mapWalked[pos];
+  }
+
+  public setWalkedAt(x: integer, y: integer, value: integer): void {
+    const pos = this._calcPos(x, y);
+    if (pos !== undefined) {
+      this._mapWalked[pos] = value;
     }
   }
 
@@ -893,6 +908,7 @@ export class DungeonMap {
       this._player.y = pos[1];
       this._player.direction = getRandomDirection();
       this.clearFogWithinPlayer();
+      this.setWalkedAt(this._player.x, this._player.y, 1);
       return true;
     }
   }
@@ -921,6 +937,7 @@ export class DungeonMap {
 
     this._player.direction = direction;
     this.clearFogWithinPlayer();
+    this.setWalkedAt(this._player.x, this._player.y, 1);
     for (const object of this._objects) {
       object.event && object.event(this, object);
     }
@@ -998,6 +1015,7 @@ export class DungeonMap {
           wallState,
           fog: this.getFogAt(x, y),
           enter: value !== -1,
+          walked: this.getWalkedAt(x, y),
         }
       }
     }
