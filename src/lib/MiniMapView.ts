@@ -78,6 +78,10 @@ export class MiniMapView {
       }
 
       for (const object of dun.getObject(block.x, block.y)) {
+        if (!object.visible) {
+          continue;
+        }
+
         graph.fillStyle(object.color, object.alpha);
         graph.lineStyle(1, 0xFFFFFF);
         switch (object.mark) {

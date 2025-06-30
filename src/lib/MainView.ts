@@ -238,6 +238,10 @@ export class MainView {
           }
         }
         for (const object of dun.getObject(blockList[i][order][1], blockList[i][order][2])) {
+          if (!object.visible) {
+            continue;
+          }
+
           const pol = this.polygonList[RANGE - i][order][2];
           if (pol) {
             graph.strokePoints(pol.points, true)
@@ -276,6 +280,10 @@ export class MainView {
           }
         }
         for (const object of dun.getObject(blockList[i][order + 1][1], blockList[i][order + 1][2])) {
+          if (!object.visible) {
+            continue;
+          }
+
           const pol = this.polygonList[RANGE - i][order + 1][2];
           if (pol) {
             graph.strokePoints(pol.points, true)
@@ -328,6 +336,10 @@ export class MainView {
         }
       }
       for (const object of dun.getObject(blockList[i][0][1], blockList[i][0][2])) {
+        if (!object.visible) {
+          continue;
+        }
+
         const pol = this.polygonList[RANGE - i][0][2];
         if (pol) {
           graph.strokePoints(pol.points, true)

@@ -67,6 +67,7 @@ export class MapObject {
   public x: integer = -1;
   public y: integer = -1;
   public sphere: boolean = false;
+  public visible: boolean = true;
 }
 
 export const MapDirection = {
@@ -106,6 +107,12 @@ export const rotateDirection = (direction: MapDirection, value: number) => {
   return direction;
 }
 
+export type RandomPosConfig = {
+  withoutCorridor?: boolean,
+  withoutDoor?: boolean,
+  withoutPlayer?: boolean,
+  excludePositionList?: integer[][]
+}
 
 /**
  * ダンジョンマップ
@@ -138,7 +145,9 @@ export class DungeonMap {
     direction: MapDirection,
   };
 
-  private _objects: MapObject[];
+  private _object_counter: integer = 0;
+  private _objects: Map<integer, MapObject>;
+  private _mapObjects: Map<integer, MapObject[]>;
 
   constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
     this._width = width + 2;
@@ -153,7 +162,8 @@ export class DungeonMap {
     this._mapWalked = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
-    this._objects = [];
+    this._objects = new Map<integer, MapObject>();
+    this._mapObjects = new Map<integer, MapObject[]>();
     const fog = this._enableFog ? 1 : 0;
     for (let i = 0; i < this._width * this._height; i++) {
       this._map[i] = -1;
@@ -856,7 +866,7 @@ export class DungeonMap {
     }
   }
 
-  public getRandomPos(withoutCorridor: boolean = false, withoutDoor: boolean = false, withoutPlayer: boolean = false): integer[] {
+  public getRandomPos({ withoutCorridor = false, withoutDoor = false, withoutPlayer = false, excludePositionList = [] }: RandomPosConfig): integer[] {
     let x: integer = 0, y: integer = 0, pos = -1;
     const limit = 1000, playerPos = this._calcPos(this._player.x, this._player.y);
     for (let i = 0; i < limit && pos === -1; i++) {
@@ -885,6 +895,15 @@ export class DungeonMap {
           pos = -1;
         }
       }
+      if (excludePositionList.length > 0) {
+        for (const exPos of excludePositionList) {
+          if (pos === this._calcPos(exPos[0], exPos[1])) {
+            // 除外リストに一致すればキャンセル
+            pos = -1;
+            break;
+          }
+        }
+      }
     }
 
     if (pos === -1) {
@@ -896,10 +915,31 @@ export class DungeonMap {
   }
 
   /**
+   * getRandomPosList
+   */
+  public getRandomPosList(count: integer, permitSamePos: boolean = false, config: RandomPosConfig = { withoutCorridor: false, withoutDoor: false, withoutPlayer: false, excludePositionList: [] }) {
+    const result: integer[][] = [];
+    for (let i = 0; i < count; i++) {
+      const res = this.getRandomPos(config);
+      if (res.length > 0) {
+        result.push(res);
+      } else {
+        // 座標が見つからなかった場合、次の座標検索でも見つからないはずなので、ループを抜ける
+        break;
+      }
+      if (!permitSamePos) {
+        config.excludePositionList = result;
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * setPlayerRandom
    */
   public setPlayerRandom() {
-    const pos = this.getRandomPos();
+    const pos = this.getRandomPos({});
     if (pos.length === 0) {
       console.error('fault player set');
       return false;
@@ -938,7 +978,7 @@ export class DungeonMap {
     this._player.direction = direction;
     this.clearFogWithinPlayer();
     this.setWalkedAt(this._player.x, this._player.y, 1);
-    for (const object of this._objects) {
+    for (const object of this._objects.values()) {
       object.event && object.event(this, object);
     }
     return 1;
@@ -1027,7 +1067,7 @@ export class DungeonMap {
 
   public getObject(x: integer, y: integer) {
     const list: MapObject[] = [];
-    for (const object of this._objects) {
+    for (const object of this._objects.values()) {
       if (object.x === x && object.y === y) {
         list.push(object)
       }
@@ -1035,7 +1075,7 @@ export class DungeonMap {
     return list;
   }
 
-  public addObject(x: integer, y: integer, mark: string, event: ObjectEvent, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false) {
+  public addObject(x: integer, y: integer, mark: string, event: ObjectEvent, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false, visible = true) {
     const obj = new MapObject()
     obj.x = x;
     obj.y = y;
@@ -1044,6 +1084,9 @@ export class DungeonMap {
     obj.color = color;
     obj.alpha = alpha;
     obj.sphere = sphere;
-    this._objects.push(obj)
+    obj.visible = visible;
+    this._object_counter++;
+    this._objects.set(this._object_counter, obj);
+    return this._object_counter;
   }
 }

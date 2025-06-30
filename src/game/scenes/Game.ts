@@ -55,7 +55,7 @@ export class Game extends Scene {
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
             dungeon.build();
             // dungeon.dump();
-            const step = dungeon.getRandomPos(true, true, true);
+            const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true });
             if (step.length >= 2) {
                 // 階段の追加
                 dungeon.addObject(step[0], step[1], 'o', (dungeon: DungeonMap, object: MapObject) => {
@@ -65,6 +65,17 @@ export class Game extends Scene {
                         EventBus.emit('go-to-next-floor', dungeon)
                     }
                 }, 0x00FF00)
+            }
+            const traps = dungeon.getRandomPosList(10, false, { withoutPlayer: true, excludePositionList: [step] });
+            for (const trap of traps) {
+                // トラップの追加
+                dungeon.addObject(trap[0], trap[1], 'x', (dungeon: DungeonMap, object: MapObject) => {
+                    const player = dungeon.getPlayerPos()
+                    if (player.x === object.x && player.y === object.y) {
+                        console.log('trap!!')
+                        object.visible = true;
+                    }
+                }, 0xFF0000, 1, false, false);
             }
             EventBus.emit('update-view')
         })
