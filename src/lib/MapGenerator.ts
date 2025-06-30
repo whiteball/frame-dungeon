@@ -1,12 +1,23 @@
 'use strict';
 
+/**
+ * 指定した範囲内のランダムな整数を生成する
+ * @param min 最小値（含む）
+ * @param max 最大値（含まない）
+ * @returns 生成されたランダムな整数
+ */
 function getRandomInt(min: integer, max: integer): integer {
   min = Math.ceil(min);
   max = Math.floor(max);
   return Math.floor(Math.random() * (max - min) + min); //The maximum is exclusive and the minimum is inclusive
 }
 
-// https://ja.wikipedia.org/wiki/%E3%83%95%E3%82%A3%E3%83%83%E3%82%B7%E3%83%A3%E3%83%BC%E2%80%93%E3%82%A4%E3%82%A7%E3%83%BC%E3%83%84%E3%81%AE%E3%82%B7%E3%83%A3%E3%83%83%E3%83%95%E3%83%AB
+/**
+ * Fisher-Yatesアルゴリズムを使用して配列をシャッフルする
+ * @param array シャッフルする配列
+ * @returns シャッフルされた配列
+ * @see https://ja.wikipedia.org/wiki/%E3%83%95%E3%82%A3%E3%83%83%E3%82%B7%E3%83%A3%E3%83%BC%E2%80%93%E3%82%A4%E3%82%A7%E3%83%BC%E3%83%84%E3%81%AE%E3%82%B7%E3%83%A3%E3%83%83%E3%83%95%E3%83%AB
+ */
 function arrayShuffle<T>(array: Array<T>): Array<T> {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -36,6 +47,8 @@ class Rect {
 
   /**
    * 指定した矩形と一辺が完全に一致しているか判定する
+   * @param rect 判定する矩形
+   * @returns 一辺が完全に一致している場合true
    */
   isContact(rect: Rect) {
     if (rect.y1 === this.y1 && rect.y2 === this.y2 && rect.x2 === this.x1 + 1) {
@@ -77,6 +90,10 @@ export const MapDirection = {
   NORTH: 3,
 } as const;
 export type MapDirection = typeof MapDirection[keyof typeof MapDirection]
+/**
+ * ランダムな方向を取得する
+ * @returns ランダムに選択された方向
+ */
 export const getRandomDirection = (): MapDirection => {
   switch (getRandomInt(0, 4)) {
     case 0:
@@ -91,6 +108,12 @@ export const getRandomDirection = (): MapDirection => {
 
   return MapDirection.EAST;
 }
+/**
+ * 指定した方向を時計回りに回転させる
+ * @param direction 回転させる元の方向
+ * @param value 回転量（1=90度時計回り）
+ * @returns 回転後の方向
+ */
 export const rotateDirection = (direction: MapDirection, value: number) => {
   switch ((Number(direction) + value) % 4) {
     case 0:
@@ -156,6 +179,10 @@ export class DungeonMap {
     this._enableFog = enableFog;
   }
 
+  /**
+   * ダンジョンマップを初期化する
+   * 全てのマップデータをクリアし、プレイヤーの初期位置を設定する
+   */
   public init() {
     this._map = [];
     this._mapFog = [];
@@ -177,21 +204,45 @@ export class DungeonMap {
     };
   }
 
+  /**
+   * X,Y座標から1次元配列のインデックスを計算する
+   * @param x X座標
+   * @param y Y座標
+   * @returns 1次元配列のインデックス、範囲外の場合undefined
+   */
   private _calcPos(x: integer, y: integer) {
     const pos = (y + 0) * this._width + x;
     return (pos >= this._map.length || pos < 0) ? undefined : pos;
   }
 
+  /**
+   * 指定座標のマップ値を取得する
+   * @param x X座標
+   * @param y Y座標
+   * @returns マップ値、範囲外の場合-1
+   */
   public getAt(x: integer, y: integer): integer {
     const pos = this._calcPos(x, y);
     return pos === undefined ? -1 : this._map[pos];
   }
 
+  /**
+   * 指定座標のフォグ状態を取得する
+   * @param x X座標
+   * @param y Y座標
+   * @returns フォグ値（0=見える、1=見えない）、範囲外の場合1
+   */
   public getFogAt(x: integer, y: integer): integer {
     const pos = this._calcPos(x, y);
     return pos === undefined ? 1 : this._mapFog[pos];
   }
 
+  /**
+   * 指定座標のフォグ状態を設定する
+   * @param x X座標
+   * @param y Y座標
+   * @param value フォグ値（0=見える、1=見えない）
+   */
   public setFogAt(x: integer, y: integer, value: integer): void {
     const pos = this._calcPos(x, y);
     if (pos !== undefined) {
@@ -199,11 +250,23 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * 指定座標の歩行済み状態を取得する
+   * @param x X座標
+   * @param y Y座標
+   * @returns 歩行済み値（0=未歩行、1=歩行済み）、範囲外の場合1
+   */
   public getWalkedAt(x: integer, y: integer): integer {
     const pos = this._calcPos(x, y);
     return pos === undefined ? 1 : this._mapWalked[pos];
   }
 
+  /**
+   * 指定座標の歩行済み状態を設定する
+   * @param x X座標
+   * @param y Y座標
+   * @param value 歩行済み値（0=未歩行、1=歩行済み）
+   */
   public setWalkedAt(x: integer, y: integer, value: integer): void {
     const pos = this._calcPos(x, y);
     if (pos !== undefined) {
@@ -211,6 +274,12 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * 指定座標のマップ値を設定する
+   * @param x X座標
+   * @param y Y座標
+   * @param value マップ値
+   */
   public setAt(x: integer, y: integer, value: integer): void {
     const pos = this._calcPos(x, y);
     if (pos !== undefined) {
@@ -218,14 +287,28 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * マップの幅を取得する（境界を除く）
+   * @returns マップの幅
+   */
   public getWidth(): integer {
     return this._width - 2;
   }
 
+  /**
+   * マップの高さを取得する（境界を除く）
+   * @returns マップの高さ
+   */
   public getHeight(): integer {
     return this._height - 2;
   }
 
+  /**
+   * 指定座標のマップ値に値を加算する
+   * @param x X座標
+   * @param y Y座標
+   * @param value 加算する値
+   */
   public updateAt(x: integer, y: integer, value: integer): void {
     const pos = this._calcPos(x, y);
     if (pos !== undefined) {
@@ -233,6 +316,10 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * プレイヤーの現在位置と向きを取得する
+   * @returns プレイヤーの位置情報（x座標、y座標、向き）
+   */
   public getPlayerPos(): { x: integer, y: integer, direction: MapDirection } {
     return {
       x: this._player.x,
@@ -241,6 +328,10 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * ダンジョンに部屋を生成する
+   * 横方向と縦方向に分割線を配置し、矩形の部屋を作成する
+   */
   public makeRoom(): void {
     if (this._map.length <= 0) {
       return
@@ -319,7 +410,10 @@ export class DungeonMap {
     this._rooms = rooms;
   }
 
-  /** 部屋を削って通路を作る */
+  /**
+   * 部屋を削って通路を作る
+   * 各部屋の辺に通路を作成し、部屋同士を接続する
+   */
   public makeCorridor() {
     if (this._map.length <= 0 || this._rooms.length <= 0) {
       return
@@ -403,6 +497,7 @@ export class DungeonMap {
 
   /**
    * マップの各マスに壁と扉を設定する
+   * 部屋と通路の配置に基づいて壁の配置を決定し、扉を配置する
    */
   public setWall() {
     const roomsWithCorridors = this._roomsWithCorridors
@@ -657,6 +752,10 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * デバッグ用にマップの状態をコンソールに出力する
+   * @param doorOff trueの場合扉の表示を無効にする
+   */
   public dump(doorOff = false) {
     let buffer = '';
     const bias = doorOff ? 15 : -1;
@@ -743,6 +842,10 @@ export class DungeonMap {
     console.log(buffer)
   }
 
+  /**
+   * ダンジョン全体を構築する
+   * 初期化、部屋生成、通路生成、壁設定、プレイヤー配置を順次実行する
+   */
   public build() {
     this.init();
     this.makeRoom();
@@ -751,6 +854,10 @@ export class DungeonMap {
     this.setPlayerRandom();
   }
 
+  /**
+   * プレイヤーの視界範囲内のフォグをクリアする
+   * プレイヤーの向きと視界範囲に基づいて、見える範囲のフォグを除去する
+   */
   public clearFogWithinPlayer(): void {
     const direction = this._player.direction;
 
@@ -866,6 +973,11 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * 条件に従ってランダムな位置を取得する
+   * @param config ランダム位置取得の設定オプション
+   * @returns ランダムな位置の座標配列[x, y]、取得できない場合は空配列
+   */
   public getRandomPos({ withoutCorridor = false, withoutDoor = false, withoutPlayer = false, excludePositionList = [] }: RandomPosConfig): integer[] {
     let x: integer = 0, y: integer = 0, pos = -1;
     const limit = 1000, playerPos = this._calcPos(this._player.x, this._player.y);
@@ -915,7 +1027,11 @@ export class DungeonMap {
   }
 
   /**
-   * getRandomPosList
+   * 複数のランダムな位置を取得する
+   * @param count 取得する位置の数
+   * @param permitSamePos 同じ位置の重複を許可するかどうか
+   * @param config ランダム位置取得の設定オプション
+   * @returns ランダムな位置の座標配列のリスト
    */
   public getRandomPosList(count: integer, permitSamePos: boolean = false, config: RandomPosConfig = { withoutCorridor: false, withoutDoor: false, withoutPlayer: false, excludePositionList: [] }) {
     const result: integer[][] = [];
@@ -936,7 +1052,8 @@ export class DungeonMap {
   }
 
   /**
-   * setPlayerRandom
+   * プレイヤーをランダムな位置に配置する
+   * @returns 配置に成功した場合true、失敗した場合false
    */
   public setPlayerRandom() {
     const pos = this.getRandomPos({});
@@ -953,6 +1070,11 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * プレイヤーを指定方向に移動させる
+   * @param direction 移動方向
+   * @returns 移動に成功した場合1、壁や扉で移動できない場合0
+   */
   public movePlayer(direction: MapDirection): integer {
     const value = this.getAt(this._player.x, this._player.y)
     if (value & (2 ** direction)) {
@@ -984,18 +1106,34 @@ export class DungeonMap {
     return 1;
   }
 
+  /**
+   * プレイヤーを現在の向きに向かって前進させる
+   * @returns 移動に成功した場合1、移動できない場合0
+   */
   public goPlayer(): integer {
     return this.movePlayer(this._player.direction)
   }
 
+  /**
+   * プレイヤーを現在の向きから右方向に移動させる
+   * @returns 移動に成功した場合1、移動できない場合0
+   */
   public goRightPlayer(): integer {
     return this.movePlayer(rotateDirection(this._player.direction, 1))
   }
 
+  /**
+   * プレイヤーを現在の向きから左方向に移動させる
+   * @returns 移動に成功した場合1、移動できない場合0
+   */
   public goLeftPlayer(): integer {
     return this.movePlayer(rotateDirection(this._player.direction, 3))
   }
 
+  /**
+   * プレイヤーを右（時計回り）に90度回転させる
+   * @returns 常にtrue
+   */
   public turnRightPlayer(): boolean {
     const now = this._player.direction;
     this._player.direction = rotateDirection(now, 1);
@@ -1003,6 +1141,10 @@ export class DungeonMap {
     return true;
   }
 
+  /**
+   * プレイヤーを左（反時計回り）に90度回転させる
+   * @returns 常にtrue
+   */
   public turnLeftPlayer(): boolean {
     const now = this._player.direction;
     this._player.direction = rotateDirection(now, 3);
@@ -1010,6 +1152,10 @@ export class DungeonMap {
     return true;
   }
 
+  /**
+   * プレイヤーを180度回転させる（振り返り）
+   * @returns 常にtrue
+   */
   public turnBackPlayer(): boolean {
     const now = this._player.direction;
     this._player.direction = rotateDirection(now, 2);
@@ -1017,6 +1163,10 @@ export class DungeonMap {
     return true;
   }
 
+  /**
+   * マップの各セルを順次取得するイテレータ
+   * @yields マップセルの情報（座標、壁状態、フォグ、進入可能性、歩行済み状態）
+   */
   public * mapIterator() {
     for (let x = 1; x < this._width - 1; x++) {
       for (let y = 1; y < this._height - 1; y++) {
@@ -1061,10 +1211,20 @@ export class DungeonMap {
     }
   }
 
+  /**
+   * マップ上の全オブジェクトを取得する
+   * @returns オブジェクトのMapコレクション
+   */
   public getObjects() {
     return this._objects;
   }
 
+  /**
+   * 指定座標にあるオブジェクトのリストを取得する
+   * @param x X座標
+   * @param y Y座標
+   * @returns 指定座標にあるオブジェクトの配列
+   */
   public getObject(x: integer, y: integer) {
     const list: MapObject[] = [];
     for (const object of this._objects.values()) {
@@ -1075,6 +1235,18 @@ export class DungeonMap {
     return list;
   }
 
+  /**
+   * マップにオブジェクトを追加する
+   * @param x X座標
+   * @param y Y座標
+   * @param mark オブジェクトの表示マーク
+   * @param event オブジェクトのイベント関数
+   * @param color オブジェクトの色（デフォルト: 白）
+   * @param alpha オブジェクトの透明度（デフォルト: 1）
+   * @param sphere 球体として表示するかどうか（デフォルト: false）
+   * @param visible オブジェクトの可視性（デフォルト: true）
+   * @returns 追加されたオブジェクトのID
+   */
   public addObject(x: integer, y: integer, mark: string, event: ObjectEvent, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false, visible = true) {
     const obj = new MapObject()
     obj.x = x;

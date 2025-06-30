@@ -12,6 +12,15 @@ export class InfoView {
   private textLabelList: Phaser.GameObjects.Text[];
   private textValueList: Phaser.GameObjects.Text[];
 
+  /**
+   * 情報表示ビューを初期化する
+   * @param factory Phaserのゲームオブジェクトファクトリー
+   * @param x 描画開始X座標
+   * @param y 描画開始Y座標
+   * @param width 情報パネルの幅
+   * @param height 情報パネルの高さ
+   * @param fontFamily 使用するフォントファミリー（デフォルト: BIZ UDゴシック）
+   */
   constructor(factory: Phaser.GameObjects.GameObjectFactory, x: integer, y: integer, width: integer, height: integer, fontFamily = '\'BIZ UDゴシック\', Consolas, monospace') {
 
     this.factory = factory;
@@ -31,6 +40,12 @@ export class InfoView {
     this.textValueList = [];
   }
 
+  /**
+   * 情報パネルをレンダリングする
+   * フロア番号とゲーム情報を表示する
+   * @param floor 現在のフロア番号
+   * @param info 表示するゲーム情報のMap（ラベルと値のペア）
+   */
   render(floor: number, info: Map<string, number | string>) {
     const graph = this.graph;
     graph.fillRect(0, 0, this.width, this.height);

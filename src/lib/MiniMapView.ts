@@ -6,6 +6,14 @@ export class MiniMapView {
   private width: integer;
   private height: integer;
 
+  /**
+   * ミニマップビューを初期化する
+   * @param factory Phaserのゲームオブジェクトファクトリー
+   * @param x 描画開始X座標
+   * @param y 描画開始Y座標
+   * @param width ミニマップの幅
+   * @param height ミニマップの高さ
+   */
   constructor(factory: Phaser.GameObjects.GameObjectFactory, x: integer, y: integer, width: integer, height: integer) {
     const mask = factory.graphics({ fillStyle: { color: 0xffffff, alpha: 0 } });
     mask.fillRect(x - 1, y - 1, width + 2, height + 2);
@@ -20,6 +28,11 @@ export class MiniMapView {
     this.height = height;
   }
 
+  /**
+   * ダンジョンマップを俯瞰図でレンダリングする
+   * 探索済みエリア、壁、扉、オブジェクト、プレイヤーの位置を表示する
+   * @param dun レンダリングするダンジョンマップ
+   */
   render(dun: DungeonMap) {
     const graph = this.graph;
 

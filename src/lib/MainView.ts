@@ -18,6 +18,16 @@ export class MainView {
 
   private blockSize: integer;
 
+  /**
+   * メインビューを初期化する
+   * @param factory Phaserのゲームオブジェクトファクトリー
+   * @param x 描画開始X座標
+   * @param y 描画開始Y座標
+   * @param width ビューの幅
+   * @param height ビューの高さ
+   * @param angle 視野角（デフォルト: 70度）
+   * @param blockSize ブロックサイズ（デフォルト: 0で自動計算）
+   */
   constructor(factory: Phaser.GameObjects.GameObjectFactory, x: integer, y: integer, width: integer, height: integer, angle = 70, blockSize = 0) {
     const mask = factory.graphics({ fillStyle: { color: 0xffffff, alpha: 0 } });
     mask.fillRect(x - 2, y - 2, width + 4, height + 4);
@@ -36,6 +46,10 @@ export class MainView {
     this.prepareDrawPoints();
   }
 
+  /**
+   * 3D透視投影のための描画ポイントを事前計算する
+   * 距離と角度に基づいて、各ブロックの描画用ポリゴンと中心点を計算する
+   */
   private prepareDrawPoints() {
     const polygonList: typeof this.polygonList = [];
     const centerList: typeof this.centerList = [];
@@ -107,6 +121,11 @@ export class MainView {
     this.floor = new Phaser.Geom.Rectangle(frame.left, frame.top + frame.height / 2 + AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE), frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE))
   }
 
+  /**
+   * ダンジョンマップを3D透視投影でレンダリングする
+   * プレイヤーの位置と向きに基づいて、見える範囲の壁とオブジェクトを描画する
+   * @param dun レンダリングするダンジョンマップ
+   */
   render(dun: DungeonMap) {
     const graph = this.graph;
 
