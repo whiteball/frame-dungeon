@@ -72,7 +72,7 @@ class Rect {
 }
 
 /**
- * オブジェクトのイベントディスパッチャー
+ * オブジェクトのイベント
  * @param dungeon ダンジョンマップ
  * @param object マップオブジェクト
  * @returns falseの場合、このマップオブジェクトを破棄する
@@ -1279,11 +1279,11 @@ export class DungeonMap {
    * dispatchObjectEvent
    */
   public dispatchObjectEvent() {
-    for (const object of this._objects.values()) {
+    for (const [id, object] of this._objects.entries()) {
       if (this._player.x === object.x && this._player.y === object.y) {
         const event = object.events.get('around-0')
-        if (event) {
-          event(this, object)
+        if (event && ! event(this, object)) {
+          this._objects.delete(id)
         }
       }
     }

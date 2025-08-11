@@ -68,7 +68,7 @@ export class Game extends Scene {
             for (const trap of traps) {
                 // トラップの追加
                 dungeon.addObject(trap[0], trap[1], 'x', newMapEvent('around-0', (_, object: MapObject) => {
-                    console.log('trap!!')
+                    console.log('trap!!' + object.x + ',' + object.y)
                     object.visible = true;
                     return true;
                 }), 0xFF0000, 1, false, false);
