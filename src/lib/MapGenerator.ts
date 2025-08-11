@@ -71,16 +71,30 @@ class Rect {
   }
 }
 
-type ObjectEvent = (dungeon: DungeonMap, object: MapObject) => void;
+/**
+ * オブジェクトのイベントディスパッチャー
+ * @param dungeon ダンジョンマップ
+ * @param object マップオブジェクト
+ * @returns falseの場合、このマップオブジェクトを破棄する
+ */
+type ObjectEvent = (dungeon: DungeonMap, object: MapObject) => boolean;
 export class MapObject {
   public mark: string = 'o';
   public color: integer = 0xFFFFFF;
   public alpha: integer = 1;
-  public event: null | ObjectEvent = null;
+  public events: Map<string, ObjectEvent> = new Map<string, ObjectEvent>();
   public x: integer = -1;
   public y: integer = -1;
   public sphere: boolean = false;
   public visible: boolean = true;
+}
+
+export function newMapEvent(eventName: string, event: ObjectEvent, parent?: Map<string, ObjectEvent>) {
+  if (!parent) {
+    parent = new Map<string, ObjectEvent>();
+  }
+  parent.set(eventName, event);
+  return parent;
 }
 
 export const MapDirection = {
@@ -1100,9 +1114,8 @@ export class DungeonMap {
     this._player.direction = direction;
     this.clearFogWithinPlayer();
     this.setWalkedAt(this._player.x, this._player.y, 1);
-    for (const object of this._objects.values()) {
-      object.event && object.event(this, object);
-    }
+    
+    this.dispatchObjectEvent();
     return 1;
   }
 
@@ -1247,12 +1260,12 @@ export class DungeonMap {
    * @param visible オブジェクトの可視性（デフォルト: true）
    * @returns 追加されたオブジェクトのID
    */
-  public addObject(x: integer, y: integer, mark: string, event: ObjectEvent, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false, visible = true) {
+  public addObject(x: integer, y: integer, mark: string, events: Map<string, ObjectEvent>, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false, visible = true) {
     const obj = new MapObject()
     obj.x = x;
     obj.y = y;
     obj.mark = mark;
-    obj.event = event;
+    obj.events = events;
     obj.color = color;
     obj.alpha = alpha;
     obj.sphere = sphere;
@@ -1260,5 +1273,19 @@ export class DungeonMap {
     this._object_counter++;
     this._objects.set(this._object_counter, obj);
     return this._object_counter;
+  }
+
+  /**
+   * dispatchObjectEvent
+   */
+  public dispatchObjectEvent() {
+    for (const object of this._objects.values()) {
+      if (this._player.x === object.x && this._player.y === object.y) {
+        const event = object.events.get('around-0')
+        if (event) {
+          event(this, object)
+        }
+      }
+    }
   }
 }

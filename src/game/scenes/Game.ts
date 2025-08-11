@@ -1,6 +1,6 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
-import { DungeonMap, MapObject } from '../../lib/MapGenerator';
+import { DungeonMap, MapObject, newMapEvent } from '../../lib/MapGenerator';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
@@ -58,24 +58,20 @@ export class Game extends Scene {
             const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true });
             if (step.length >= 2) {
                 // 階段の追加
-                dungeon.addObject(step[0], step[1], 'o', (dungeon: DungeonMap, object: MapObject) => {
-                    const player = dungeon.getPlayerPos()
-                    if (player.x === object.x && player.y === object.y) {
-                        this.floor++;
-                        EventBus.emit('go-to-next-floor', dungeon)
-                    }
-                }, 0x00FF00)
+                dungeon.addObject(step[0], step[1], 'o', newMapEvent('around-0', (dungeon: DungeonMap) => {
+                    this.floor++;
+                    EventBus.emit('go-to-next-floor', dungeon)
+                    return true;
+                }), 0x00FF00)
             }
             const traps = dungeon.getRandomPosList(10, false, { withoutPlayer: true, excludePositionList: [step] });
             for (const trap of traps) {
                 // トラップの追加
-                dungeon.addObject(trap[0], trap[1], 'x', (dungeon: DungeonMap, object: MapObject) => {
-                    const player = dungeon.getPlayerPos()
-                    if (player.x === object.x && player.y === object.y) {
-                        console.log('trap!!')
-                        object.visible = true;
-                    }
-                }, 0xFF0000, 1, false, false);
+                dungeon.addObject(trap[0], trap[1], 'x', newMapEvent('around-0', (_, object: MapObject) => {
+                    console.log('trap!!')
+                    object.visible = true;
+                    return true;
+                }), 0xFF0000, 1, false, false);
             }
             EventBus.emit('update-view')
         })
