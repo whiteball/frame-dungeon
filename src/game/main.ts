@@ -14,6 +14,10 @@ const config: Phaser.Types.Core.GameConfig = {
     parent: 'game-container',
     // backgroundColor: '#028af8',
     backgroundColor: '#000000',
+    fps: {
+        target: 20,
+        limit: 20,
+    },
     scene: [
         Boot,
         Preloader,
