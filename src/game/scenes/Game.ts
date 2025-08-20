@@ -4,6 +4,7 @@ import { DungeonMap, MapObject, newMapEvent } from '../../lib/MapGenerator';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
+import { Player } from '../../lib/Player';
 
 export class Game extends Scene {
     keys: {
@@ -22,6 +23,7 @@ export class Game extends Scene {
     infoView: InfoView;
 
     params: Map<string, number | string>;
+    player: Player;
 
     constructor() {
         super('Game');
@@ -76,12 +78,8 @@ export class Game extends Scene {
             EventBus.emit('update-view')
         })
 
-        this.params = new Map([
-            ['HP', 100],
-            ['MP', 50],
-            ['POW', 10],
-            ['EXP', 0],
-        ]);
+        this.player = new Player();
+        this.params = this.player.getStats();
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         this.miniMapView = new MiniMapView(this.add, this.game.canvas.width - 10 - 200, 10, 200, 200);
