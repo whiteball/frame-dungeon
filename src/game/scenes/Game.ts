@@ -32,7 +32,19 @@ export class Game extends Scene {
     render() {
         this.miniMapView.render(this.dungeon);
         this.mainView.render(this.dungeon);
+        this.params = this.getDisplayParams();
         this.infoView.render(this.floor, this.params);
+    }
+
+    private getDisplayParams(): Map<string, number | string> {
+        const displayParams = new Map<string, number | string>();
+        const displayStats = this.player.getDisplayStats();
+        
+        for (const data of displayStats.values()) {
+            displayParams.set(data.abbreviation, data.value);
+        }
+        
+        return displayParams;
     }
 
     static fontFamily = '\'BIZ UDゴシック\', Consolas, monospace';
@@ -51,7 +63,7 @@ export class Game extends Scene {
         this.playerTextValue.setText(buf2);
     }
 
-    create() {
+    async create() {
         const dun = new DungeonMap(15, 15);
 
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
@@ -78,8 +90,10 @@ export class Game extends Scene {
             EventBus.emit('update-view')
         })
 
+        // Player初期化前にstatsシステムを初期化
+        await Player.initializeStatsSystem();
         this.player = new Player();
-        this.params = this.player.getStats();
+        this.params = this.getDisplayParams();
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         this.miniMapView = new MiniMapView(this.add, this.game.canvas.width - 10 - 200, 10, 200, 200);
