@@ -1,21 +1,42 @@
 
 import { StatsLoader } from './StatsLoader';
+import { Inventory } from './Inventory';
+import { Item } from './Item';
+import { ItemsLoader } from './ItemsLoader';
 
 export class Player {
     private stats: Map<string, number>;
     private maxStats: Map<string, number>;
-    private inventoryCapacity: number = 20;
+    private inventory: Inventory;
     private static statsLoader: StatsLoader;
+    private static itemsLoader: ItemsLoader;
+
+    // 装備スロット
+    private equippedWeapon: Item | null = null;
+    private equippedMainArmor: Item | null = null;
+    private equippedSubArmor1: Item | null = null;
+    private equippedSubArmor2: Item | null = null;
 
     constructor() {
         this.stats = new Map();
         this.maxStats = new Map();
+        this.inventory = new Inventory(20);
         this.initializeStats();
     }
 
     static async initializeStatsSystem(): Promise<void> {
         this.statsLoader = StatsLoader.getInstance();
         await this.statsLoader.loadStats();
+    }
+
+    static async initializeItemsSystem(): Promise<void> {
+        this.itemsLoader = ItemsLoader.getInstance();
+        await this.itemsLoader.loadItems();
+    }
+
+    static async initializeAllSystems(): Promise<void> {
+        await this.initializeStatsSystem();
+        await this.initializeItemsSystem();
     }
 
     private initializeStats(): void {
@@ -83,28 +104,161 @@ export class Player {
         }
     }
 
+    getInventory(): Inventory {
+        return this.inventory;
+    }
+
     getInventoryCapacity(): number {
-        return this.inventoryCapacity;
+        return this.inventory.getCapacity();
     }
 
     setInventoryCapacity(capacity: number): void {
-        this.inventoryCapacity = Math.max(1, capacity);
+        this.inventory.setCapacity(capacity);
     }
 
     addInventoryCapacity(amount: number): void {
-        this.inventoryCapacity = Math.max(1, this.inventoryCapacity + amount);
+        const currentCapacity = this.inventory.getCapacity();
+        this.inventory.setCapacity(currentCapacity + amount);
     }
 
-    // 表示用の能力値を取得（略称付き）
+    // 装備関連メソッド
+    getEquippedWeapon(): Item | null {
+        return this.equippedWeapon;
+    }
+
+    getEquippedMainArmor(): Item | null {
+        return this.equippedMainArmor;
+    }
+
+    getEquippedSubArmor1(): Item | null {
+        return this.equippedSubArmor1;
+    }
+
+    getEquippedSubArmor2(): Item | null {
+        return this.equippedSubArmor2;
+    }
+
+    getAllEquippedItems(): (Item | null)[] {
+        return [this.equippedWeapon, this.equippedMainArmor, this.equippedSubArmor1, this.equippedSubArmor2];
+    }
+
+    equipWeapon(item: Item | null): Item | null {
+        const previousItem = this.equippedWeapon;
+        this.equippedWeapon = item;
+        return previousItem;
+    }
+
+    equipMainArmor(item: Item | null): Item | null {
+        const previousItem = this.equippedMainArmor;
+        this.equippedMainArmor = item;
+        return previousItem;
+    }
+
+    equipSubArmor1(item: Item | null): Item | null {
+        const previousItem = this.equippedSubArmor1;
+        this.equippedSubArmor1 = item;
+        return previousItem;
+    }
+
+    equipSubArmor2(item: Item | null): Item | null {
+        const previousItem = this.equippedSubArmor2;
+        this.equippedSubArmor2 = item;
+        return previousItem;
+    }
+
+    /**
+     * アイテムを装備（自動的に適切なスロットに装備）
+     * @param item 装備するアイテム
+     * @returns 装備に成功した場合は交換されたアイテム、失敗した場合はnull
+     */
+    equipItem(item: Item): Item | null {
+        if (item.isWeapon()) {
+            return this.equipWeapon(item);
+        } else if (item.isMainArmor()) {
+            return this.equipMainArmor(item);
+        } else if (item.isSubArmor()) {
+            // 空いているサブ防具スロットに装備
+            if (!this.equippedSubArmor1) {
+                return this.equipSubArmor1(item);
+            } else if (!this.equippedSubArmor2) {
+                return this.equipSubArmor2(item);
+            } else {
+                // 両方埋まっている場合は1番目を交換
+                return this.equipSubArmor1(item);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 装備を外す
+     * @param slotType スロットタイプ
+     * @returns 外されたアイテム
+     */
+    unequipItem(slotType: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2'): Item | null {
+        switch (slotType) {
+            case 'weapon':
+                return this.equipWeapon(null);
+            case 'main_armor':
+                return this.equipMainArmor(null);
+            case 'sub_armor1':
+                return this.equipSubArmor1(null);
+            case 'sub_armor2':
+                return this.equipSubArmor2(null);
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * 装備による能力値ボーナスを計算
+     * @returns 装備ボーナスのマップ
+     */
+    getEquipmentBonuses(): Map<string, number> {
+        const bonuses = new Map<string, number>();
+        
+        const equippedItems = this.getAllEquippedItems().filter(item => item !== null) as Item[];
+        
+        for (const item of equippedItems) {
+            const effects = item.getEquipmentEffects();
+            for (const [statName, value] of Object.entries(effects)) {
+                const currentBonus = bonuses.get(statName) || 0;
+                bonuses.set(statName, currentBonus + value);
+            }
+        }
+        
+        return bonuses;
+    }
+
+    // 表示用の能力値を取得（略称付き、装備ボーナス込み）
     getDisplayStats(): Map<string, { value: number; abbreviation: string; description: string }> {
         const displayStats = new Map();
+        const equipmentBonuses = this.getEquipmentBonuses();
         
-        for (const [key, value] of this.stats) {
+        for (const [key, baseValue] of this.stats) {
+            const bonus = equipmentBonuses.get(key) || 0;
+            const totalValue = baseValue + bonus;
             const abbreviation = Player.statsLoader?.getAbbreviation(key) || key.toUpperCase();
             const description = Player.statsLoader?.getDescription(key) || key;
-            displayStats.set(key, { value, abbreviation, description });
+            displayStats.set(key, { value: totalValue, abbreviation, description });
         }
         
         return displayStats;
+    }
+
+    // アイテム作成ヘルパー
+    static createItem(itemName: string): Item | null {
+        if (!this.itemsLoader) {
+            console.error('ItemsLoader not initialized');
+            return null;
+        }
+        
+        const definition = this.itemsLoader.getItem(itemName);
+        if (!definition) {
+            console.error(`Item definition not found: ${itemName}`);
+            return null;
+        }
+        
+        return new Item(definition);
     }
 }

@@ -1,0 +1,33 @@
+- name: iron sword
+  label: 鉄の剣
+  type: weapon
+  effect:
+    power: 15
+  description: 一般的な鉄の剣
+- name: round shield
+  label: 丸い盾
+  type: main_armor
+  effect:
+    defense: 10
+  description: 丸い板を鉄で補強した盾
+- name: silver ring
+  label: 銀の指輪
+  type: sub_armor
+  effect:
+    defense: 10
+  description: 銀でできた綺麗な指輪
+- name: potion
+  label: 薬
+  type: consumable
+  effect:
+    immediate:
+      life: 30
+  description: 傷を治す薬
+- name: power potion
+  label: 力の薬
+  type: consumable
+  effect:
+    continuous:
+      turns: 5
+      power: 10
+  description: 一時的に力を高める薬

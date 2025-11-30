@@ -90,10 +90,13 @@ export class Game extends Scene {
             EventBus.emit('update-view')
         })
 
-        // Player初期化前にstatsシステムを初期化
-        await Player.initializeStatsSystem();
+        // Player初期化前にシステムを初期化
+        await Player.initializeAllSystems();
         this.player = new Player();
         this.params = this.getDisplayParams();
+
+        // テスト用: アイテムをプレイヤーに追加
+        this.testItemSystem();
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         this.miniMapView = new MiniMapView(this.add, this.game.canvas.width - 10 - 200, 10, 200, 200);
@@ -168,6 +171,56 @@ export class Game extends Scene {
     //         this.repaint()
     //     }
     // }
+
+    private testItemSystem(): void {
+        console.log('=== Item System Test ===');
+        
+        // アイテム作成テスト
+        const sword = Player.createItem('iron sword');
+        const shield = Player.createItem('round shield');
+        const ring = Player.createItem('silver ring');
+        const potion = Player.createItem('potion');
+        
+        if (sword && shield && ring && potion) {
+            console.log('✓ アイテム作成成功');
+            console.log('- 鉄の剣:', sword.toString());
+            console.log('- 丸い盾:', shield.toString());
+            console.log('- 銀の指輪:', ring.toString());
+            console.log('- 薬:', potion.toString());
+            
+            // インベントリ追加テスト
+            const inventory = this.player.getInventory();
+            inventory.addItem(sword);
+            inventory.addItem(shield);
+            inventory.addItem(ring);
+            inventory.addItem(potion);
+            
+            console.log('✓ インベントリ追加成功');
+            console.log(`インベントリ使用量: ${inventory.getUsedCapacity()}/${inventory.getCapacity()}`);
+            
+            // 装備テスト
+            const oldWeapon = this.player.equipItem(sword);
+            const oldArmor = this.player.equipItem(shield);
+            const oldRing = this.player.equipItem(ring);
+            
+            console.log('✓ 装備成功');
+            console.log('- 武器:', this.player.getEquippedWeapon()?.getLabel());
+            console.log('- メイン防具:', this.player.getEquippedMainArmor()?.getLabel());
+            console.log('- サブ防具1:', this.player.getEquippedSubArmor1()?.getLabel());
+            
+            // 装備ボーナス確認
+            const bonuses = this.player.getEquipmentBonuses();
+            console.log('✓ 装備ボーナス:');
+            for (const [stat, bonus] of bonuses) {
+                console.log(`- ${stat}: +${bonus}`);
+            }
+            
+        } else {
+            console.error('✗ アイテム作成失敗');
+        }
+        
+        console.log('=== Test Complete ===');
+    }
 
     changeScene() {
         this.scene.start('GameOver');
