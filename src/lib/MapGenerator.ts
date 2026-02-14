@@ -1,5 +1,9 @@
 'use strict';
 
+import { Enemy } from './Enemy';
+import { MapObject } from './MapObject';
+import type { ObjectEvent } from './MapObject';
+
 /**
  * 指定した範囲内のランダムな整数を生成する
  * @param min 最小値（含む）
@@ -69,32 +73,6 @@ class Rect {
 
     return false;
   }
-}
-
-/**
- * オブジェクトのイベント
- * @param dungeon ダンジョンマップ
- * @param object マップオブジェクト
- * @returns falseの場合、このマップオブジェクトを破棄する
- */
-type ObjectEvent = (dungeon: DungeonMap, object: MapObject) => boolean;
-export class MapObject {
-  public mark: string = 'o';
-  public color: integer = 0xFFFFFF;
-  public alpha: integer = 1;
-  public events: Map<string, ObjectEvent> = new Map<string, ObjectEvent>();
-  public x: integer = -1;
-  public y: integer = -1;
-  public sphere: boolean = false;
-  public visible: boolean = true;
-}
-
-export function newMapEvent(eventName: string, event: ObjectEvent, parent?: Map<string, ObjectEvent>) {
-  if (!parent) {
-    parent = new Map<string, ObjectEvent>();
-  }
-  parent.set(eventName, event);
-  return parent;
 }
 
 export const MapDirection = {
@@ -1286,6 +1264,100 @@ export class DungeonMap {
           this._objects.delete(id)
         }
       }
+    }
+  }
+
+  /**
+   * 敵をマップに追加する
+   * @param enemy 追加する敵（既に座標が設定されているMapObjectとして）
+   * @returns 追加されたオブジェクトのID
+   */
+  public addEnemy(enemy: Enemy): integer {
+    this._object_counter++;
+    this._objects.set(this._object_counter, enemy);
+    return this._object_counter;
+  }
+
+  /**
+   * 指定座標の敵を取得する
+   * @param x X座標
+   * @param y Y座標
+   * @returns 敵のインスタンス、存在しない場合はundefined
+   */
+  public getEnemy(x: integer, y: integer): Enemy | undefined {
+    for (const object of this._objects.values()) {
+      if (object instanceof Enemy && object.x === x && object.y === y) {
+        return object;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * 指定座標の敵を削除する
+   * @param x X座標
+   * @param y Y座標
+   * @returns 削除に成功した場合はtrue
+   */
+  public removeEnemy(x: integer, y: integer): boolean {
+    for (const [id, object] of this._objects.entries()) {
+      if (object instanceof Enemy && object.x === x && object.y === y) {
+        this._objects.delete(id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 全ての敵を取得する
+   * @returns 敵の配列
+   */
+  public getEnemies(): Enemy[] {
+    const enemies: Enemy[] = [];
+    for (const object of this._objects.values()) {
+      if (object instanceof Enemy) {
+        enemies.push(object);
+      }
+    }
+    return enemies;
+  }
+
+  /**
+   * プレイヤーの位置に敵がいるかチェック
+   * @returns 敵がいる場合はその敵、いない場合はundefined
+   */
+  public getEnemyAtPlayer(): Enemy | undefined {
+    return this.getEnemy(this._player.x, this._player.y);
+  }
+
+  /**
+   * 敵の数を取得
+   * @returns 現在マップ上にいる敵の数
+   */
+  public getEnemyCount(): integer {
+    let count = 0;
+    for (const object of this._objects.values()) {
+      if (object instanceof Enemy) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * 全ての敵をクリア
+   */
+  public clearEnemies(): void {
+    const enemyIds: integer[] = [];
+    for (const [id, object] of this._objects.entries()) {
+      if (object instanceof Enemy) {
+        enemyIds.push(id);
+      }
+    }
+
+    for (const id of enemyIds) {
+      this._objects.delete(id);
     }
   }
 }

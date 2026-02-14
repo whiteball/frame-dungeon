@@ -3,6 +3,8 @@ import { StatsLoader } from './StatsLoader';
 import { Inventory } from './Inventory';
 import { Item } from './Item';
 import { ItemsLoader } from './ItemsLoader';
+import { Enemy } from './Enemy';
+import { EnemyLoader } from './EnemyLoader';
 
 export class Player {
     private stats: Map<string, number>;
@@ -10,6 +12,7 @@ export class Player {
     private inventory: Inventory;
     private static statsLoader: StatsLoader;
     private static itemsLoader: ItemsLoader;
+    private static enemyLoader: EnemyLoader;
 
     // 装備スロット
     private equippedWeapon: Item | null = null;
@@ -34,9 +37,15 @@ export class Player {
         await this.itemsLoader.loadItems();
     }
 
+    static async initializeEnemySystem(): Promise<void> {
+        this.enemyLoader = EnemyLoader.getInstance();
+        await this.enemyLoader.loadEnemies();
+    }
+
     static async initializeAllSystems(): Promise<void> {
         await this.initializeStatsSystem();
         await this.initializeItemsSystem();
+        await this.initializeEnemySystem();
     }
 
     private initializeStats(): void {
@@ -252,13 +261,45 @@ export class Player {
             console.error('ItemsLoader not initialized');
             return null;
         }
-        
+
         const definition = this.itemsLoader.getItem(itemName);
         if (!definition) {
             console.error(`Item definition not found: ${itemName}`);
             return null;
         }
-        
+
         return new Item(definition);
+    }
+
+    // 敵作成ヘルパー
+    static createEnemy(enemyName: string, x: integer, y: integer): Enemy | null {
+        if (!this.enemyLoader) {
+            console.error('EnemyLoader not initialized');
+            return null;
+        }
+
+        const definition = this.enemyLoader.getEnemy(enemyName);
+        if (!definition) {
+            console.error(`Enemy definition not found: ${enemyName}`);
+            return null;
+        }
+
+        return new Enemy(definition, x, y);
+    }
+
+    // フロアに応じたランダムな敵を作成
+    static createRandomEnemy(floor: number, x: integer, y: integer): Enemy | null {
+        if (!this.enemyLoader) {
+            console.error('EnemyLoader not initialized');
+            return null;
+        }
+
+        const definition = this.enemyLoader.getRandomEnemy(floor);
+        if (!definition) {
+            console.error(`No enemy available for floor ${floor}`);
+            return null;
+        }
+
+        return new Enemy(definition, x, y);
     }
 }

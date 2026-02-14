@@ -1,6 +1,7 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
-import { DungeonMap, MapObject, newMapEvent } from '../../lib/MapGenerator';
+import { DungeonMap } from '../../lib/MapGenerator';
+import { MapObject, newMapEvent } from '../../lib/MapObject';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
@@ -69,6 +70,10 @@ export class Game extends Scene {
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
             dungeon.build();
             // dungeon.dump();
+
+            // 敵をクリア
+            dungeon.clearEnemies();
+
             const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true });
             if (step.length >= 2) {
                 // 階段の追加
@@ -78,6 +83,7 @@ export class Game extends Scene {
                     return true;
                 }), 0x00FF00)
             }
+
             const traps = dungeon.getRandomPosList(10, false, { withoutPlayer: true, excludePositionList: [step] });
             for (const trap of traps) {
                 // トラップの追加
@@ -87,6 +93,10 @@ export class Game extends Scene {
                     return true;
                 }), 0xFF0000, 1, false, false);
             }
+
+            // 敵の配置
+            this.spawnEnemies(dungeon);
+
             EventBus.emit('update-view')
         })
 
@@ -220,6 +230,28 @@ export class Game extends Scene {
         }
         
         console.log('=== Test Complete ===');
+    }
+
+    private spawnEnemies(dungeon: DungeonMap): void {
+        // フロアに応じた敵の数を決定
+        const enemyCount = Math.min(3 + this.floor, 10);
+
+        // 敵を配置する位置のリストを取得
+        const enemyPositions = dungeon.getRandomPosList(
+            enemyCount,
+            false,
+            { withoutCorridor: false, withoutPlayer: true }
+        );
+
+        // 各位置に敵を配置
+        for (const pos of enemyPositions) {
+            const enemy = Player.createRandomEnemy(this.floor, pos[0], pos[1]);
+            if (enemy) {
+                dungeon.addEnemy(enemy);
+            }
+        }
+
+        console.log(`Spawned ${enemyPositions.length} enemies on floor ${this.floor}`);
     }
 
     changeScene() {
