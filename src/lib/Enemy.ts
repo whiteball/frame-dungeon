@@ -39,11 +39,16 @@ export class Enemy extends MapObject {
         this.visible = true;
 
         // デフォルトのイベント設定
-        this.events = newMapEvent('around-0', () => {
-            // プレイヤーが敵のマスに入った時の処理
-            // 戦闘システムが実装されるまでは何もしない
-            console.log(`Encountered enemy: ${this.getLabel()}`);
-            return true; // trueを返すと敵は削除されない
+        // around-1: 周囲8マスにプレイヤーがいる場合に攻撃する
+        this.events = newMapEvent('around-1', (dungeon) => {
+            const player = dungeon.getPlayerInstance();
+            if (player) {
+                const playerDefense = player.getStat('defense');
+                const damage = this.calculateDamageToPlayer(playerDefense);
+                player.addStat('life', -damage);
+                console.log(`${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`);
+            }
+            return true;
         });
     }
 

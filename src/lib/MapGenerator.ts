@@ -3,6 +3,7 @@
 import { Enemy } from './Enemy';
 import { MapObject } from './MapObject';
 import type { ObjectEvent } from './MapObject';
+import type { Player } from './Player';
 
 /**
  * 指定した範囲内のランダムな整数を生成する
@@ -163,6 +164,7 @@ export class DungeonMap {
   private _object_counter: integer = 0;
   private _objects: Map<integer, MapObject>;
   private _mapObjects: Map<integer, MapObject[]>;
+  private _playerInstance: Player | null = null;
 
   constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
     this._width = width + 2;
@@ -1074,25 +1076,36 @@ export class DungeonMap {
         return 0;
       }
     }
+
+    // 移動先の座標を計算
+    let nx = this._player.x;
+    let ny = this._player.y;
     switch (direction) {
       case MapDirection.EAST:
-        this._player.x += 1;
+        nx += 1;
         break;
       case MapDirection.SOUTH:
-        this._player.y += 1;
+        ny += 1;
         break;
       case MapDirection.WEST:
-        this._player.x -= 1;
+        nx -= 1;
         break;
       case MapDirection.NORTH:
-        this._player.y -= 1;
+        ny -= 1;
         break;
     }
 
+    // 移動先に敵がいる場合は移動できない
+    if (this.getEnemy(nx, ny)) {
+      return 0;
+    }
+
+    this._player.x = nx;
+    this._player.y = ny;
     this._player.direction = direction;
     this.clearFogWithinPlayer();
     this.setWalkedAt(this._player.x, this._player.y, 1);
-    
+
     this.dispatchObjectEvent();
     return 1;
   }
@@ -1254,15 +1267,19 @@ export class DungeonMap {
   }
 
   /**
-   * dispatchObjectEvent
+   * プレイヤーとオブジェクトの距離に応じてイベントをディスパッチする
+   * around-0: プレイヤーと同じマス
+   * around-1: プレイヤーの周囲8マス（チェビシェフ距離1）
    */
   public dispatchObjectEvent() {
     for (const [id, object] of this._objects.entries()) {
-      if (this._player.x === object.x && this._player.y === object.y) {
-        const event = object.events.get('around-0')
-        if (event && ! event(this, object)) {
-          this._objects.delete(id)
-        }
+      const dx = Math.abs(this._player.x - object.x);
+      const dy = Math.abs(this._player.y - object.y);
+      const distance = Math.max(dx, dy); // チェビシェフ距離
+
+      const event = object.events.get(`around-${distance}`);
+      if (event && !event(this, object)) {
+        this._objects.delete(id);
       }
     }
   }
@@ -1343,6 +1360,22 @@ export class DungeonMap {
       }
     }
     return count;
+  }
+
+  /**
+   * Playerインスタンスを設定する
+   * @param player Playerインスタンス
+   */
+  public setPlayerInstance(player: Player): void {
+    this._playerInstance = player;
+  }
+
+  /**
+   * Playerインスタンスを取得する
+   * @returns Playerインスタンス
+   */
+  public getPlayerInstance(): Player | null {
+    return this._playerInstance;
   }
 
   /**

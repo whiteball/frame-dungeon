@@ -153,6 +153,7 @@ export class Game extends Scene {
         // })
 
         this.dungeon = dun;
+        this.dungeon.setPlayerInstance(this.player);
 
         EventBus.on('update-view', () => {
             this.render();
