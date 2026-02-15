@@ -1,5 +1,6 @@
 import type { EnemyDefinition } from './EnemyLoader';
 import { MapObject, MapMark, newMapEvent } from './MapObject';
+import { StatsLoader } from './StatsLoader';
 
 /**
  * ゲーム内の敵インスタンスを表すクラス
@@ -8,14 +9,25 @@ import { MapObject, MapMark, newMapEvent } from './MapObject';
 export class Enemy extends MapObject {
     private definition: EnemyDefinition;
     private instanceId: string;
-    private currentHp: number;
+    private stats: Map<string, number>;
+    private maxStats: Map<string, number>;
     private isDead: boolean = false;
 
     constructor(definition: EnemyDefinition, x: integer, y: integer, instanceId?: string) {
         super();
         this.definition = definition;
         this.instanceId = instanceId || this.generateInstanceId();
-        this.currentHp = definition.hp;
+
+        // stats.ymlで定義されたステータスをMapに格納
+        this.stats = new Map();
+        this.maxStats = new Map();
+        const statsLoader = StatsLoader.getInstance();
+        for (const statName of statsLoader.getStatNames()) {
+            const value = definition[statName];
+            const numValue = typeof value === 'number' ? value : 0;
+            this.stats.set(statName, numValue);
+            this.maxStats.set(statName, numValue);
+        }
 
         // MapObjectのプロパティを設定
         this.x = x;
@@ -52,18 +64,6 @@ export class Enemy extends MapObject {
         return this.definition.description;
     }
 
-    getMaxHp(): number {
-        return this.definition.hp;
-    }
-
-    getPower(): number {
-        return this.definition.power;
-    }
-
-    getDefense(): number {
-        return this.definition.defense;
-    }
-
     getExp(): number {
         return this.definition.exp;
     }
@@ -76,45 +76,61 @@ export class Enemy extends MapObject {
         return this.definition;
     }
 
+    // ステータス操作
+    getStat(key: string): number {
+        return this.stats.get(key) || 0;
+    }
+
+    getMaxStat(key: string): number {
+        return this.maxStats.get(key) || 0;
+    }
+
+    setStat(key: string, value: number): void {
+        const maxValue = this.maxStats.get(key);
+        if (maxValue !== undefined) {
+            this.stats.set(key, Math.max(0, Math.min(value, maxValue)));
+        } else {
+            this.stats.set(key, value);
+        }
+        // lifeが0になったら死亡
+        if (key === 'life' && this.getStat('life') === 0) {
+            this.isDead = true;
+        }
+    }
+
+    addStat(key: string, value: number): void {
+        this.setStat(key, this.getStat(key) + value);
+    }
+
+    getStats(): Map<string, number> {
+        return new Map(this.stats);
+    }
+
+    getMaxStats(): Map<string, number> {
+        return new Map(this.maxStats);
+    }
+
     // インスタンス固有の情報
     getInstanceId(): string {
         return this.instanceId;
     }
 
-    getCurrentHp(): number {
-        return this.currentHp;
-    }
-
-    setCurrentHp(hp: number): void {
-        this.currentHp = Math.max(0, Math.min(hp, this.definition.hp));
-        if (this.currentHp === 0) {
-            this.isDead = true;
-        }
-    }
-
-    addHp(amount: number): void {
-        this.setCurrentHp(this.currentHp + amount);
-    }
-
     damage(amount: number): number {
         const actualDamage = Math.max(1, amount);
-        this.currentHp = Math.max(0, this.currentHp - actualDamage);
-        if (this.currentHp === 0) {
-            this.isDead = true;
-        }
+        this.addStat('life', -actualDamage);
         return actualDamage;
     }
 
     heal(amount: number): void {
-        this.setCurrentHp(this.currentHp + amount);
+        this.addStat('life', amount);
     }
 
     isAlive(): boolean {
-        return !this.isDead && this.currentHp > 0;
+        return !this.isDead && this.getStat('life') > 0;
     }
 
     kill(): void {
-        this.currentHp = 0;
+        this.setStat('life', 0);
         this.isDead = true;
     }
 
@@ -125,7 +141,7 @@ export class Enemy extends MapObject {
      * @returns 計算されたダメージ
      */
     calculateDamageToPlayer(playerDefense: number): number {
-        const baseDamage = this.getPower();
+        const baseDamage = this.getStat('power');
         const damage = Math.max(1, baseDamage - Math.floor(playerDefense / 2));
         return damage;
     }
@@ -137,14 +153,16 @@ export class Enemy extends MapObject {
      */
     takeDamageFromPlayer(playerPower: number): number {
         const baseDamage = playerPower;
-        const damage = Math.max(1, baseDamage - Math.floor(this.getDefense() / 2));
+        const damage = Math.max(1, baseDamage - Math.floor(this.getStat('defense') / 2));
         return this.damage(damage);
     }
 
     // ユーティリティ
     clone(newInstanceId?: string): Enemy {
         const clone = new Enemy(this.definition, this.x, this.y, newInstanceId);
-        clone.currentHp = this.currentHp;
+        for (const [key, value] of this.stats) {
+            clone.stats.set(key, value);
+        }
         clone.isDead = this.isDead;
         return clone;
     }
@@ -158,17 +176,21 @@ export class Enemy extends MapObject {
     }
 
     toString(): string {
-        return `${this.getLabel()} (${this.getName()}) HP:${this.currentHp}/${this.getMaxHp()}`;
+        const lifeDesc = StatsLoader.getInstance().getDescription('life');
+        return `${this.getLabel()} (${this.getName()}) ${lifeDesc}:${this.getStat('life')}/${this.getMaxStat('life')}`;
     }
 
     /**
      * 敵の状態を表す文字列を取得（詳細版）
      */
     toDetailString(): string {
-        return `${this.getLabel()} (${this.getName()})\n` +
-            `HP: ${this.currentHp}/${this.getMaxHp()}\n` +
-            `攻撃力: ${this.getPower()}\n` +
-            `防御力: ${this.getDefense()}\n` +
-            `経験値: ${this.getExp()}`;
+        const statsLoader = StatsLoader.getInstance();
+        let result = `${this.getLabel()} (${this.getName()})\n`;
+        for (const [key, value] of this.stats) {
+            const description = statsLoader.getDescription(key);
+            result += `${description}: ${value}/${this.getMaxStat(key)}\n`;
+        }
+        result += `経験値: ${this.getExp()}`;
+        return result;
     }
 }

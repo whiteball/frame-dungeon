@@ -1,6 +1,6 @@
 - name: slime
   label: スライム
-  hp: 20
+  life: 20
   power: 5
   defense: 2
   exp: 10
@@ -8,7 +8,7 @@
   description: 最も弱い魔物。ぷよぷよしている
 - name: goblin
   label: ゴブリン
-  hp: 35
+  life: 35
   power: 8
   defense: 4
   exp: 20
@@ -16,7 +16,7 @@
   description: 小柄な魔物。素早く攻撃してくる
 - name: skeleton
   label: スケルトン
-  hp: 40
+  life: 40
   power: 10
   defense: 6
   exp: 30
@@ -24,7 +24,7 @@
   description: 骨だけの不死者。防御力が高い
 - name: orc
   label: オーク
-  hp: 60
+  life: 60
   power: 15
   defense: 8
   exp: 50
@@ -32,7 +32,7 @@
   description: 筋骨隆々とした魔物。攻撃力が高い
 - name: wolf
   label: ウルフ
-  hp: 45
+  life: 45
   power: 12
   defense: 5
   exp: 35
@@ -40,7 +40,7 @@
   description: 野生の狼。素早い攻撃が特徴
 - name: bat
   label: コウモリ
-  hp: 25
+  life: 25
   power: 7
   defense: 3
   exp: 15
@@ -48,7 +48,7 @@
   description: 洞窟に住む巨大コウモリ
 - name: spider
   label: 大蜘蛛
-  hp: 30
+  life: 30
   power: 9
   defense: 5
   exp: 25
@@ -56,7 +56,7 @@
   description: 毒を持つ大きな蜘蛛
 - name: ogre
   label: オーガ
-  hp: 80
+  life: 80
   power: 20
   defense: 10
   exp: 80
@@ -64,7 +64,7 @@
   description: 巨大な魔物。非常に危険
 - name: dragon
   label: ドラゴン
-  hp: 150
+  life: 150
   power: 30
   defense: 20
   exp: 200

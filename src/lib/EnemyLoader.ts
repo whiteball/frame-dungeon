@@ -1,4 +1,5 @@
 import yaml from 'js-yaml';
+import { StatsLoader } from './StatsLoader';
 
 export interface EnemyDefinition {
     /**
@@ -9,18 +10,6 @@ export interface EnemyDefinition {
      * 敵表示名（日本語）
      */
     label: string;
-    /**
-     * HP
-     */
-    hp: number;
-    /**
-     * 攻撃力
-     */
-    power: number;
-    /**
-     * 防御力
-     */
-    defense: number;
     /**
      * 倒した時の経験値
      */
@@ -33,6 +22,11 @@ export interface EnemyDefinition {
      * 敵の説明文
      */
     description: string;
+    /**
+     * ステータス値（stats.ymlのnameをキーとする）
+     * 例: { life: 20, power: 5, defense: 2 }
+     */
+    [statName: string]: string | number | undefined;
 }
 
 export class EnemyLoader {
@@ -94,20 +88,20 @@ export class EnemyLoader {
         if (!enemy.label || typeof enemy.label !== 'string') {
             throw new Error(`Invalid enemy '${enemy.name}': missing or invalid 'label' field`);
         }
-        if (typeof enemy.hp !== 'number' || enemy.hp <= 0) {
-            throw new Error(`Invalid enemy '${enemy.name}': invalid 'hp' field. Must be a positive number`);
-        }
-        if (typeof enemy.power !== 'number' || enemy.power < 0) {
-            throw new Error(`Invalid enemy '${enemy.name}': invalid 'power' field. Must be a non-negative number`);
-        }
-        if (typeof enemy.defense !== 'number' || enemy.defense < 0) {
-            throw new Error(`Invalid enemy '${enemy.name}': invalid 'defense' field. Must be a non-negative number`);
-        }
         if (typeof enemy.exp !== 'number' || enemy.exp < 0) {
             throw new Error(`Invalid enemy '${enemy.name}': invalid 'exp' field. Must be a non-negative number`);
         }
         if (!enemy.description || typeof enemy.description !== 'string') {
             throw new Error(`Invalid enemy '${enemy.name}': missing or invalid 'description' field`);
+        }
+
+        // stats.ymlで定義されたステータスのバリデーション
+        const statsLoader = StatsLoader.getInstance();
+        const statNames = statsLoader.getStatNames();
+        for (const statName of statNames) {
+            if (statName in enemy && typeof enemy[statName] !== 'number') {
+                throw new Error(`Invalid enemy '${enemy.name}': '${statName}' must be a number`);
+            }
         }
     }
 
@@ -130,23 +124,26 @@ export class EnemyLoader {
      */
     getEnemiesByFloor(floor: number): EnemyDefinition[] {
         // フロアに応じて敵の強さをフィルタリング
-        // floor 1-2: HP 40以下
-        // floor 3-5: HP 60以下
-        // floor 6-9: HP 100以下
+        // floor 1-2: life 40以下
+        // floor 3-5: life 60以下
+        // floor 6-9: life 100以下
         // floor 10+: 全ての敵
 
-        let maxHp: number;
+        let maxLife: number;
         if (floor <= 2) {
-            maxHp = 40;
+            maxLife = 40;
         } else if (floor <= 5) {
-            maxHp = 60;
+            maxLife = 60;
         } else if (floor <= 9) {
-            maxHp = 100;
+            maxLife = 100;
         } else {
             return [...this.enemies]; // 全ての敵
         }
 
-        return this.enemies.filter(enemy => enemy.hp <= maxHp);
+        return this.enemies.filter(enemy => {
+            const life = enemy['life'];
+            return typeof life === 'number' && life <= maxLife;
+        });
     }
 
     /**

@@ -1,18 +1,18 @@
 - name: life
   abbreviation: HP
   fluctuation: yes
-  description: 生命力
+  description: HP
   initial: 100
 - name: magic
   abbreviation: MP
   fluctuation: yes
-  description: 魔法力
+  description: MP
   initial: 50
 - name: power
   abbreviation: POW
-  description: 力の強さ
+  description: 攻撃力
   initial: 10
 - name: defense
   abbreviation: DEF
-  description: 防御の上手さ
+  description: 防御力
   initial: 5
