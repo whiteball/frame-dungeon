@@ -1,4 +1,5 @@
 import { DungeonMap, MapDirection } from './MapGenerator';
+import { MapMark } from './MapObject';
 
 export class MiniMapView {
   private graph: Phaser.GameObjects.Graphics;
@@ -98,11 +99,11 @@ export class MiniMapView {
         graph.fillStyle(object.color, object.alpha);
         graph.lineStyle(1, 0xFFFFFF);
         switch (object.mark) {
-          case 'o':
+          case MapMark.CIRCLE:
             graph.fillCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3);
             graph.strokeCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3);
             break;
-          case '*':
+          case MapMark.STAR:
             {
               const r = blockWidth * 4 / 5 / 2;
               graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
@@ -119,7 +120,7 @@ export class MiniMapView {
                 .translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2)
             }
             break;
-          case '<>':
+          case MapMark.DIAMOND:
             graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
               .rotateCanvas(Math.PI / 4)
               .fillRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2, blockWidth / 2)
@@ -127,7 +128,7 @@ export class MiniMapView {
               .rotateCanvas(-Math.PI / 4)
               .translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2);
             break;
-          case '+':
+          case MapMark.CROSS:
             {
               const r = blockWidth * 4 / 5 / 2;
               graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
@@ -142,7 +143,7 @@ export class MiniMapView {
                 .translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2)
             }
             break;
-          case 'x':
+          case MapMark.X_CROSS:
             {
               const r = blockWidth * 4 / 5 / 2;
               graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2).rotateCanvas(Math.PI / 4)

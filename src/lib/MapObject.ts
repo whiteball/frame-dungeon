@@ -8,8 +8,23 @@
  */
 export type ObjectEvent = (dungeon: any, object: MapObject) => boolean;
 
+/** マップオブジェクトの表示マーク定数 */
+export const MapMark = {
+  /** 丸（デフォルト） */
+  CIRCLE: 'o',
+  /** 星形 */
+  STAR: '*',
+  /** ダイアモンド形 */
+  DIAMOND: '<>',
+  /** 十字形 */
+  CROSS: '+',
+  /** 斜め十字形 */
+  X_CROSS: 'x',
+} as const;
+export type MapMark = typeof MapMark[keyof typeof MapMark];
+
 export class MapObject {
-  public mark: string = 'o';
+  public mark: MapMark | string = MapMark.CIRCLE;
   public color: integer = 0xFFFFFF;
   public alpha: integer = 1;
   public events: Map<string, ObjectEvent> = new Map<string, ObjectEvent>();

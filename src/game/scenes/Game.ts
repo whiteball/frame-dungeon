@@ -1,7 +1,7 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 import { DungeonMap } from '../../lib/MapGenerator';
-import { MapObject, newMapEvent } from '../../lib/MapObject';
+import { MapObject, MapMark, newMapEvent } from '../../lib/MapObject';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
@@ -77,7 +77,7 @@ export class Game extends Scene {
             const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true });
             if (step.length >= 2) {
                 // 階段の追加
-                dungeon.addObject(step[0], step[1], 'o', newMapEvent('around-0', (dungeon: DungeonMap) => {
+                dungeon.addObject(step[0], step[1], MapMark.CIRCLE, newMapEvent('around-0', (dungeon: DungeonMap) => {
                     this.floor++;
                     EventBus.emit('go-to-next-floor', dungeon)
                     return true;
@@ -87,7 +87,7 @@ export class Game extends Scene {
             const traps = dungeon.getRandomPosList(10, false, { withoutPlayer: true, excludePositionList: [step] });
             for (const trap of traps) {
                 // トラップの追加
-                dungeon.addObject(trap[0], trap[1], 'x', newMapEvent('around-0', (_, object: MapObject) => {
+                dungeon.addObject(trap[0], trap[1], MapMark.X_CROSS, newMapEvent('around-0', (_, object: MapObject) => {
                     console.log('trap!!' + object.x + ',' + object.y)
                     object.visible = true;
                     return true;

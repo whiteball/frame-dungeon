@@ -1,5 +1,5 @@
 import type { EnemyDefinition } from './EnemyLoader';
-import { MapObject, newMapEvent } from './MapObject';
+import { MapObject, MapMark, newMapEvent } from './MapObject';
 
 /**
  * ゲーム内の敵インスタンスを表すクラス
@@ -20,7 +20,7 @@ export class Enemy extends MapObject {
         // MapObjectのプロパティを設定
         this.x = x;
         this.y = y;
-        this.mark = '<>';
+        this.mark = MapMark.DIAMOND;
         this.color = definition.color || 0xFF0000;
         this.alpha = 1;
         this.sphere = true;
