@@ -4,6 +4,7 @@ import { Enemy } from './Enemy';
 import { MapObject } from './MapObject';
 import type { ObjectEvent } from './MapObject';
 import type { Player } from './Player';
+import { EventBus } from '../game/EventBus';
 
 /**
  * 指定した範囲内のランダムな整数を生成する
@@ -1116,6 +1117,75 @@ export class DungeonMap {
    */
   public goPlayer(): integer {
     return this.movePlayer(this._player.direction)
+  }
+
+  /**
+   * 2点間に壁がなく攻撃可能かを判定する（Chebyshev距離1の隣接セル限定）
+   * 斜め方向は、隣接する縦横両方向が壁で塞がれている場合のみ不可
+   */
+  public canAttack(fromX: integer, fromY: integer, toX: integer, toY: integer): boolean {
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return false;
+
+    const isSolidWall = (x: integer, y: integer, dir: number): boolean => {
+      const val = this.getAt(x, y);
+      return !!(val & (1 << dir)) && !(val & (1 << (dir + 4)));
+    };
+
+    if (dy === 0) {
+      return !isSolidWall(fromX, fromY, dx > 0 ? MapDirection.EAST : MapDirection.WEST);
+    }
+    if (dx === 0) {
+      return !isSolidWall(fromX, fromY, dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH);
+    }
+    // 斜め: 角を回る2本のL字経路のうち、少なくとも1本が通れれば攻撃可
+    // 経路A: 横→縦 (fromX,fromY)→(toX,fromY)→(toX,toY)
+    // 経路B: 縦→横 (fromX,fromY)→(fromX,toY)→(toX,toY)
+    const hDir = dx > 0 ? MapDirection.EAST : MapDirection.WEST;
+    const vDir = dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH;
+    const pathA = !isSolidWall(fromX, fromY, hDir) && !isSolidWall(toX, fromY, vDir);
+    const pathB = !isSolidWall(fromX, fromY, vDir) && !isSolidWall(fromX, toY, hDir);
+    return pathA || pathB;
+  }
+
+  /**
+   * プレイヤーが正面の敵を攻撃する
+   * @returns 攻撃が実行された場合true、正面に敵がいない場合false
+   */
+  public attackPlayer(): boolean {
+    const { x, y, direction } = this.getPlayerPos();
+    let destX = x;
+    let destY = y;
+    switch (direction) {
+      case MapDirection.EAST:  destX += 1; break;
+      case MapDirection.SOUTH: destY += 1; break;
+      case MapDirection.WEST:  destX -= 1; break;
+      case MapDirection.NORTH: destY -= 1; break;
+    }
+    const enemy = this.getEnemy(destX, destY);
+    if (!enemy) return false;
+    if (!this.canAttack(x, y, destX, destY)) return false;
+
+    const player = this.getPlayerInstance();
+    if (!player) return false;
+
+    const bonus = player.getEquipmentBonuses().get('power') ?? 0;
+    const playerPower = player.getStat('power') + bonus;
+    const damage = enemy.takeDamageFromPlayer(playerPower);
+    EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`);
+
+    if (!enemy.isAlive()) {
+      this.removeEnemy(destX, destY);
+      const levelsGained = player.addExp(enemy.getExp());
+      EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`);
+      for (let i = 0; i < levelsGained; i++) {
+        EventBus.emit('message-log', `レベルアップ！Lv${player.level}`);
+      }
+    }
+
+    this.dispatchObjectEvent();
+    return true;
   }
 
   /**

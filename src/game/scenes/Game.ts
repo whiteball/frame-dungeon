@@ -15,6 +15,7 @@ export class Game extends Scene {
         keyD: Phaser.Input.Keyboard.Key | undefined,
         keyE: Phaser.Input.Keyboard.Key | undefined,
         keyQ: Phaser.Input.Keyboard.Key | undefined,
+        keySpace: Phaser.Input.Keyboard.Key | undefined,
     };
     dungeon: DungeonMap;
     floor: integer = 1;
@@ -119,10 +120,16 @@ export class Game extends Scene {
             keyD: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D),
             keyE: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E),
             keyQ: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
+            keySpace: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         };
 
         this.keys.keyW?.on('down', () => {
             if (this.dungeon.goPlayer() > 0) {
+                this.render()
+            }
+        })
+        this.keys.keySpace?.on('down', () => {
+            if (this.dungeon.attackPlayer()) {
                 this.render()
             }
         })
@@ -157,6 +164,10 @@ export class Game extends Scene {
 
         EventBus.on('update-view', () => {
             this.render();
+        })
+
+        EventBus.on('game-over', () => {
+            this.scene.start('GameOver');
         })
 
         EventBus.emit('go-to-next-floor', this.dungeon);

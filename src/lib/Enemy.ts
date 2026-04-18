@@ -1,6 +1,7 @@
 import type { EnemyDefinition } from './EnemyLoader';
 import { MapObject, MapMark, newMapEvent } from './MapObject';
 import { StatsLoader } from './StatsLoader';
+import { EventBus } from '../game/EventBus';
 
 /**
  * ゲーム内の敵インスタンスを表すクラス
@@ -41,12 +42,17 @@ export class Enemy extends MapObject {
         // デフォルトのイベント設定
         // around-1: 周囲8マスにプレイヤーがいる場合に攻撃する
         this.events = newMapEvent('around-1', (dungeon) => {
+            const { x: px, y: py } = dungeon.getPlayerPos();
+            if (!dungeon.canAttack(this.x, this.y, px, py)) return true;
             const player = dungeon.getPlayerInstance();
             if (player) {
-                const playerDefense = player.getStat('defense');
+                const playerDefense = player.getStat('defense') + (player.getEquipmentBonuses().get('defense') ?? 0);
                 const damage = this.calculateDamageToPlayer(playerDefense);
                 player.addStat('life', -damage);
-                console.log(`${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`);
+                EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`);
+                if (player.getStat('life') <= 0) {
+                    EventBus.emit('game-over');
+                }
             }
             return true;
         });

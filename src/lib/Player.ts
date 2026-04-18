@@ -14,6 +14,9 @@ export class Player {
     private static itemsLoader: ItemsLoader;
     private static enemyLoader: EnemyLoader;
 
+    level: number = 1;
+    exp: number = 0;
+
     // 装備スロット
     private equippedWeapon: Item | null = null;
     private equippedMainArmor: Item | null = null;
@@ -237,6 +240,30 @@ export class Player {
         }
         
         return bonuses;
+    }
+
+    expToNextLevel(): number {
+        return this.level * 50;
+    }
+
+    addExp(amount: number): number {
+        this.exp += amount;
+        let levelsGained = 0;
+        while (this.exp >= this.expToNextLevel()) {
+            this.exp -= this.expToNextLevel();
+            this.levelUp();
+            levelsGained++;
+        }
+        return levelsGained;
+    }
+
+    levelUp(): void {
+        this.level++;
+        const newMaxLife = this.getMaxStat('life') + 10;
+        this.maxStats.set('life', newMaxLife);
+        this.stats.set('life', newMaxLife);
+        this.addStat('power', 2);
+        this.addStat('defense', 1);
     }
 
     // 表示用の能力値を取得（略称付き、装備ボーナス込み）
