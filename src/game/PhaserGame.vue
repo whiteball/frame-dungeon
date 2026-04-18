@@ -8,6 +8,7 @@ const scene = ref();
 const game = ref();
 const logs = ref<string[]>([]);
 const MAX_LOGS = 50;
+const logVisible = ref(false);
 
 const emit = defineEmits(['current-active-scene']);
 
@@ -20,6 +21,10 @@ onMounted(() => {
         scene.value = scene_instance;
     });
 
+    EventBus.on('game-scene-start', () => {
+        logVisible.value = true;
+    });
+
     EventBus.on('message-log', (message: string) => {
         logs.value.unshift(message);
         if (logs.value.length > MAX_LOGS) logs.value.length = MAX_LOGS;
@@ -29,6 +34,7 @@ onMounted(() => {
 
 onUnmounted(() => {
 
+    EventBus.removeListener('game-scene-start');
     EventBus.removeListener('message-log');
 
     if (game.value)
@@ -47,6 +53,7 @@ defineExpose({ scene, game });
     <div style="position: relative; display: inline-block;">
         <div id="game-container"></div>
         <textarea
+            v-show="logVisible"
             readonly
             :value="logs.join('\n')"
             style="position: absolute; left: 10px; top: 540px;

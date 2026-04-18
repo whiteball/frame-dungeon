@@ -30,6 +30,7 @@ export class MainMenu extends Scene
 
     changeScene ()
     {
+        EventBus.emit('game-scene-start');
         this.scene.start('Game');
     }
 }
