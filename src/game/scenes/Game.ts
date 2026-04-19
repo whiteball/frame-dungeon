@@ -172,6 +172,11 @@ export class Game extends Scene {
 
         EventBus.emit('go-to-next-floor', this.dungeon);
         EventBus.emit('current-scene-ready', this);
+
+        EventBus.emit('scene-actions', [
+            { label: 'アイテム使用', onClick: () => EventBus.emit('message-log', 'アイテム使用機能は未実装です') },
+            { label: 'ステータス', onClick: () => EventBus.emit('message-log', 'ステータス確認機能は未実装です') },
+        ]);
     }
 
     // update(time: number, delta: number): void {

@@ -28,6 +28,10 @@ export class GameOver extends Scene
         }).setOrigin(0.5).setDepth(100);
         
         EventBus.emit('current-scene-ready', this);
+
+        EventBus.emit('scene-actions', [
+            { label: 'リスタート', onClick: () => this.changeScene() },
+        ]);
     }
 
     changeScene ()
