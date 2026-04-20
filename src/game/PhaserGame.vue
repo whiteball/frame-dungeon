@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { EventBus } from './EventBus';
 import StartGame from './main';
 import Phaser from 'phaser';
 
 type SceneAction = { label: string, onClick: () => void };
+type ItemListEntry = { id: string, label: string, description: string };
 
 const scene = ref();
 const game = ref();
@@ -13,7 +14,42 @@ const MAX_LOGS = 50;
 const logVisible = ref(false);
 const actions = ref<SceneAction[]>([]);
 
+const itemList = ref<ItemListEntry[]>([]);
+const itemListVisible = ref(false);
+const selectedIndex = ref(0);
+const listRef = ref<HTMLUListElement | null>(null);
+
 const emit = defineEmits(['current-active-scene']);
+
+function onListKeyDown(e: KeyboardEvent) {
+    if (e.key === 'ArrowDown') {
+        if (itemList.value.length > 0) {
+            selectedIndex.value = Math.min(itemList.value.length - 1, selectedIndex.value + 1);
+        }
+        e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+        if (itemList.value.length > 0) {
+            selectedIndex.value = Math.max(0, selectedIndex.value - 1);
+        }
+        e.preventDefault();
+    } else if (e.key === 'Enter') {
+        confirmUse();
+        e.preventDefault();
+    } else if (e.key === 'Escape') {
+        requestClose();
+        e.preventDefault();
+    }
+}
+
+function confirmUse() {
+    const it = itemList.value[selectedIndex.value];
+    if (!it) return;
+    EventBus.emit('use-item', { instanceId: it.id });
+}
+
+function requestClose() {
+    EventBus.emit('close-item-list-request');
+}
 
 onMounted(() => {
 
@@ -41,6 +77,25 @@ onMounted(() => {
     EventBus.on('reset-message-log', () => {
         logs.value = [];
         logVisible.value = false;
+        itemListVisible.value = false;
+        itemList.value = [];
+        selectedIndex.value = 0;
+    });
+
+    EventBus.on('open-item-list', (payload: { items: ItemListEntry[] }) => {
+        itemList.value = payload.items;
+        if (selectedIndex.value >= itemList.value.length) {
+            selectedIndex.value = Math.max(0, itemList.value.length - 1);
+        }
+        if (!itemListVisible.value) selectedIndex.value = 0;
+        itemListVisible.value = true;
+        nextTick(() => listRef.value?.focus());
+    });
+
+    EventBus.on('close-item-list', () => {
+        itemListVisible.value = false;
+        itemList.value = [];
+        selectedIndex.value = 0;
     });
 
 });
@@ -51,6 +106,8 @@ onUnmounted(() => {
     EventBus.removeListener('message-log');
     EventBus.removeListener('scene-actions');
     EventBus.removeListener('reset-message-log');
+    EventBus.removeListener('open-item-list');
+    EventBus.removeListener('close-item-list');
 
     if (game.value)
     {
@@ -70,7 +127,7 @@ defineExpose({ scene, game });
         <div
             style="position: absolute; left: 0; top: 540px;
                    width: 1024px; height: 50px;
-                   display: flex; flex-direction: row; justify-content: center;
+                   display: flex; flex-direction: row; justify-content: flex-start;
                    align-items: center; gap: 8px; padding: 6px;
                    box-sizing: border-box;"
         >
@@ -92,5 +149,61 @@ defineExpose({ scene, game });
                    font-size: 13px; border: 1px solid #444;
                    resize: none; box-sizing: border-box; padding: 6px;"
         ></textarea>
+        <div
+            v-show="itemListVisible"
+            style="position: absolute; left: 10px; top: 10px;
+                   width: 760px; height: 520px;
+                   display: flex; justify-content: center; align-items: center;
+                   pointer-events: none;"
+        >
+            <span
+                style="font-family: 'BIZ UDゴシック', Consolas, monospace;
+                       font-size: 36px; font-weight: bold; color: #fff;
+                       background: rgba(0, 0, 0, 0.8);
+                       border: 2px solid #fff;
+                       border-radius: 6px;
+                       padding: 12px 32px;
+                       box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);"
+            >アイテム選択中</span>
+        </div>
+        <div
+            v-show="itemListVisible"
+            style="position: absolute; left: 780px; top: 590px;
+                   width: 234px; height: 170px;
+                   background: rgba(0,0,0,0.85); color: white;
+                   font-family: 'BIZ UDゴシック', Consolas, monospace;
+                   font-size: 13px; border: 1px solid #666;
+                   display: flex; flex-direction: column; box-sizing: border-box;"
+        >
+            <ul
+                ref="listRef"
+                tabindex="0"
+                @keydown="onListKeyDown"
+                style="list-style: none; margin: 0; padding: 4px; flex: 1;
+                       overflow-y: auto; outline: none;"
+            >
+                <li
+                    v-for="(it, i) in itemList"
+                    :key="it.id"
+                    @click="selectedIndex = i"
+                    @dblclick="confirmUse"
+                    :style="{ padding: '2px 4px', cursor: 'pointer',
+                              background: i === selectedIndex ? '#335' : 'transparent' }"
+                    :title="it.description"
+                >{{ it.label }}</li>
+                <li
+                    v-if="itemList.length === 0"
+                    style="padding: 2px 4px; opacity: 0.6;"
+                >使える薬がない</li>
+            </ul>
+            <div style="display: flex; gap: 4px; padding: 4px; border-top: 1px solid #666;">
+                <button
+                    class="button"
+                    @click="confirmUse"
+                    :disabled="itemList.length === 0"
+                >使用</button>
+                <button class="button" @click="requestClose">キャンセル</button>
+            </div>
+        </div>
     </div>
 </template>

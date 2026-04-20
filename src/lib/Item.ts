@@ -66,6 +66,10 @@ export class Item {
         return this.definition.effect.continuous;
     }
 
+    hasImmediateEffect(): boolean {
+        return this.definition.effect.immediate !== undefined;
+    }
+
     getEquipmentEffects(): { [statName: string]: number } {
         const effects: { [statName: string]: number } = {};
         for (const [key, value] of Object.entries(this.definition.effect)) {

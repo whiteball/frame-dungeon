@@ -2,7 +2,7 @@
 import { StatsLoader } from './StatsLoader';
 import { Inventory } from './Inventory';
 import { Item } from './Item';
-import { ItemsLoader } from './ItemsLoader';
+import { ItemsLoader, type ImmediateEffect } from './ItemsLoader';
 import { Enemy } from './Enemy';
 import { EnemyLoader } from './EnemyLoader';
 
@@ -106,7 +106,7 @@ export class Player {
     addStat(key: string, value: number): void {
         const current = this.stats.get(key) || 0;
         const newValue = current + value;
-        
+
         // fluctuation許可の能力値は最大値でクランプ
         if (Player.statsLoader?.isFluctuationAllowed(key)) {
             const maxValue = this.getMaxStat(key);
@@ -114,6 +114,21 @@ export class Player {
         } else {
             this.stats.set(key, newValue);
         }
+    }
+
+    /**
+     * 即座効果を能力値へ反映する
+     * @param effect 即座効果
+     * @returns 能力値名 → 実際に変動した量（クランプ後の差分）
+     */
+    applyImmediateEffect(effect: ImmediateEffect): Map<string, number> {
+        const applied = new Map<string, number>();
+        for (const [statName, value] of Object.entries(effect)) {
+            const before = this.getStat(statName);
+            this.addStat(statName, value);
+            applied.set(statName, this.getStat(statName) - before);
+        }
+        return applied;
     }
 
     getInventory(): Inventory {

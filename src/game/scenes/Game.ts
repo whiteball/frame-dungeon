@@ -6,6 +6,7 @@ import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
 import { Player } from '../../lib/Player';
+import type { Item } from '../../lib/Item';
 
 export class Game extends Scene {
     keys: {
@@ -26,6 +27,8 @@ export class Game extends Scene {
 
     params: Map<string, number | string>;
     player: Player;
+
+    private itemListOpen: boolean = false;
 
     constructor() {
         super('Game');
@@ -66,6 +69,15 @@ export class Game extends Scene {
     }
 
     async create() {
+        // シーン再開（リスタート）に備えて、このシーンが扱うイベントの旧リスナを一掃する
+        // 古いシーンインスタンスのハンドラが残ると、scene.manager が null の dead scene で
+        // scene.start が呼ばれて queueOp が失敗する
+        EventBus.removeAllListeners('go-to-next-floor');
+        EventBus.removeAllListeners('update-view');
+        EventBus.removeAllListeners('game-over');
+        EventBus.removeAllListeners('use-item');
+        EventBus.removeAllListeners('close-item-list-request');
+
         const dun = new DungeonMap(15, 15);
 
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
@@ -167,16 +179,90 @@ export class Game extends Scene {
         })
 
         EventBus.on('game-over', () => {
+            this.closeItemList();
             this.scene.start('GameOver');
         })
+
+        EventBus.on('use-item', (payload: { instanceId: string }) => {
+            if (this.dungeon.useConsumableItem(payload.instanceId)) {
+                const rest = this.player.getInventory().getConsumableItems();
+                if (rest.length === 0) {
+                    this.closeItemList();
+                } else {
+                    EventBus.emit('open-item-list', { items: this.buildItemListPayload(rest) });
+                }
+                this.render();
+            }
+        });
+
+        EventBus.on('close-item-list-request', () => {
+            this.closeItemList();
+        });
 
         EventBus.emit('go-to-next-floor', this.dungeon);
         EventBus.emit('current-scene-ready', this);
 
-        EventBus.emit('scene-actions', [
-            { label: 'アイテム使用', onClick: () => EventBus.emit('message-log', 'アイテム使用機能は未実装です') },
+        const sceneActions = [
+            { label: 'アイテム使用', onClick: () => this.toggleItemList() },
             { label: 'ステータス', onClick: () => EventBus.emit('message-log', 'ステータス確認機能は未実装です') },
-        ]);
+        ];
+        EventBus.emit('scene-actions', sceneActions);
+
+        // 数字キー 1〜0 をアクションボタンの左から順に割り当てる
+        // アイテム一覧表示中は keyboard.enabled = false により自動的に無効化される
+        const numberKeyCodes = [
+            Phaser.Input.Keyboard.KeyCodes.ONE,
+            Phaser.Input.Keyboard.KeyCodes.TWO,
+            Phaser.Input.Keyboard.KeyCodes.THREE,
+            Phaser.Input.Keyboard.KeyCodes.FOUR,
+            Phaser.Input.Keyboard.KeyCodes.FIVE,
+            Phaser.Input.Keyboard.KeyCodes.SIX,
+            Phaser.Input.Keyboard.KeyCodes.SEVEN,
+            Phaser.Input.Keyboard.KeyCodes.EIGHT,
+            Phaser.Input.Keyboard.KeyCodes.NINE,
+            Phaser.Input.Keyboard.KeyCodes.ZERO,
+        ];
+        numberKeyCodes.forEach((code, i) => {
+            this.input.keyboard?.addKey(code)?.on('down', () => {
+                const a = sceneActions[i];
+                if (a) a.onClick();
+            });
+        });
+    }
+
+    private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string }> {
+        return items.map(it => ({
+            id: it.getInstanceId(),
+            label: it.getLabel(),
+            description: it.getDescription(),
+        }));
+    }
+
+    private toggleItemList(): void {
+        if (this.itemListOpen) {
+            this.closeItemList();
+        } else {
+            this.openItemList();
+        }
+    }
+
+    private openItemList(): void {
+        const consumables = this.player.getInventory().getConsumableItems();
+        this.itemListOpen = true;
+        if (this.input.keyboard) this.input.keyboard.enabled = false;
+        EventBus.emit('open-item-list', { items: this.buildItemListPayload(consumables) });
+    }
+
+    private closeItemList(): void {
+        if (!this.itemListOpen) return;
+        this.itemListOpen = false;
+        if (this.input.keyboard) {
+            // enabled=false の間に取りこぼした keyup で Key.isDown が true 固定になるのを解消
+            // （次回同じキー押下時に down が発火しない問題の対策）
+            this.input.keyboard.resetKeys();
+            this.input.keyboard.enabled = true;
+        }
+        EventBus.emit('close-item-list');
     }
 
     // update(time: number, delta: number): void {
@@ -207,13 +293,15 @@ export class Game extends Scene {
         const shield = Player.createItem('round shield');
         const ring = Player.createItem('silver ring');
         const potion = Player.createItem('potion');
+        const powerPotion = Player.createItem('power potion');
         
-        if (sword && shield && ring && potion) {
+        if (sword && shield && ring && potion && powerPotion) {
             console.log('✓ アイテム作成成功');
             console.log('- 鉄の剣:', sword.toString());
             console.log('- 丸い盾:', shield.toString());
             console.log('- 銀の指輪:', ring.toString());
             console.log('- 薬:', potion.toString());
+            console.log('- 力の薬:', powerPotion.toString());
             
             // インベントリ追加テスト
             const inventory = this.player.getInventory();
@@ -221,14 +309,15 @@ export class Game extends Scene {
             inventory.addItem(shield);
             inventory.addItem(ring);
             inventory.addItem(potion);
+            inventory.addItem(powerPotion);
             
             console.log('✓ インベントリ追加成功');
             console.log(`インベントリ使用量: ${inventory.getUsedCapacity()}/${inventory.getCapacity()}`);
             
             // 装備テスト
-            const oldWeapon = this.player.equipItem(sword);
-            const oldArmor = this.player.equipItem(shield);
-            const oldRing = this.player.equipItem(ring);
+            // const oldWeapon = this.player.equipItem(sword);
+            // const oldArmor = this.player.equipItem(shield);
+            // const oldRing = this.player.equipItem(ring);
             
             console.log('✓ 装備成功');
             console.log('- 武器:', this.player.getEquippedWeapon()?.getLabel());

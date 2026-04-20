@@ -1189,6 +1189,39 @@ export class DungeonMap {
   }
 
   /**
+   * プレイヤーが消耗品を使用する
+   * @param instanceId 使用するアイテムのインスタンスID
+   * @returns 使用に成功しターンを消費した場合true
+   */
+  public useConsumableItem(instanceId: string): boolean {
+    const player = this.getPlayerInstance();
+    if (!player) return false;
+
+    const inventory = player.getInventory();
+    const item = inventory.getItemById(instanceId);
+    if (!item || !item.isConsumable()) return false;
+
+    const immediate = item.getImmediateEffect();
+    if (!immediate) {
+      // continuous のみのアイテムは今回の実装では使用不可（ターンも消費しない）
+      EventBus.emit('message-log', `${item.getLabel()}は今は使用できない`);
+      return false;
+    }
+
+    const applied = player.applyImmediateEffect(immediate);
+    inventory.removeItemById(instanceId);
+
+    const parts: string[] = [];
+    for (const [stat, delta] of applied) {
+      if (delta !== 0) parts.push(`${stat}が${delta > 0 ? '+' : ''}${delta}`);
+    }
+    EventBus.emit('message-log', `${item.getLabel()}を使った！${parts.length ? '（' + parts.join('、') + '）' : ''}`);
+
+    this.dispatchObjectEvent();
+    return true;
+  }
+
+  /**
    * プレイヤーを現在の向きから右方向に移動させる
    * @returns 移動に成功した場合1、移動できない場合0
    */

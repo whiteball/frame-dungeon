@@ -120,7 +120,7 @@ EventBus.on('event-name', callback);
 - **ItemsLoader**: `items.yml`からアイテムデータを読み込み
 - **Item**: 個別のアイテムインスタンスを管理
 - **Inventory**: プレイヤーのアイテム所持を管理（容量制限あり）
-- **Player**: 装備スロット管理と装備ボーナス計算
+- **Player**: 装備スロット管理と装備ボーナス計算。`applyImmediateEffect()` で消耗品の即座効果を能力値へ反映（`addStat` の fluctuation クランプを経由）
 
 アイテムタイプ：
 
@@ -128,3 +128,32 @@ EventBus.on('event-name', callback);
 - `main_armor`: メイン防具（防御力ボーナス）
 - `sub_armor`: サブ防具（指輪など、2スロット）
 - `consumable`: 消耗品（即座効果・持続効果）
+
+### 消耗品の使用フロー
+
+1. シーン下部の「アイテム使用」ボタン押下またはショートカットキー押下で `Game.toggleItemList()` が呼ばれる
+2. `openItemList()` が `Inventory.getConsumableItems()` で一覧を取得し、EventBus `'open-item-list'` で Vue 側へ渡す。同時に `this.input.keyboard.enabled = false` で Phaser キー入力を停止
+3. Vue 側（`PhaserGame.vue`）は textarea 右隣に `<ul>` を表示し、フォーカスを奪う。↑↓/Enter/ESC、ダブルクリック、「使用」「キャンセル」ボタンで操作
+4. 「使用」確定時、Vue は EventBus `'use-item'` を `{ instanceId }` 付きで発行
+5. Game シーンが受け取り `DungeonMap.useConsumableItem(instanceId)` を呼び出す：
+   - `Item.getImmediateEffect()` が `undefined`（continuous のみのアイテム）の場合はログ表示のみでターン非消費
+   - 即座効果がある場合は `Player.applyImmediateEffect()` → `Inventory.removeItemById()` → `dispatchObjectEvent()`（敵の反撃ターン）
+6. 使用後、残りの消耗品があれば一覧を更新再描画、なければ `closeItemList()` で UI を閉じる
+7. `closeItemList()` は `resetKeys()` で Phaser Key 状態をクリアしてから `keyboard.enabled = true` に戻す（`enabled=false` 中に取りこぼした keyup により `Key.isDown` が固定される副作用の対策）
+
+持続効果（`effect.continuous`）の適用は TODO.md の別項目として残存。
+
+### EventBus イベント一覧（アイテム使用関連）
+
+| イベント名 | 方向 | payload | 用途 |
+| --- | --- | --- | --- |
+| `open-item-list` | Phaser→Vue | `{ items: Array<{ id, label, description }> }` | 一覧 UI を開く・再描画する |
+| `close-item-list` | Phaser→Vue | なし | 一覧 UI を閉じる確定通知 |
+| `close-item-list-request` | Vue→Phaser | なし | Vue 側（ESC/キャンセル/外側トリガ）からのクローズ要求 |
+| `use-item` | Vue→Phaser | `{ instanceId: string }` | 使用確定 |
+
+## シーンアクションボタン
+
+シーンごとの操作ボタン（画面下部の「アイテム使用」「ステータス」等）は `EventBus.emit('scene-actions', [{ label, onClick }, ...])` で発行します。`PhaserGame.vue` が受け取り、ボタン列として左寄せで表示します。
+
+Game シーンでは、これらのボタンに数字キー `1〜0`（10 個まで）を左から順に割り当てます（`Phaser.Input.Keyboard.KeyCodes.ONE`〜`ZERO` を `addKey` で登録し、`down` イベントで該当 `onClick` を呼び出す）。アイテム一覧表示中は `keyboard.enabled = false` によりこれらのショートカットも自動的に無効化されます。
