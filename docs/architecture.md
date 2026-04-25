@@ -120,7 +120,7 @@ EventBus.on('event-name', callback);
 - **ItemsLoader**: `items.yml`からアイテムデータを読み込み
 - **Item**: 個別のアイテムインスタンスを管理
 - **Inventory**: プレイヤーのアイテム所持を管理（容量制限あり）
-- **Player**: 装備スロット管理と装備ボーナス計算。`applyImmediateEffect()` で消耗品の即座効果を能力値へ反映（`addStat` の fluctuation クランプを経由）
+- **Player**: 装備スロット管理と装備ボーナス計算。`applyImmediateEffect()` で消耗品の即座効果を能力値へ反映（`addStat` の fluctuation クランプを経由）。`applyContinuousEffect()`/`tickContinuousEffects()` で持続効果を独立エントリ管理。`getEffectiveStat(key)` は基本値+装備ボーナス+持続効果ボーナスの合算を返し、戦闘・表示の両方で使用
 
 アイテムタイプ：
 
@@ -136,12 +136,20 @@ EventBus.on('event-name', callback);
 3. Vue 側（`PhaserGame.vue`）は textarea 右隣に `<ul>` を表示し、フォーカスを奪う。↑↓/Enter/ESC、ダブルクリック、「使用」「キャンセル」ボタンで操作
 4. 「使用」確定時、Vue は EventBus `'use-item'` を `{ instanceId }` 付きで発行
 5. Game シーンが受け取り `DungeonMap.useConsumableItem(instanceId)` を呼び出す：
-   - `Item.getImmediateEffect()` が `undefined`（continuous のみのアイテム）の場合はログ表示のみでターン非消費
-   - 即座効果がある場合は `Player.applyImmediateEffect()` → `Inventory.removeItemById()` → `dispatchObjectEvent()`（敵の反撃ターン）
+   - 即座効果（`immediate`）がある場合は `Player.applyImmediateEffect()` を実行
+   - 持続効果（`continuous`）がある場合は `Player.applyContinuousEffect(effect, label)` で `activeContinuousEffects` に新規エントリを追加（同じアイテムを複数回使用しても合算せず別エントリとして独立保持）
+   - 両方とも無いアイテムの場合のみログ表示のみでターン非消費
+   - 効果適用後 `Inventory.removeItemById()` → `dispatchObjectEvent()`（敵の反撃ターン）
 6. 使用後、残りの消耗品があれば一覧を更新再描画、なければ `closeItemList()` で UI を閉じる
 7. `closeItemList()` は `resetKeys()` で Phaser Key 状態をクリアしてから `keyboard.enabled = true` に戻す（`enabled=false` 中に取りこぼした keyup により `Key.isDown` が固定される副作用の対策）
 
-持続効果（`effect.continuous`）の適用は TODO.md の別項目として残存。
+### 持続効果のターン進行
+
+`DungeonMap.dispatchObjectEvent()` は player の行動 → 敵反撃 を処理した最後で `Player.tickContinuousEffects()` を呼び、各エントリの残ターン数を1減らします。残ターン数が 0 以下になったエントリは削除され、「○○の効果が切れた」とログ出力されます。
+
+回転（`turnLeftPlayer`/`turnRightPlayer`/`turnBackPlayer`）は `dispatchObjectEvent` を呼ばずターン非消費のため、持続効果も進行しません。
+
+`turns: N` の効果は使用ターンを 1 ターン目として N ターン目までアクティブで、N+1 ターン目のプレイヤー行動時には既に切れている挙動になります（tick が敵反撃の後に行われるため、使用と同ターンの敵反撃にもバフ/デバフが乗る）。
 
 ### EventBus イベント一覧（アイテム使用関連）
 

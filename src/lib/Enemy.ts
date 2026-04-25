@@ -46,7 +46,7 @@ export class Enemy extends MapObject {
             if (!dungeon.canAttack(this.x, this.y, px, py)) return true;
             const player = dungeon.getPlayerInstance();
             if (player) {
-                const playerDefense = player.getStat('defense') + (player.getEquipmentBonuses().get('defense') ?? 0);
+                const playerDefense = player.getEffectiveStat('defense');
                 const damage = this.calculateDamageToPlayer(playerDefense);
                 player.addStat('life', -damage);
                 EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`);

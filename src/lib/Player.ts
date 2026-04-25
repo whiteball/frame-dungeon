@@ -2,9 +2,15 @@
 import { StatsLoader } from './StatsLoader';
 import { Inventory } from './Inventory';
 import { Item } from './Item';
-import { ItemsLoader, type ImmediateEffect } from './ItemsLoader';
+import { ItemsLoader, type ImmediateEffect, type ContinuousEffect } from './ItemsLoader';
 import { Enemy } from './Enemy';
 import { EnemyLoader } from './EnemyLoader';
+
+interface ActiveContinuousEffect {
+    effects: Map<string, number>;
+    remainingTurns: number;
+    sourceLabel: string;
+}
 
 export class Player {
     private stats: Map<string, number>;
@@ -22,6 +28,9 @@ export class Player {
     private equippedMainArmor: Item | null = null;
     private equippedSubArmor1: Item | null = null;
     private equippedSubArmor2: Item | null = null;
+
+    // 持続効果スロット（同じアイテムを複数使用しても各エントリ独立に管理）
+    private activeContinuousEffects: ActiveContinuousEffect[] = [];
 
     constructor() {
         this.stats = new Map();
@@ -129,6 +138,82 @@ export class Player {
             applied.set(statName, this.getStat(statName) - before);
         }
         return applied;
+    }
+
+    /**
+     * 持続効果を有効化する
+     * 既存の同種効果と合算せず、エントリとして独立に保持する
+     * @param effect 持続効果（turns と能力値変動）
+     * @param sourceLabel 効果の発生源（アイテム名など。ログとUI表示に使用）
+     * @returns 能力値名 → 加算量
+     */
+    applyContinuousEffect(effect: ContinuousEffect, sourceLabel: string): Map<string, number> {
+        const effects = new Map<string, number>();
+        for (const [statName, value] of Object.entries(effect)) {
+            if (statName === 'turns') continue;
+            if (typeof value !== 'number') continue;
+            effects.set(statName, value);
+        }
+        if (effects.size === 0 || effect.turns <= 0) return effects;
+
+        this.activeContinuousEffects.push({
+            effects,
+            remainingTurns: effect.turns,
+            sourceLabel,
+        });
+        return effects;
+    }
+
+    /**
+     * 持続効果を1ターン経過させる。残ターン数が0以下になったエントリは自動削除。
+     * @returns 期限切れになったエントリの { sourceLabel, effects } 配列
+     */
+    tickContinuousEffects(): Array<{ sourceLabel: string; effects: Map<string, number> }> {
+        const expired: Array<{ sourceLabel: string; effects: Map<string, number> }> = [];
+        const remaining: ActiveContinuousEffect[] = [];
+        for (const entry of this.activeContinuousEffects) {
+            entry.remainingTurns--;
+            if (entry.remainingTurns <= 0) {
+                expired.push({ sourceLabel: entry.sourceLabel, effects: entry.effects });
+            } else {
+                remaining.push(entry);
+            }
+        }
+        this.activeContinuousEffects = remaining;
+        return expired;
+    }
+
+    /**
+     * 全アクティブ持続効果のボーナス合計（能力値名 → 合計変動量）
+     */
+    getContinuousBonuses(): Map<string, number> {
+        const bonuses = new Map<string, number>();
+        for (const entry of this.activeContinuousEffects) {
+            for (const [stat, value] of entry.effects) {
+                bonuses.set(stat, (bonuses.get(stat) ?? 0) + value);
+            }
+        }
+        return bonuses;
+    }
+
+    /**
+     * 基本能力値 + 装備ボーナス + 持続効果ボーナスの合算
+     */
+    getEffectiveStat(key: string): number {
+        return this.getStat(key)
+            + (this.getEquipmentBonuses().get(key) ?? 0)
+            + (this.getContinuousBonuses().get(key) ?? 0);
+    }
+
+    /**
+     * アクティブな持続効果のスナップショットを取得（UI表示用）
+     */
+    getActiveContinuousEffects(): ActiveContinuousEffect[] {
+        return this.activeContinuousEffects.map(e => ({
+            effects: new Map(e.effects),
+            remainingTurns: e.remainingTurns,
+            sourceLabel: e.sourceLabel,
+        }));
     }
 
     getInventory(): Inventory {
@@ -281,19 +366,21 @@ export class Player {
         this.addStat('defense', 1);
     }
 
-    // 表示用の能力値を取得（略称付き、装備ボーナス込み）
+    // 表示用の能力値を取得（略称付き、装備ボーナス・持続効果ボーナス込み）
     getDisplayStats(): Map<string, { value: number; abbreviation: string; description: string }> {
         const displayStats = new Map();
         const equipmentBonuses = this.getEquipmentBonuses();
-        
+        const continuousBonuses = this.getContinuousBonuses();
+
         for (const [key, baseValue] of this.stats) {
-            const bonus = equipmentBonuses.get(key) || 0;
-            const totalValue = baseValue + bonus;
+            const equipBonus = equipmentBonuses.get(key) || 0;
+            const continuousBonus = continuousBonuses.get(key) || 0;
+            const totalValue = baseValue + equipBonus + continuousBonus;
             const abbreviation = Player.statsLoader?.getAbbreviation(key) || key.toUpperCase();
             const description = Player.statsLoader?.getDescription(key) || key;
             displayStats.set(key, { value: totalValue, abbreviation, description });
         }
-        
+
         return displayStats;
     }
 

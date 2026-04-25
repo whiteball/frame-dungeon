@@ -1170,8 +1170,7 @@ export class DungeonMap {
     const player = this.getPlayerInstance();
     if (!player) return false;
 
-    const bonus = player.getEquipmentBonuses().get('power') ?? 0;
-    const playerPower = player.getStat('power') + bonus;
+    const playerPower = player.getEffectiveStat('power');
     const damage = enemy.takeDamageFromPlayer(playerPower);
     EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`);
 
@@ -1202,20 +1201,35 @@ export class DungeonMap {
     if (!item || !item.isConsumable()) return false;
 
     const immediate = item.getImmediateEffect();
-    if (!immediate) {
-      // continuous のみのアイテムは今回の実装では使用不可（ターンも消費しない）
-      EventBus.emit('message-log', `${item.getLabel()}は今は使用できない`);
+    const continuous = item.getContinuousEffect();
+
+    if (!immediate && !continuous) {
+      EventBus.emit('message-log', `${item.getLabel()}は何の効果も無い`);
       return false;
     }
 
-    const applied = player.applyImmediateEffect(immediate);
-    inventory.removeItemById(instanceId);
+    const messageParts: string[] = [];
 
-    const parts: string[] = [];
-    for (const [stat, delta] of applied) {
-      if (delta !== 0) parts.push(`${stat}が${delta > 0 ? '+' : ''}${delta}`);
+    if (immediate) {
+      const applied = player.applyImmediateEffect(immediate);
+      const parts: string[] = [];
+      for (const [stat, delta] of applied) {
+        if (delta !== 0) parts.push(`${stat}が${delta > 0 ? '+' : ''}${delta}`);
+      }
+      if (parts.length) messageParts.push(parts.join('、'));
     }
-    EventBus.emit('message-log', `${item.getLabel()}を使った！${parts.length ? '（' + parts.join('、') + '）' : ''}`);
+
+    if (continuous) {
+      const applied = player.applyContinuousEffect(continuous, item.getLabel());
+      const parts: string[] = [];
+      for (const [stat, value] of applied) {
+        parts.push(`${stat}が${value > 0 ? '+' : ''}${value}`);
+      }
+      if (parts.length) messageParts.push(`${continuous.turns}ターンの間 ${parts.join('、')}`);
+    }
+
+    inventory.removeItemById(instanceId);
+    EventBus.emit('message-log', `${item.getLabel()}を使った！${messageParts.length ? '（' + messageParts.join('、') + '）' : ''}`);
 
     this.dispatchObjectEvent();
     return true;
@@ -1383,6 +1397,15 @@ export class DungeonMap {
       const event = object.events.get(`around-${distance}`);
       if (event && !event(this, object)) {
         this._objects.delete(id);
+      }
+    }
+
+    // 敵反撃を含むターン処理が完了した後、持続効果を1ターン進める
+    const player = this.getPlayerInstance();
+    if (player) {
+      const expired = player.tickContinuousEffects();
+      for (const entry of expired) {
+        EventBus.emit('message-log', `${entry.sourceLabel}の効果が切れた`);
       }
     }
   }
