@@ -139,6 +139,11 @@ export class Game extends Scene {
                         pos[0], pos[1],
                         MapMark.CROSS,
                         newMapEvent('around-0', () => {
+                            const newItem = Player.createItem(itemDef.name);
+                            if (newItem && this.player.getInventory().addItem(newItem)) {
+                                EventBus.emit('message-log', `${label}を入手した`);
+                                return false;
+                            }
                             EventBus.emit('message-log', `${label}の上に乗った`);
                             return true;
                         }),
