@@ -262,7 +262,7 @@ export class Game extends Scene {
         });
     }
 
-    private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean }> {
+    private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean; type: string; effectJson: string }> {
         const equippedIds = new Set(
             this.player.getAllEquippedItems()
                 .filter((it): it is Item => it !== null)
@@ -273,6 +273,8 @@ export class Game extends Scene {
             label: it.getLabel(),
             description: it.getDescription(),
             isEquipped: equippedIds.has(it.getInstanceId()),
+            type: it.getType(),
+            effectJson: JSON.stringify(it.getDefinition().effect),
         }));
     }
 

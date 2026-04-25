@@ -6,7 +6,7 @@ import Phaser from 'phaser';
 
 type SceneAction = { label: string, onClick: () => void };
 type ListMode = 'item' | 'equip';
-type ItemListEntry = { id: string, label: string, description: string, isEquipped?: boolean };
+type ItemListEntry = { id: string, label: string, description: string, isEquipped?: boolean, type?: string, effectJson?: string };
 
 const scene = ref();
 const game = ref();
@@ -52,6 +52,14 @@ function confirmSelect() {
     } else {
         EventBus.emit('use-item', { instanceId: it.id });
     }
+}
+
+function showDescription() {
+    const it = itemList.value[selectedIndex.value];
+    if (!it) return;
+    const line1 = `${it.label}:${it.type ?? ''}:${it.description}`;
+    const line2 = it.effectJson ?? '{}';
+    EventBus.emit('message-log', `${line1}\n${line2}`);
 }
 
 function requestClose() {
@@ -211,7 +219,12 @@ defineExpose({ scene, game });
                     @click="confirmSelect"
                     :disabled="itemList.length === 0"
                 >{{ actionLabel }}</button>
-                <button class="button" @click="requestClose">閉じる</button>
+                <button
+                    class="button"
+                    @click="showDescription"
+                    :disabled="itemList.length === 0"
+                >説明</button>
+                <button class="button" @click="requestClose">閉</button>
             </div>
         </div>
     </div>
