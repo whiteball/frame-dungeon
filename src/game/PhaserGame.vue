@@ -5,7 +5,8 @@ import StartGame from './main';
 import Phaser from 'phaser';
 
 type SceneAction = { label: string, onClick: () => void };
-type ItemListEntry = { id: string, label: string, description: string };
+type ListMode = 'item' | 'equip';
+type ItemListEntry = { id: string, label: string, description: string, isEquipped?: boolean };
 
 const scene = ref();
 const game = ref();
@@ -18,6 +19,8 @@ const itemList = ref<ItemListEntry[]>([]);
 const itemListVisible = ref(false);
 const selectedIndex = ref(0);
 const listRef = ref<HTMLUListElement | null>(null);
+const listMode = ref<ListMode>('item');
+const actionLabel = ref<string>('使用');
 
 const emit = defineEmits(['current-active-scene']);
 
@@ -33,7 +36,7 @@ function onListKeyDown(e: KeyboardEvent) {
         }
         e.preventDefault();
     } else if (e.key === 'Enter') {
-        confirmUse();
+        confirmSelect();
         e.preventDefault();
     } else if (e.key === 'Escape') {
         requestClose();
@@ -41,10 +44,14 @@ function onListKeyDown(e: KeyboardEvent) {
     }
 }
 
-function confirmUse() {
+function confirmSelect() {
     const it = itemList.value[selectedIndex.value];
     if (!it) return;
-    EventBus.emit('use-item', { instanceId: it.id });
+    if (listMode.value === 'equip') {
+        EventBus.emit('equip-item', { instanceId: it.id });
+    } else {
+        EventBus.emit('use-item', { instanceId: it.id });
+    }
 }
 
 function requestClose() {
@@ -82,7 +89,9 @@ onMounted(() => {
         selectedIndex.value = 0;
     });
 
-    EventBus.on('open-item-list', (payload: { items: ItemListEntry[] }) => {
+    EventBus.on('open-item-list', (payload: { items: ItemListEntry[]; mode?: ListMode; actionLabel?: string }) => {
+        listMode.value = payload.mode ?? 'item';
+        actionLabel.value = payload.actionLabel ?? '使用';
         itemList.value = payload.items;
         if (selectedIndex.value >= itemList.value.length) {
             selectedIndex.value = Math.max(0, itemList.value.length - 1);
@@ -164,7 +173,7 @@ defineExpose({ scene, game });
                        border-radius: 6px;
                        padding: 12px 32px;
                        box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);"
-            >アイテム選択中</span>
+            >{{ listMode === 'equip' ? '装備変更中' : 'アイテム選択中' }}</span>
         </div>
         <div
             v-show="itemListVisible"
@@ -186,23 +195,23 @@ defineExpose({ scene, game });
                     v-for="(it, i) in itemList"
                     :key="it.id"
                     @click="selectedIndex = i"
-                    @dblclick="confirmUse"
+                    @dblclick="confirmSelect"
                     :style="{ padding: '2px 4px', cursor: 'pointer',
                               background: i === selectedIndex ? '#335' : 'transparent' }"
                     :title="it.description"
-                >{{ it.label }}</li>
+                >{{ (it.isEquipped ? '[E] ' : '') + it.label }}</li>
                 <li
                     v-if="itemList.length === 0"
                     style="padding: 2px 4px; opacity: 0.6;"
-                >使える薬がない</li>
+                >{{ listMode === 'equip' ? '装備できる物がない' : '使える薬がない' }}</li>
             </ul>
             <div style="display: flex; gap: 4px; padding: 4px; border-top: 1px solid #666;">
                 <button
                     class="button"
-                    @click="confirmUse"
+                    @click="confirmSelect"
                     :disabled="itemList.length === 0"
-                >使用</button>
-                <button class="button" @click="requestClose">キャンセル</button>
+                >{{ actionLabel }}</button>
+                <button class="button" @click="requestClose">閉じる</button>
             </div>
         </div>
     </div>

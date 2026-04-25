@@ -254,6 +254,19 @@ export class Player {
         return [this.equippedWeapon, this.equippedMainArmor, this.equippedSubArmor1, this.equippedSubArmor2];
     }
 
+    /**
+     * 指定アイテムが装備されているスロットを返す（instanceId 一致で判定）
+     * @returns 装備されている場合はスロット名、未装備なら null
+     */
+    getEquippedSlotOf(item: Item): 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2' | null {
+        const id = item.getInstanceId();
+        if (this.equippedWeapon?.getInstanceId() === id) return 'weapon';
+        if (this.equippedMainArmor?.getInstanceId() === id) return 'main_armor';
+        if (this.equippedSubArmor1?.getInstanceId() === id) return 'sub_armor1';
+        if (this.equippedSubArmor2?.getInstanceId() === id) return 'sub_armor2';
+        return null;
+    }
+
     equipWeapon(item: Item | null): Item | null {
         const previousItem = this.equippedWeapon;
         this.equippedWeapon = item;

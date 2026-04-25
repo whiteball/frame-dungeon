@@ -1236,6 +1236,45 @@ export class DungeonMap {
   }
 
   /**
+   * プレイヤーの装備を変更する
+   * - 既に装備中のアイテムを指定した場合は装備解除（ターン消費なし）
+   * - 未装備のアイテムを指定した場合は装備（1ターン消費）
+   * @param instanceId 対象アイテムのインスタンスID
+   * @returns 成否、ターン消費の有無、実行された動作
+   */
+  public changeEquipment(instanceId: string): {
+    success: boolean;
+    consumedTurn: boolean;
+    action: 'equipped' | 'unequipped' | 'none';
+  } {
+    const player = this.getPlayerInstance();
+    if (!player) return { success: false, consumedTurn: false, action: 'none' };
+
+    const inventory = player.getInventory();
+    const item = inventory.getItemById(instanceId);
+    if (!item || !item.isEquippable()) {
+      return { success: false, consumedTurn: false, action: 'none' };
+    }
+
+    const slot = player.getEquippedSlotOf(item);
+    if (slot !== null) {
+      player.unequipItem(slot);
+      EventBus.emit('message-log', `${item.getLabel()}を外した`);
+      return { success: true, consumedTurn: false, action: 'unequipped' };
+    }
+
+    const previous = player.equipItem(item);
+    if (previous) {
+      EventBus.emit('message-log', `${previous.getLabel()}を外して${item.getLabel()}を装備した`);
+    } else {
+      EventBus.emit('message-log', `${item.getLabel()}を装備した`);
+    }
+
+    this.dispatchObjectEvent();
+    return { success: true, consumedTurn: true, action: 'equipped' };
+  }
+
+  /**
    * プレイヤーを現在の向きから右方向に移動させる
    * @returns 移動に成功した場合1、移動できない場合0
    */

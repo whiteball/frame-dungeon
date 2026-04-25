@@ -5,6 +5,7 @@ import { MapObject, MapMark, newMapEvent } from '../../lib/MapObject';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
+import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
 import type { Item } from '../../lib/Item';
 
@@ -24,11 +25,12 @@ export class Game extends Scene {
     mainView: MainView;
     miniMapView: MiniMapView;
     infoView: InfoView;
+    equipmentView: EquipmentView;
 
     params: Map<string, number | string>;
     player: Player;
 
-    private itemListOpen: boolean = false;
+    private listMode: 'item' | 'equip' | null = null;
 
     constructor() {
         super('Game');
@@ -39,6 +41,12 @@ export class Game extends Scene {
         this.mainView.render(this.dungeon);
         this.params = this.getDisplayParams();
         this.infoView.render(this.floor, this.params);
+        this.equipmentView.render({
+            weapon: this.player.getEquippedWeapon(),
+            mainArmor: this.player.getEquippedMainArmor(),
+            subArmor1: this.player.getEquippedSubArmor1(),
+            subArmor2: this.player.getEquippedSubArmor2(),
+        });
     }
 
     private getDisplayParams(): Map<string, number | string> {
@@ -76,6 +84,7 @@ export class Game extends Scene {
         EventBus.removeAllListeners('update-view');
         EventBus.removeAllListeners('game-over');
         EventBus.removeAllListeners('use-item');
+        EventBus.removeAllListeners('equip-item');
         EventBus.removeAllListeners('close-item-list-request');
 
         const dun = new DungeonMap(15, 15);
@@ -123,7 +132,8 @@ export class Game extends Scene {
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         this.miniMapView = new MiniMapView(this.add, this.game.canvas.width - 10 - 200, 10, 200, 200);
-        this.infoView = new InfoView(this.add, this.game.canvas.width - 10 - 200, 220, 200, 400);
+        this.infoView = new InfoView(this.add, this.game.canvas.width - 10 - 200, 220, 200, 180);
+        this.equipmentView = new EquipmentView(this.add, this.game.canvas.width - 10 - 200, 405, 200, 130);
 
         this.keys = {
             keyW: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -179,7 +189,7 @@ export class Game extends Scene {
         })
 
         EventBus.on('game-over', () => {
-            this.closeItemList();
+            this.closeList();
             this.scene.start('GameOver');
         })
 
@@ -187,23 +197,45 @@ export class Game extends Scene {
             if (this.dungeon.useConsumableItem(payload.instanceId)) {
                 const rest = this.player.getInventory().getConsumableItems();
                 if (rest.length === 0) {
-                    this.closeItemList();
+                    this.closeList();
                 } else {
-                    EventBus.emit('open-item-list', { items: this.buildItemListPayload(rest) });
+                    EventBus.emit('open-item-list', {
+                        items: this.buildItemListPayload(rest),
+                        mode: 'item',
+                        actionLabel: '使用',
+                    });
+                }
+                this.render();
+            }
+        });
+
+        EventBus.on('equip-item', (payload: { instanceId: string }) => {
+            const result = this.dungeon.changeEquipment(payload.instanceId);
+            if (result.success) {
+                const rest = this.player.getInventory().getEquippableItems();
+                if (rest.length === 0) {
+                    this.closeList();
+                } else {
+                    EventBus.emit('open-item-list', {
+                        items: this.buildItemListPayload(rest),
+                        mode: 'equip',
+                        actionLabel: '装備',
+                    });
                 }
                 this.render();
             }
         });
 
         EventBus.on('close-item-list-request', () => {
-            this.closeItemList();
+            this.closeList();
         });
 
         EventBus.emit('go-to-next-floor', this.dungeon);
         EventBus.emit('current-scene-ready', this);
 
         const sceneActions = [
-            { label: 'アイテム使用', onClick: () => this.toggleItemList() },
+            { label: 'アイテム使用', onClick: () => this.toggleList('item') },
+            { label: '装備変更', onClick: () => this.toggleList('equip') },
             { label: 'ステータス', onClick: () => EventBus.emit('message-log', 'ステータス確認機能は未実装です') },
         ];
         EventBus.emit('scene-actions', sceneActions);
@@ -230,32 +262,45 @@ export class Game extends Scene {
         });
     }
 
-    private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string }> {
+    private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean }> {
+        const equippedIds = new Set(
+            this.player.getAllEquippedItems()
+                .filter((it): it is Item => it !== null)
+                .map(it => it.getInstanceId())
+        );
         return items.map(it => ({
             id: it.getInstanceId(),
             label: it.getLabel(),
             description: it.getDescription(),
+            isEquipped: equippedIds.has(it.getInstanceId()),
         }));
     }
 
-    private toggleItemList(): void {
-        if (this.itemListOpen) {
-            this.closeItemList();
+    private toggleList(mode: 'item' | 'equip'): void {
+        if (this.listMode === mode) {
+            this.closeList();
         } else {
-            this.openItemList();
+            this.openList(mode);
         }
     }
 
-    private openItemList(): void {
-        const consumables = this.player.getInventory().getConsumableItems();
-        this.itemListOpen = true;
+    private openList(mode: 'item' | 'equip'): void {
+        if (this.listMode !== null) this.closeList();
+        const items = mode === 'item'
+            ? this.player.getInventory().getConsumableItems()
+            : this.player.getInventory().getEquippableItems();
+        this.listMode = mode;
         if (this.input.keyboard) this.input.keyboard.enabled = false;
-        EventBus.emit('open-item-list', { items: this.buildItemListPayload(consumables) });
+        EventBus.emit('open-item-list', {
+            items: this.buildItemListPayload(items),
+            mode,
+            actionLabel: mode === 'item' ? '使用' : '装備',
+        });
     }
 
-    private closeItemList(): void {
-        if (!this.itemListOpen) return;
-        this.itemListOpen = false;
+    private closeList(): void {
+        if (this.listMode === null) return;
+        this.listMode = null;
         if (this.input.keyboard) {
             // enabled=false の間に取りこぼした keyup で Key.isDown が true 固定になるのを解消
             // （次回同じキー押下時に down が発火しない問題の対策）
