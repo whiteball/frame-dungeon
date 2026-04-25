@@ -299,6 +299,14 @@ export class DungeonMap {
   }
 
   /**
+   * 現在のフロアの部屋数を取得する
+   * @returns 部屋数
+   */
+  public getRoomCount(): integer {
+    return this._rooms.length;
+  }
+
+  /**
    * 指定座標のマップ値に値を加算する
    * @param x X座標
    * @param y Y座標

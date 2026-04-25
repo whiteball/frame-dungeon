@@ -8,6 +8,7 @@ import { InfoView } from '../../lib/InfoView';
 import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
 import type { Item } from '../../lib/Item';
+import { ItemsLoader } from '../../lib/ItemsLoader';
 
 export class Game extends Scene {
     keys: {
@@ -114,6 +115,36 @@ export class Game extends Scene {
                     object.visible = true;
                     return true;
                 }), 0xFF0000, 1, false, false);
+            }
+
+            // アイテムの配置
+            const itemDefs = ItemsLoader.getInstance().getItems();
+            if (itemDefs.length > 0) {
+                const roomCount = dungeon.getRoomCount();
+                const itemCount = Math.max(0, Phaser.Math.Between(roomCount - 3, roomCount + 3));
+                const itemExcludeList: integer[][] = [];
+                if (step.length >= 2) {
+                    itemExcludeList.push(step);
+                }
+                itemExcludeList.push(...traps);
+                const itemPositions = dungeon.getRandomPosList(itemCount, false, {
+                    withoutCorridor: true,
+                    withoutPlayer: true,
+                    excludePositionList: itemExcludeList,
+                });
+                for (const pos of itemPositions) {
+                    const itemDef = itemDefs[Phaser.Math.Between(0, itemDefs.length - 1)];
+                    const label = itemDef.label;
+                    dungeon.addObject(
+                        pos[0], pos[1],
+                        MapMark.CROSS,
+                        newMapEvent('around-0', () => {
+                            EventBus.emit('message-log', `${label}の上に乗った`);
+                            return true;
+                        }),
+                        0x00FFFF
+                    );
+                }
             }
 
             // 敵の配置
