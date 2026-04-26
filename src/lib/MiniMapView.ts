@@ -1,4 +1,5 @@
-import { DungeonMap, MapDirection } from './MapGenerator';
+import { DungeonMap } from './MapGenerator';
+import { MapDirection } from './map/MapDirection';
 import { MapMark } from './MapObject';
 
 export class MiniMapView {

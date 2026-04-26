@@ -1,5 +1,6 @@
 
-import { DungeonMap, MapDirection } from './MapGenerator';
+import { DungeonMap } from './MapGenerator';
+import { MapDirection } from './map/MapDirection';
 
 export class MainView {
   private graph: Phaser.GameObjects.Graphics;

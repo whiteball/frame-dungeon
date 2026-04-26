@@ -7,7 +7,8 @@
 メインゲームロジックは複数のモジュールに分割されています：
 
 - **MapObject**（`src/lib/MapObject.ts`）: マップ上に配置される全オブジェクトの基底クラス。表示マーク定数（`MapMark`）やイベントハンドラの型定義も含む
-- **MapGenerator**（`src/lib/MapGenerator.ts`）: 部屋ベースのアルゴリズムを使用したダンジョン生成を処理。`DungeonMap`クラスがマップ状態とオブジェクト管理を担当
+- **MapGenerator**（`src/lib/MapGenerator.ts`）: `DungeonMap` クラスを公開。マップ状態（壁・フォグ・歩行済み・プレイヤー位置）の保持と、視界 (FOV)・移動・回転・ランダム位置抽選など中核ロジックを担当。生成・オブジェクト管理・戦闘・デバッグ出力は `src/lib/map/` 配下のヘルパーモジュールに委譲
+- **マップ系ヘルパー**（`src/lib/map/`）: `DungeonMap` から責務分離されたモジュール群。詳細は後述「マップ系モジュール構成」を参照
 - **MainView**（`src/lib/MainView.ts`）: 透視投影を使用したメインの3Dスタイルダンジョンビューをレンダリング
 - **MiniMapView**（`src/lib/MiniMapView.ts`）: 探索済みエリアを含む俯瞰ミニマップを表示
 - **InfoView**（`src/lib/InfoView.ts`）: プレイヤーステータスとフロア情報のUIオーバーレイを管理
@@ -37,12 +38,25 @@ EventBus.emit('event-name', data);
 EventBus.on('event-name', callback);
 ```
 
+## マップ系モジュール構成
+
+`DungeonMap`（`src/lib/MapGenerator.ts`）は薄いファサードとして以下のモジュール群へ責務を委譲します：
+
+- **MapBuilder**（`src/lib/map/MapBuilder.ts`）: 部屋・通路・壁・扉の生成アルゴリズム。`DungeonMap.build()` から呼ばれ、生成結果（`Rect[]` と `RoomWithCorridors[]`）を返す
+- **MapObjectStore**（`src/lib/map/MapObjectStore.ts`）: マップ上のオブジェクト・敵を `Map<integer, MapObject>` で一元管理。プレイヤー位置を引数で受け取り `around-N` イベントをディスパッチ。`Player.tickContinuousEffects()` の呼び出しもここで行う
+- **PlayerActions**（`src/lib/map/PlayerActions.ts`）: ターン消費アクションの純粋関数群（`canAttack` / `attackPlayer` / `useConsumableItem` / `changeEquipment`）。`EventBus` を介したメッセージログ通知を集約
+- **MapDebug**（`src/lib/map/MapDebug.ts`）: `dumpDungeon()` によるコンソール用デバッグ出力（Box-drawing 文字でグリッド描画）
+- **MapDirection**（`src/lib/map/MapDirection.ts`）: 方向定数 `MapDirection`（東=0/南=1/西=2/北=3）と `getRandomDirection` / `rotateDirection`
+- **Rect**（`src/lib/map/Rect.ts`）: 部屋・通路の矩形プリミティブ。`isContact` で隣接判定
+- **random ユーティリティ**（`src/lib/util/random.ts`）: `getRandomInt` と Fisher-Yates の `arrayShuffle`
+
 ## マップ生成
 
-ダンジョンは部屋ベースの生成アルゴリズムを使用します：
+ダンジョンは部屋ベースの生成アルゴリズムを使用します（`MapBuilder`）：
 
-- ランダムサイズの矩形の部屋を作成
-- 廊下で部屋を接続
+- ランダムサイズの矩形の部屋を作成（`makeRoom`）
+- 廊下で部屋を接続（`makeCorridor`）
+- 壁・扉ビットを設定し、ランダムに部屋を進入禁止化（`setWall`）
 - 階段を配置し、フロア遷移を管理
 - ミニマップ表示用に探索済みエリアを追跡
 
@@ -62,7 +76,7 @@ EventBus.on('event-name', callback);
 
 - **MapObject**（`src/lib/MapObject.ts`）: 全オブジェクトの基底クラス。座標、表示マーク、色、イベントハンドラなどを保持
 - **MapMark定数**: オブジェクトの表示形状を定義（`CIRCLE`, `STAR`, `DIAMOND`, `CROSS`, `X_CROSS`）
-- **DungeonMap._objects**: 全オブジェクトを`Map<integer, MapObject>`で一元管理。`instanceof`で型別のフィルタリングが可能
+- **MapObjectStore**（`src/lib/map/MapObjectStore.ts`）: 全オブジェクトを `Map<integer, MapObject>` で一元管理。`instanceof` で型別のフィルタリングが可能。`DungeonMap` は同名の薄い委譲メソッド（`addEnemy`、`getEnemy`、`removeEnemy` など）を公開する
 
 ## 敵システム
 
@@ -70,7 +84,7 @@ EventBus.on('event-name', callback);
 
 - **EnemyLoader**: `enemies.yml`から敵データを読み込み、フロアに応じた敵を提供
 - **Enemy**: `MapObject`を継承した敵クラス。座標は`MapObject`のプロパティとして自身が保持するため、敵の移動時にキーの差し替えが不要
-- **DungeonMap**: 敵を`_objects`で他のオブジェクトと統一管理（`addEnemy`、`getEnemy`、`removeEnemy`など。内部で`instanceof Enemy`によるフィルタリングを使用）
+- **DungeonMap / MapObjectStore**: 敵を他のオブジェクトと統一管理（`addEnemy`、`getEnemy`、`removeEnemy` などを `DungeonMap` 経由で呼び出すと `MapObjectStore` に委譲。`instanceof Enemy` によるフィルタリングを内部で実施）
 - **Game Scene**: フロアごとに敵を自動生成・配置（フロア数に応じて難易度調整）
 
 敵は3Dビュー上で球体（ダイアモンド形マーク）として表示され、各敵は`enemies.yml`で定義された色で描画されます。
@@ -89,7 +103,7 @@ EventBus.on('event-name', callback);
 
 ### 壁越し攻撃の判定（`DungeonMap.canAttack()`）
 
-隣接する2セル間の攻撃可否を判定します（`src/lib/MapGenerator.ts`）：
+隣接する2セル間の攻撃可否を判定します（実装は `src/lib/map/PlayerActions.ts` の `canAttack`、`DungeonMap.canAttack()` から委譲）：
 
 - **縦横方向**: 出発点からその方向に壁があれば攻撃不可
 - **斜め方向**: 角を回る2本のL字経路（横→縦 / 縦→横）のうち、**少なくとも1本が通れれば攻撃可**。両方とも壁で塞がれている場合のみ攻撃不可

@@ -1,128 +1,15 @@
 'use strict';
 
-import { Enemy } from './Enemy';
-import { MapObject } from './MapObject';
-import type { ObjectEvent } from './MapObject';
+import type { Enemy } from './Enemy';
+import type { MapObject, ObjectEvent } from './MapObject';
 import type { Player } from './Player';
-import { EventBus } from '../game/EventBus';
-
-/**
- * 指定した範囲内のランダムな整数を生成する
- * @param min 最小値（含む）
- * @param max 最大値（含まない）
- * @returns 生成されたランダムな整数
- */
-function getRandomInt(min: integer, max: integer): integer {
-  min = Math.ceil(min);
-  max = Math.floor(max);
-  return Math.floor(Math.random() * (max - min) + min); //The maximum is exclusive and the minimum is inclusive
-}
-
-/**
- * Fisher-Yatesアルゴリズムを使用して配列をシャッフルする
- * @param array シャッフルする配列
- * @returns シャッフルされた配列
- * @see https://ja.wikipedia.org/wiki/%E3%83%95%E3%82%A3%E3%83%83%E3%82%B7%E3%83%A3%E3%83%BC%E2%80%93%E3%82%A4%E3%82%A7%E3%83%BC%E3%83%84%E3%81%AE%E3%82%B7%E3%83%A3%E3%83%83%E3%83%95%E3%83%AB
- */
-function arrayShuffle<T>(array: Array<T>): Array<T> {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-  return array;
-}
-
-class Rect {
-  public x1: integer;
-  public x2: integer;
-  public y1: integer;
-  public y2: integer;
-  constructor(x1: integer | Rect, y1: integer = 0, x2: integer = 0, y2: integer = 0) {
-    if (x1 instanceof Rect) {
-      this.x1 = x1.x1;
-      this.y1 = x1.y1;
-      this.x2 = x1.x2;
-      this.y2 = x1.y2;
-      return
-    }
-    this.x1 = x1;
-    this.y1 = y1;
-    this.x2 = x2;
-    this.y2 = y2;
-  }
-
-  /**
-   * 指定した矩形と一辺が完全に一致しているか判定する
-   * @param rect 判定する矩形
-   * @returns 一辺が完全に一致している場合true
-   */
-  isContact(rect: Rect) {
-    if (rect.y1 === this.y1 && rect.y2 === this.y2 && rect.x2 === this.x1 + 1) {
-      return true;
-    }
-
-    if (rect.x1 === this.x1 && rect.x2 === this.x2 && rect.y1 === this.y2 + 1) {
-      return true;
-    }
-
-    if (rect.y1 === this.y1 && rect.y2 === this.y2 && rect.x2 + 1 === this.x1) {
-      return true;
-    }
-
-    if (rect.x1 === this.x1 && rect.x2 === this.x2 && rect.y2 + 1 === this.y1) {
-      return true;
-    }
-
-    return false;
-  }
-}
-
-export const MapDirection = {
-  EAST: 0,
-  SOUTH: 1,
-  WEST: 2,
-  NORTH: 3,
-} as const;
-export type MapDirection = typeof MapDirection[keyof typeof MapDirection]
-/**
- * ランダムな方向を取得する
- * @returns ランダムに選択された方向
- */
-export const getRandomDirection = (): MapDirection => {
-  switch (getRandomInt(0, 4)) {
-    case 0:
-      return MapDirection.EAST;
-    case 1:
-      return MapDirection.SOUTH;
-    case 2:
-      return MapDirection.WEST;
-    case 3:
-      return MapDirection.NORTH;
-  }
-
-  return MapDirection.EAST;
-}
-/**
- * 指定した方向を時計回りに回転させる
- * @param direction 回転させる元の方向
- * @param value 回転量（1=90度時計回り）
- * @returns 回転後の方向
- */
-export const rotateDirection = (direction: MapDirection, value: number) => {
-  switch ((Number(direction) + value) % 4) {
-    case 0:
-      return MapDirection.EAST;
-    case 1:
-      return MapDirection.SOUTH;
-    case 2:
-      return MapDirection.WEST;
-    case 3:
-      return MapDirection.NORTH;
-  }
-
-  console.error('rotateDirection');
-  return direction;
-}
+import { getRandomInt } from './util/random';
+import type { Rect } from './map/Rect';
+import { MapDirection, getRandomDirection, rotateDirection } from './map/MapDirection';
+import { MapBuilder, type RoomWithCorridors } from './map/MapBuilder';
+import { MapObjectStore } from './map/MapObjectStore';
+import * as PlayerActions from './map/PlayerActions';
+import { dumpDungeon } from './map/MapDebug';
 
 export type RandomPosConfig = {
   withoutCorridor?: boolean,
@@ -151,10 +38,7 @@ export class DungeonMap {
   private _viewRange: integer = 3;
 
   private _rooms: Rect[];
-  private _roomsWithCorridors: {
-    room: Rect,
-    corridors: Rect[],
-  }[];
+  private _roomsWithCorridors: RoomWithCorridors[];
 
   private _player: {
     x: integer,
@@ -162,9 +46,7 @@ export class DungeonMap {
     direction: MapDirection,
   };
 
-  private _object_counter: integer = 0;
-  private _objects: Map<integer, MapObject>;
-  private _mapObjects: Map<integer, MapObject[]>;
+  private _objectStore: MapObjectStore = new MapObjectStore();
   private _playerInstance: Player | null = null;
 
   constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
@@ -184,8 +66,7 @@ export class DungeonMap {
     this._mapWalked = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
-    this._objects = new Map<integer, MapObject>();
-    this._mapObjects = new Map<integer, MapObject[]>();
+    this._objectStore.clear();
     const fog = this._enableFog ? 1 : 0;
     for (let i = 0; i < this._width * this._height; i++) {
       this._map[i] = -1;
@@ -332,517 +213,11 @@ export class DungeonMap {
   }
 
   /**
-   * ダンジョンに部屋を生成する
-   * 横方向と縦方向に分割線を配置し、矩形の部屋を作成する
-   */
-  public makeRoom(): void {
-    if (this._map.length <= 0) {
-      return
-    }
-
-    const minRoomLength = this._minRoomLength;
-
-    const hMax = Math.floor((this._height - 3) / (minRoomLength + 1))
-    const vMax = Math.floor((this._width - 3) / (minRoomLength + 1))
-
-    // 横方向に切る
-    const horizontalLines: integer[] = [];
-    const hLines: integer[] = [];
-    for (let i = minRoomLength; i < this._height - 2 - minRoomLength; i++) {
-      hLines.push(i)
-    }
-    arrayShuffle(hLines);
-    for (let i = 0; i < hMax; i++) {
-      let temp: integer | undefined = 0, line = 0;
-      do {
-        temp = hLines.pop()
-        if (temp !== undefined) {
-          line = temp;
-        } else {
-          line = -1
-          break;
-        }
-      } while (horizontalLines.some(val => (line - minRoomLength <= val && line + minRoomLength >= val)));
-
-      if ((line !== -1)) {
-        horizontalLines.push(line);
-      }
-    }
-
-    // 縦方向に切る
-    const verticalLines: integer[] = [];
-    const vLines: integer[] = [];
-    for (let i = minRoomLength; i < this._width - 2 - minRoomLength; i++) {
-      vLines.push(i)
-    }
-    arrayShuffle(vLines);
-    for (let i = 0; i < vMax; i++) {
-      let temp: integer | undefined = 0, line = 0;
-      do {
-        temp = vLines.pop()
-        if (temp !== undefined) {
-          line = temp;
-        } else {
-          line = -1;
-          break;
-        }
-      } while (verticalLines.some(val => (line - minRoomLength <= val && line + minRoomLength >= val)));
-
-      if ((line !== -1)) {
-        verticalLines.push(line);
-      }
-    }
-
-    // 縦横で区切られた領域を部屋とする
-    const rooms: Rect[] = [];
-    let prevHorizon = 0, prevVertical = 0;
-    for (const horizon of horizontalLines.sort((a, b) => a - b)) {
-      for (const vertical of verticalLines.sort((a, b) => a - b)) {
-        rooms.push(new Rect(prevVertical + 1, prevHorizon + 1, vertical, horizon));
-        prevVertical = vertical
-      }
-      rooms.push(new Rect(prevVertical + 1, prevHorizon + 1, this._width - 2, horizon));
-      prevHorizon = horizon
-      prevVertical = 0
-    }
-    for (const vertical of verticalLines.sort((a, b) => a - b)) {
-      rooms.push(new Rect(prevVertical + 1, prevHorizon + 1, vertical, this._height - 2));
-      prevVertical = vertical
-    }
-    rooms.push(new Rect(prevVertical + 1, prevHorizon + 1, this._width - 2, this._height - 2));
-    this._rooms = rooms;
-  }
-
-  /**
-   * 部屋を削って通路を作る
-   * 各部屋の辺に通路を作成し、部屋同士を接続する
-   */
-  public makeCorridor() {
-    if (this._map.length <= 0 || this._rooms.length <= 0) {
-      return
-    }
-
-    const newRooms: { room: Rect, corridors: Rect[] }[] = [];
-    for (let room of this._rooms) {
-      const corridors = []
-      // 部屋のいくつの辺に通路を作るか
-      const corNum = [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4][getRandomInt(0, 24)];
-      //console.log(room)
-      //console.log(corNum)
-      const directionArray = arrayShuffle([MapDirection.EAST, MapDirection.SOUTH, MapDirection.WEST, MapDirection.NORTH].slice())
-      for (let i = 0; i < corNum; i++) {
-        let cond = true;
-        let corridor;
-        for (let j = 0; j < 4 && cond && directionArray.length !== 0; j++) {
-          const isConflict = (pos: { x: integer, y: integer }, direction: string) => newRooms.some(val =>
-            val.corridors.some(v =>
-              (pos[direction as keyof typeof pos] + 1 === v[(direction + '1') as keyof Rect] || pos[direction as keyof typeof pos] - 1 === v[(direction + '2') as keyof Rect])
-              && (direction === 'x' ? (v.y2 - pos.y) : (v.x2 - pos.x)) > 1
-            )
-          )
-          const direction = directionArray.pop()
-          //console.log(direction)
-          const tempRoom = new Rect(room)
-          switch (direction) {
-            // 東
-            case MapDirection.EAST:
-              if (room.x2 === this._width - 2 || room.x2 - room.x1 <= this._minRoomLength) {
-                continue;
-              }
-              corridor = new Rect(room.x2, room.y1, room.x2, room.y2);
-              tempRoom.x2 -= 1
-              cond = isConflict({ x: room.x2, y: room.y1 }, 'x');
-              break;
-            // 南
-            case MapDirection.SOUTH:
-              if (room.y2 === this._height - 2 || room.y2 - room.y1 <= this._minRoomLength) {
-                continue;
-              }
-              corridor = new Rect(room.x1, room.y2, room.x2, room.y2);
-              tempRoom.y2 -= 1
-              cond = isConflict({ x: room.x1, y: room.y2 }, 'y');
-              break;
-            // 西
-            case MapDirection.WEST:
-              if (room.x1 === 1 || room.x2 - room.x1 <= this._minRoomLength) {
-                continue;
-              }
-              corridor = new Rect(room.x1, room.y1, room.x1, room.y2);
-              tempRoom.x1 += 1
-              cond = isConflict({ x: room.x1, y: room.y1 }, 'x');
-              break;
-            // 北
-            case MapDirection.NORTH:
-              if (room.y1 === 1 || room.y2 - room.y1 <= this._minRoomLength) {
-                continue;
-              }
-              corridor = new Rect(room.x1, room.y1, room.x2, room.y1);
-              tempRoom.y1 += 1
-              cond = isConflict({ x: room.x1, y: room.y1 }, 'y');
-              break;
-          }
-          if (!cond && corridor) {
-            corridors.push(corridor)
-            room = tempRoom
-
-            // console.log('corridor')
-            // console.log(corridor)
-          }
-        }
-      }
-
-      newRooms.push({ room, corridors });
-    }
-
-    this._roomsWithCorridors = newRooms;
-    //console.dir(newRooms, { depth: null })
-  }
-
-  /**
-   * マップの各マスに壁と扉を設定する
-   * 部屋と通路の配置に基づいて壁の配置を決定し、扉を配置する
-   */
-  public setWall() {
-    const roomsWithCorridors = this._roomsWithCorridors
-    const _set = function (x: integer, y: integer, rect: Rect) {
-      let val = 0;
-      if (x === rect.x1) {
-        val += 4;
-      }
-      if (x === rect.x2) {
-        val += 1;
-      }
-      if (y === rect.y1) {
-        val += 8;
-      }
-      if (y === rect.y2) {
-        val += 2;
-      }
-
-      return val
-    }
-    // 適当な部屋を進入禁止にする
-    const length = Math.sqrt(roomsWithCorridors.length) - 1
-    const blocked: integer[] = []
-    for (let i = 0; i < length; i++) {
-      if (Math.random() < 0.6) {
-        const temp = getRandomInt(0, roomsWithCorridors.length)
-        if (!blocked.some(val => ((val - 1 <= temp && temp <= val + 1) || (val - 1 - length <= temp && temp <= val + 1 - length) || (val - 1 + length <= temp && temp <= val + 1 + length)))) {
-          blocked.push(temp)
-        }
-      }
-    }
-    // ランダムに部屋を繋げる
-    const connected = new Map<integer, Set<integer>>(),
-      _addConnected = (roomNumber: integer, direction: integer) => {
-        if (connected.has(roomNumber)) {
-          connected.get(roomNumber)?.add(direction)
-        } else {
-          const tempDirection = new Set<integer>();
-          tempDirection.add(direction)
-          connected.set(roomNumber, tempDirection)
-        }
-      }
-    for (let i = 0; i < roomsWithCorridors.length; i++) {
-      const temp = getRandomInt(0, roomsWithCorridors.length),
-        direction = getRandomDirection();
-      if (blocked.some(v => v === temp)) {
-        continue;
-      }
-      const room = roomsWithCorridors[temp].room
-      if (direction === MapDirection.EAST) {
-        // 東
-        if (temp + 1 < roomsWithCorridors.length && room.isContact(roomsWithCorridors[temp + 1].room) && !blocked.some(v => v === (temp + 1))) {
-          _addConnected(temp, 1);
-          _addConnected(temp + 1, 4);
-        }
-      } else if (direction === MapDirection.SOUTH) {
-        // 南
-        for (let j = temp + 2; j < roomsWithCorridors.length; j++) {
-          if (roomsWithCorridors[j].room.y1 < room.y2) {
-            continue;
-          }
-          if (room.y2 + 2 < roomsWithCorridors[j].room.y1 && room.x2 < roomsWithCorridors[j].room.x1) {
-            break;
-          }
-          if (room.isContact(roomsWithCorridors[j].room) && !blocked.some(v => v === j)) {
-            _addConnected(temp, 2);
-            _addConnected(j, 8);
-          }
-        }
-      } else if (direction === MapDirection.WEST) {
-        // 西
-        if (temp - 1 >= 0 && room.isContact(roomsWithCorridors[temp - 1].room) && !blocked.some(v => v === (temp - 1))) {
-          _addConnected(temp, 4);
-          _addConnected(temp - 1, 1);
-        }
-      } else if (direction === MapDirection.NORTH) {
-        // 北
-        for (let j = temp - 2; j >= 0; j--) {
-          if (roomsWithCorridors[j].room.y2 < room.y1) {
-            continue;
-          }
-          if (room.y1 - 2 > roomsWithCorridors[j].room.y2 && room.x1 > roomsWithCorridors[j].room.x2) {
-            break;
-          }
-          if (room.isContact(roomsWithCorridors[j].room) && !blocked.some(v => v === j)) {
-            _addConnected(temp, 8);
-            _addConnected(j, 2);
-          }
-        }
-      }
-      //console.log(connected)
-    }
-
-    // 壁を作る
-    let roomCount = 0;
-    const allCorridors = [];
-    for (const roomWithCorridors of roomsWithCorridors) {
-      const block = blocked.some(v => v === roomCount)
-      let connect = 0
-      const connectedTemp = connected.get(roomCount)
-      if (connectedTemp) {
-        for (const direction of connectedTemp) {
-          connect |= direction;
-        }
-      }
-      connect = ~connect;
-
-      for (let i = roomWithCorridors.room.x1; i <= roomWithCorridors.room.x2; i++) {
-        for (let j = roomWithCorridors.room.y1; j <= roomWithCorridors.room.y2; j++) {
-          this.setAt(i, j, block ? -1 : (_set(i, j, roomWithCorridors.room) & connect))
-        }
-      }
-      for (const corridor of roomWithCorridors.corridors) {
-        for (let i = corridor.x1; i <= corridor.x2; i++) {
-          for (let j = corridor.y1; j <= corridor.y2; j++) {
-            this.setAt(i, j, _set(i, j, corridor))
-          }
-        }
-        allCorridors.push(corridor)
-      }
-      roomCount++;
-    }
-    allCorridors.sort((rect1, rect2) => {
-      if (rect1.x1 - rect2.x2 === 0) {
-        return rect1.y1 - rect2.y2
-      } else {
-        return rect1.x1 - rect2.x2
-      }
-    })
-    // 通路を繋げる
-    for (let i = 0; i < allCorridors.length; i++) {
-      const corridor = allCorridors[i];
-      for (let j = i + 1; j < allCorridors.length; j++) {
-        const nextCorridor = allCorridors[j]
-        if (nextCorridor.x1 <= corridor.x1 && corridor.x2 <= nextCorridor.x2) {
-          if (nextCorridor.y1 - 1 === corridor.y2) {
-            for (let k = corridor.x1; k <= corridor.x2; k++) {
-              // console.log('first')
-              // console.dir(corridor, { depth: null })
-              // console.dir(nextCorridor, { depth: null })
-              this.updateAt(k, corridor.y2, -2);
-              this.updateAt(k, corridor.y2 + 1, -8);
-            }
-          } else if (nextCorridor.y2 + 1 === corridor.y1) {
-            for (let k = corridor.x1; k <= corridor.x2; k++) {
-              // console.log('second')
-              // console.dir(corridor, { depth: null })
-              // console.dir(nextCorridor, { depth: null })
-              this.updateAt(k, corridor.y1, -8);
-              this.updateAt(k, corridor.y1 - 1, -2);
-            }
-          }
-        } else if (corridor.x1 <= nextCorridor.x1 && nextCorridor.x2 <= corridor.x2) {
-          if (nextCorridor.y1 - 1 === corridor.y2) {
-            for (let k = nextCorridor.x1; k <= nextCorridor.x2; k++) {
-              // console.log('third')
-              // console.dir(corridor, { depth: null })
-              // console.dir(nextCorridor, { depth: null })
-              this.updateAt(k, corridor.y2, -2);
-              this.updateAt(k, corridor.y2 + 1, -8);
-            }
-          } else if (nextCorridor.y2 + 1 === corridor.y1) {
-            for (let k = nextCorridor.x1; k <= nextCorridor.x2; k++) {
-              // console.log('forth')
-              // console.dir(corridor, { depth: null })
-              // console.dir(nextCorridor, { depth: null })
-              this.updateAt(k, corridor.y1, -8);
-              this.updateAt(k, corridor.y1 - 1, -2);
-            }
-          }
-        } else if (nextCorridor.y1 <= corridor.y1 && corridor.y2 <= nextCorridor.y2) {
-          if (nextCorridor.x1 - 1 === corridor.x2) {
-            for (let k = corridor.y1; k <= corridor.y2; k++) {
-              // console.log('fifth')
-              // console.dir(corridor, { depth: null })
-              // console.dir(nextCorridor, { depth: null })
-              this.updateAt(corridor.x2, k, -1);
-              this.updateAt(corridor.x2 + 1, k, -4);
-            }
-          } else if (nextCorridor.x2 + 1 === corridor.x1) {
-            for (let k = corridor.y1; k <= corridor.y2; k++) {
-              // console.log('sixth')
-              // console.dir(corridor, { depth: null })
-              // console.dir(nextCorridor, { depth: null })
-              this.updateAt(corridor.x1, k, -4);
-              this.updateAt(corridor.x1 - 1, k, -1);
-            }
-          }
-        } else if (corridor.y1 <= nextCorridor.y1 && nextCorridor.y2 <= corridor.y2) {
-          if (nextCorridor.x1 - 1 === corridor.x2) {
-            for (let k = nextCorridor.y1; k <= nextCorridor.y2; k++) {
-              // console.log('seventh')
-              // console.dir(corridor, { depth: null })
-              // console.dir(nextCorridor, { depth: null })
-              this.updateAt(corridor.x2, k, -1);
-              this.updateAt(corridor.x2 + 1, k, -4);
-            }
-          } else if (nextCorridor.x2 + 1 === corridor.x1) {
-            for (let k = nextCorridor.y1; k <= nextCorridor.y2; k++) {
-              // console.log('eighth')
-              // console.dir(corridor, { depth: null })
-              // console.dir(nextCorridor, { depth: null })
-              this.updateAt(corridor.x1, k, -4);
-              this.updateAt(corridor.x1 - 1, k, -1);
-            }
-          }
-        }
-      }
-    }
-
-    // 扉
-    const existsDoor = (direction: integer, x1: integer, y1: integer, x2: integer, y2: integer) => {
-      for (let i = x1; i <= x2; i++) {
-        for (let j = y1; j <= y2; j++) {
-          if ((this.getAt(i, j) & direction) === direction) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-    for (const roomWithCorridors of roomsWithCorridors) {
-      const room = roomWithCorridors.room;
-      if (!existsDoor(16, room.x2, room.y1, room.x2, room.y2)) {
-        const y = getRandomInt(room.y1, room.y2 + 1)
-        if ((this.getAt(room.x2, y) & 1) === 1 && (this.getAt(room.x2 + 1, y) & 4) === 4 && this.getAt(room.x2 + 1, y) !== -1) {
-          this.setAt(room.x2, y, this.getAt(room.x2, y) | 16);
-          this.setAt(room.x2 + 1, y, this.getAt(room.x2 + 1, y) | 64);
-        }
-      }
-      if (!existsDoor(32, room.x1, room.y2, room.x2, room.y2)) {
-        const x = getRandomInt(room.x1, room.x2 + 1)
-        if ((this.getAt(x, room.y2) & 2) === 2 && (this.getAt(x, room.y2 + 1) & 8) === 8 && this.getAt(x, room.y2 + 1) !== -1) {
-          this.setAt(x, room.y2, this.getAt(x, room.y2) | 32);
-          this.setAt(x, room.y2 + 1, this.getAt(x, room.y2 + 1) | 128);
-        }
-      }
-      if (!existsDoor(64, room.x1, room.y1, room.x1, room.y2)) {
-        const y = getRandomInt(room.y1, room.y2 + 1)
-        if ((this.getAt(room.x1, y) & 4) === 4 && (this.getAt(room.x1 - 1, y) & 1) === 1 && this.getAt(room.x1 - 1, y) !== -1) {
-          this.setAt(room.x1, y, this.getAt(room.x1, y) | 64);
-          this.setAt(room.x1 - 1, y, this.getAt(room.x1 - 1, y) | 16);
-        }
-      }
-      if (!existsDoor(128, room.x1, room.y1, room.x2, room.y1)) {
-        const x = getRandomInt(room.x1, room.x2 + 1)
-        if ((this.getAt(x, room.y1) & 8) === 8 && (this.getAt(x, room.y1 - 1) & 2) === 2 && this.getAt(x, room.y1 - 1) !== -1) {
-          this.setAt(x, room.y1, this.getAt(x, room.y1) | 128);
-          this.setAt(x, room.y1 - 1, this.getAt(x, room.y1 - 1) | 32);
-        }
-      }
-    }
-  }
-
-  /**
    * デバッグ用にマップの状態をコンソールに出力する
    * @param doorOff trueの場合扉の表示を無効にする
    */
-  public dump(doorOff = false) {
-    let buffer = '';
-    const bias = doorOff ? 15 : -1;
-    const playerPos = this._calcPos(this._player.x, this._player.y);
-    for (let i = 0; i < this._map.length; i++) {
-      if (i === playerPos) {
-        switch (this._player.direction) {
-          case 0:
-            buffer += '→';
-            break;
-          case 1:
-            buffer += '↓';
-            break;
-          case 2:
-            buffer += '←';
-            break;
-          case 3:
-            buffer += '↑';
-            break;
-        }
-        continue;
-      }
-      switch (this._map[i] & bias) {
-        case -1 & bias:
-          buffer += '☆';
-          break;
-        case 1:
-          buffer += '┤';
-          break;
-        case 2:
-          buffer += '┴';
-          break;
-        case 3:
-          buffer += '┘';
-          break;
-        case 4:
-          buffer += '├';
-          break;
-        case 5:
-          buffer += '||';
-          break;
-        case 6:
-          buffer += '└';
-          break;
-        case 7:
-          buffer += '┻';
-          break;
-        case 8:
-          buffer += '┬';
-          break;
-        case 9:
-          buffer += '┐';
-          break;
-        case 10:
-          buffer += '＝';
-          break;
-        case 11:
-          buffer += '┫';
-          break;
-        case 12:
-          buffer += '┌';
-          break;
-        case 13:
-          buffer += '┳';
-          break;
-        case 14:
-          buffer += '┣';
-          break;
-        case 15:
-          buffer += '□';
-          break;
-        default:
-          if (16 <= this._map[i] && this._map[i] <= 255) {
-            buffer += '扉'
-          } else {
-            buffer += '　'
-          }
-          break;
-      }
-      if ((i + 1) % this._width === 0) {
-        buffer += '\n';
-      }
-    }
-    console.log(buffer)
+  public dump(doorOff = false): void {
+    dumpDungeon(this._map, this._width, this._player, doorOff);
   }
 
   /**
@@ -851,9 +226,12 @@ export class DungeonMap {
    */
   public build() {
     this.init();
-    this.makeRoom();
-    this.makeCorridor();
-    this.setWall();
+    if (this._map.length > 0) {
+      const builder = new MapBuilder(this, this._width, this._height, this._minRoomLength);
+      this._rooms = builder.makeRoom();
+      this._roomsWithCorridors = builder.makeCorridor(this._rooms);
+      builder.setWall(this._roomsWithCorridors);
+    }
     this.setPlayerRandom();
   }
 
@@ -1129,157 +507,30 @@ export class DungeonMap {
 
   /**
    * 2点間に壁がなく攻撃可能かを判定する（Chebyshev距離1の隣接セル限定）
-   * 斜め方向は、隣接する縦横両方向が壁で塞がれている場合のみ不可
    */
   public canAttack(fromX: integer, fromY: integer, toX: integer, toY: integer): boolean {
-    const dx = toX - fromX;
-    const dy = toY - fromY;
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return false;
-
-    const isSolidWall = (x: integer, y: integer, dir: number): boolean => {
-      const val = this.getAt(x, y);
-      return !!(val & (1 << dir)) && !(val & (1 << (dir + 4)));
-    };
-
-    if (dy === 0) {
-      return !isSolidWall(fromX, fromY, dx > 0 ? MapDirection.EAST : MapDirection.WEST);
-    }
-    if (dx === 0) {
-      return !isSolidWall(fromX, fromY, dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH);
-    }
-    // 斜め: 角を回る2本のL字経路のうち、少なくとも1本が通れれば攻撃可
-    // 経路A: 横→縦 (fromX,fromY)→(toX,fromY)→(toX,toY)
-    // 経路B: 縦→横 (fromX,fromY)→(fromX,toY)→(toX,toY)
-    const hDir = dx > 0 ? MapDirection.EAST : MapDirection.WEST;
-    const vDir = dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH;
-    const pathA = !isSolidWall(fromX, fromY, hDir) && !isSolidWall(toX, fromY, vDir);
-    const pathB = !isSolidWall(fromX, fromY, vDir) && !isSolidWall(fromX, toY, hDir);
-    return pathA || pathB;
+    return PlayerActions.canAttack(this, fromX, fromY, toX, toY);
   }
 
   /**
    * プレイヤーが正面の敵を攻撃する
-   * @returns 攻撃が実行された場合true、正面に敵がいない場合false
    */
   public attackPlayer(): boolean {
-    const { x, y, direction } = this.getPlayerPos();
-    let destX = x;
-    let destY = y;
-    switch (direction) {
-      case MapDirection.EAST:  destX += 1; break;
-      case MapDirection.SOUTH: destY += 1; break;
-      case MapDirection.WEST:  destX -= 1; break;
-      case MapDirection.NORTH: destY -= 1; break;
-    }
-    const enemy = this.getEnemy(destX, destY);
-    if (!enemy) return false;
-    if (!this.canAttack(x, y, destX, destY)) return false;
-
-    const player = this.getPlayerInstance();
-    if (!player) return false;
-
-    const playerPower = player.getEffectiveStat('power');
-    const damage = enemy.takeDamageFromPlayer(playerPower);
-    EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`);
-
-    if (!enemy.isAlive()) {
-      this.removeEnemy(destX, destY);
-      const levelsGained = player.addExp(enemy.getExp());
-      EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`);
-      for (let i = 0; i < levelsGained; i++) {
-        EventBus.emit('message-log', `レベルアップ！Lv${player.level}`);
-      }
-    }
-
-    this.dispatchObjectEvent();
-    return true;
+    return PlayerActions.attackPlayer(this);
   }
 
   /**
    * プレイヤーが消耗品を使用する
-   * @param instanceId 使用するアイテムのインスタンスID
-   * @returns 使用に成功しターンを消費した場合true
    */
   public useConsumableItem(instanceId: string): boolean {
-    const player = this.getPlayerInstance();
-    if (!player) return false;
-
-    const inventory = player.getInventory();
-    const item = inventory.getItemById(instanceId);
-    if (!item || !item.isConsumable()) return false;
-
-    const immediate = item.getImmediateEffect();
-    const continuous = item.getContinuousEffect();
-
-    if (!immediate && !continuous) {
-      EventBus.emit('message-log', `${item.getLabel()}は何の効果も無い`);
-      return false;
-    }
-
-    const messageParts: string[] = [];
-
-    if (immediate) {
-      const applied = player.applyImmediateEffect(immediate);
-      const parts: string[] = [];
-      for (const [stat, delta] of applied) {
-        if (delta !== 0) parts.push(`${stat}が${delta > 0 ? '+' : ''}${delta}`);
-      }
-      if (parts.length) messageParts.push(parts.join('、'));
-    }
-
-    if (continuous) {
-      const applied = player.applyContinuousEffect(continuous, item.getLabel());
-      const parts: string[] = [];
-      for (const [stat, value] of applied) {
-        parts.push(`${stat}が${value > 0 ? '+' : ''}${value}`);
-      }
-      if (parts.length) messageParts.push(`${continuous.turns}ターンの間 ${parts.join('、')}`);
-    }
-
-    inventory.removeItemById(instanceId);
-    EventBus.emit('message-log', `${item.getLabel()}を使った！${messageParts.length ? '（' + messageParts.join('、') + '）' : ''}`);
-
-    this.dispatchObjectEvent();
-    return true;
+    return PlayerActions.useConsumableItem(this, instanceId);
   }
 
   /**
    * プレイヤーの装備を変更する
-   * - 既に装備中のアイテムを指定した場合は装備解除（ターン消費なし）
-   * - 未装備のアイテムを指定した場合は装備（1ターン消費）
-   * @param instanceId 対象アイテムのインスタンスID
-   * @returns 成否、ターン消費の有無、実行された動作
    */
-  public changeEquipment(instanceId: string): {
-    success: boolean;
-    consumedTurn: boolean;
-    action: 'equipped' | 'unequipped' | 'none';
-  } {
-    const player = this.getPlayerInstance();
-    if (!player) return { success: false, consumedTurn: false, action: 'none' };
-
-    const inventory = player.getInventory();
-    const item = inventory.getItemById(instanceId);
-    if (!item || !item.isEquippable()) {
-      return { success: false, consumedTurn: false, action: 'none' };
-    }
-
-    const slot = player.getEquippedSlotOf(item);
-    if (slot !== null) {
-      player.unequipItem(slot);
-      EventBus.emit('message-log', `${item.getLabel()}を外した`);
-      return { success: true, consumedTurn: false, action: 'unequipped' };
-    }
-
-    const previous = player.equipItem(item);
-    if (previous) {
-      EventBus.emit('message-log', `${previous.getLabel()}を外して${item.getLabel()}を装備した`);
-    } else {
-      EventBus.emit('message-log', `${item.getLabel()}を装備した`);
-    }
-
-    this.dispatchObjectEvent();
-    return { success: true, consumedTurn: true, action: 'equipped' };
+  public changeEquipment(instanceId: string): PlayerActions.ChangeEquipmentResult {
+    return PlayerActions.changeEquipment(this, instanceId);
   }
 
   /**
@@ -1383,51 +634,23 @@ export class DungeonMap {
    * マップ上の全オブジェクトを取得する
    * @returns オブジェクトのMapコレクション
    */
-  public getObjects() {
-    return this._objects;
+  public getObjects(): Map<integer, MapObject> {
+    return this._objectStore.getAll();
   }
 
   /**
    * 指定座標にあるオブジェクトのリストを取得する
-   * @param x X座標
-   * @param y Y座標
-   * @returns 指定座標にあるオブジェクトの配列
    */
-  public getObject(x: integer, y: integer) {
-    const list: MapObject[] = [];
-    for (const object of this._objects.values()) {
-      if (object.x === x && object.y === y) {
-        list.push(object)
-      }
-    }
-    return list;
+  public getObject(x: integer, y: integer): MapObject[] {
+    return this._objectStore.getAt(x, y);
   }
 
   /**
    * マップにオブジェクトを追加する
-   * @param x X座標
-   * @param y Y座標
-   * @param mark オブジェクトの表示マーク
-   * @param event オブジェクトのイベント関数
-   * @param color オブジェクトの色（デフォルト: 白）
-   * @param alpha オブジェクトの透明度（デフォルト: 1）
-   * @param sphere 球体として表示するかどうか（デフォルト: false）
-   * @param visible オブジェクトの可視性（デフォルト: true）
    * @returns 追加されたオブジェクトのID
    */
-  public addObject(x: integer, y: integer, mark: string, events: Map<string, ObjectEvent>, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false, visible = true) {
-    const obj = new MapObject()
-    obj.x = x;
-    obj.y = y;
-    obj.mark = mark;
-    obj.events = events;
-    obj.color = color;
-    obj.alpha = alpha;
-    obj.sphere = sphere;
-    obj.visible = visible;
-    this._object_counter++;
-    this._objects.set(this._object_counter, obj);
-    return this._object_counter;
+  public addObject(x: integer, y: integer, mark: string, events: Map<string, ObjectEvent>, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false, visible = true): integer {
+    return this._objectStore.addObject(x, y, mark, events, color, alpha, sphere, visible);
   }
 
   /**
@@ -1435,143 +658,75 @@ export class DungeonMap {
    * around-0: プレイヤーと同じマス
    * around-1: プレイヤーの周囲8マス（チェビシェフ距離1）
    */
-  public dispatchObjectEvent() {
-    for (const [id, object] of this._objects.entries()) {
-      const dx = Math.abs(this._player.x - object.x);
-      const dy = Math.abs(this._player.y - object.y);
-      const distance = Math.max(dx, dy); // チェビシェフ距離
-
-      const event = object.events.get(`around-${distance}`);
-      if (event && !event(this, object)) {
-        this._objects.delete(id);
-      }
-    }
-
-    // 敵反撃を含むターン処理が完了した後、持続効果を1ターン進める
-    const player = this.getPlayerInstance();
-    if (player) {
-      const expired = player.tickContinuousEffects();
-      for (const entry of expired) {
-        EventBus.emit('message-log', `${entry.sourceLabel}の効果が切れた`);
-      }
-    }
+  public dispatchObjectEvent(): void {
+    this._objectStore.dispatchEvent(this, this._player.x, this._player.y, this._playerInstance);
   }
 
   /**
    * プレイヤー位置にあるオブジェクトに対して around-0-self イベントをディスパッチする
-   * 「足下」アクションのように、プレイヤーが意図的に発火させる用途を想定。
-   * @returns ハンドラが1件以上発火した場合 true
    */
   public dispatchSelfEvent(): boolean {
-    let dispatched = false;
-    for (const [id, object] of this._objects.entries()) {
-      if (this._player.x !== object.x || this._player.y !== object.y) continue;
-      const event = object.events.get('around-0-self');
-      if (!event) continue;
-      dispatched = true;
-      if (!event(this, object)) {
-        this._objects.delete(id);
-      }
-    }
-    return dispatched;
+    return this._objectStore.dispatchSelfEvent(this, this._player.x, this._player.y);
   }
 
   /**
    * 指定された MapObject インスタンスを参照一致でマップから削除する
-   * @param target 削除対象のオブジェクト参照
-   * @returns 削除に成功した場合 true
    */
   public removeMapObject(target: MapObject): boolean {
-    for (const [id, object] of this._objects.entries()) {
-      if (object === target) {
-        this._objects.delete(id);
-        return true;
-      }
-    }
-    return false;
+    return this._objectStore.remove(target);
   }
 
   /**
    * 敵をマップに追加する
-   * @param enemy 追加する敵（既に座標が設定されているMapObjectとして）
-   * @returns 追加されたオブジェクトのID
    */
   public addEnemy(enemy: Enemy): integer {
-    this._object_counter++;
-    this._objects.set(this._object_counter, enemy);
-    return this._object_counter;
+    return this._objectStore.addEnemy(enemy);
   }
 
   /**
    * 指定座標の敵を取得する
-   * @param x X座標
-   * @param y Y座標
-   * @returns 敵のインスタンス、存在しない場合はundefined
    */
   public getEnemy(x: integer, y: integer): Enemy | undefined {
-    for (const object of this._objects.values()) {
-      if (object instanceof Enemy && object.x === x && object.y === y) {
-        return object;
-      }
-    }
-    return undefined;
+    return this._objectStore.getEnemy(x, y);
   }
 
   /**
    * 指定座標の敵を削除する
-   * @param x X座標
-   * @param y Y座標
-   * @returns 削除に成功した場合はtrue
    */
   public removeEnemy(x: integer, y: integer): boolean {
-    for (const [id, object] of this._objects.entries()) {
-      if (object instanceof Enemy && object.x === x && object.y === y) {
-        this._objects.delete(id);
-        return true;
-      }
-    }
-    return false;
+    return this._objectStore.removeEnemy(x, y);
   }
 
   /**
    * 全ての敵を取得する
-   * @returns 敵の配列
    */
   public getEnemies(): Enemy[] {
-    const enemies: Enemy[] = [];
-    for (const object of this._objects.values()) {
-      if (object instanceof Enemy) {
-        enemies.push(object);
-      }
-    }
-    return enemies;
+    return this._objectStore.getEnemies();
   }
 
   /**
    * プレイヤーの位置に敵がいるかチェック
-   * @returns 敵がいる場合はその敵、いない場合はundefined
    */
   public getEnemyAtPlayer(): Enemy | undefined {
-    return this.getEnemy(this._player.x, this._player.y);
+    return this._objectStore.getEnemy(this._player.x, this._player.y);
   }
 
   /**
    * 敵の数を取得
-   * @returns 現在マップ上にいる敵の数
    */
   public getEnemyCount(): integer {
-    let count = 0;
-    for (const object of this._objects.values()) {
-      if (object instanceof Enemy) {
-        count++;
-      }
-    }
-    return count;
+    return this._objectStore.getEnemyCount();
+  }
+
+  /**
+   * 全ての敵をクリア
+   */
+  public clearEnemies(): void {
+    this._objectStore.clearEnemies();
   }
 
   /**
    * Playerインスタンスを設定する
-   * @param player Playerインスタンス
    */
   public setPlayerInstance(player: Player): void {
     this._playerInstance = player;
@@ -1579,25 +734,8 @@ export class DungeonMap {
 
   /**
    * Playerインスタンスを取得する
-   * @returns Playerインスタンス
    */
   public getPlayerInstance(): Player | null {
     return this._playerInstance;
-  }
-
-  /**
-   * 全ての敵をクリア
-   */
-  public clearEnemies(): void {
-    const enemyIds: integer[] = [];
-    for (const [id, object] of this._objects.entries()) {
-      if (object instanceof Enemy) {
-        enemyIds.push(id);
-      }
-    }
-
-    for (const id of enemyIds) {
-      this._objects.delete(id);
-    }
   }
 }
