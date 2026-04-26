@@ -1458,6 +1458,40 @@ export class DungeonMap {
   }
 
   /**
+   * プレイヤー位置にあるオブジェクトに対して around-0-self イベントをディスパッチする
+   * 「足下」アクションのように、プレイヤーが意図的に発火させる用途を想定。
+   * @returns ハンドラが1件以上発火した場合 true
+   */
+  public dispatchSelfEvent(): boolean {
+    let dispatched = false;
+    for (const [id, object] of this._objects.entries()) {
+      if (this._player.x !== object.x || this._player.y !== object.y) continue;
+      const event = object.events.get('around-0-self');
+      if (!event) continue;
+      dispatched = true;
+      if (!event(this, object)) {
+        this._objects.delete(id);
+      }
+    }
+    return dispatched;
+  }
+
+  /**
+   * 指定された MapObject インスタンスを参照一致でマップから削除する
+   * @param target 削除対象のオブジェクト参照
+   * @returns 削除に成功した場合 true
+   */
+  public removeMapObject(target: MapObject): boolean {
+    for (const [id, object] of this._objects.entries()) {
+      if (object === target) {
+        this._objects.delete(id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * 敵をマップに追加する
    * @param enemy 追加する敵（既に座標が設定されているMapObjectとして）
    * @returns 追加されたオブジェクトのID

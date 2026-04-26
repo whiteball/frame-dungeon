@@ -5,7 +5,7 @@ import StartGame from './main';
 import Phaser from 'phaser';
 
 type SceneAction = { label: string, onClick: () => void };
-type ListMode = 'item' | 'equip';
+type ListMode = 'item' | 'equip' | 'drop';
 type ItemListEntry = { id: string, label: string, description: string, isEquipped?: boolean, type?: string, effectJson?: string };
 
 const scene = ref();
@@ -49,6 +49,8 @@ function confirmSelect() {
     if (!it) return;
     if (listMode.value === 'equip') {
         EventBus.emit('equip-item', { instanceId: it.id });
+    } else if (listMode.value === 'drop') {
+        EventBus.emit('drop-item', { instanceId: it.id });
     } else {
         EventBus.emit('use-item', { instanceId: it.id });
     }
@@ -181,7 +183,7 @@ defineExpose({ scene, game });
                        border-radius: 6px;
                        padding: 12px 32px;
                        box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);"
-            >{{ listMode === 'equip' ? '装備変更中' : 'アイテム選択中' }}</span>
+            >{{ listMode === 'equip' ? '装備変更中' : listMode === 'drop' ? '置くもの選択中' : 'アイテム選択中' }}</span>
         </div>
         <div
             v-show="itemListVisible"
@@ -211,7 +213,7 @@ defineExpose({ scene, game });
                 <li
                     v-if="itemList.length === 0"
                     style="padding: 2px 4px; opacity: 0.6;"
-                >{{ listMode === 'equip' ? '装備できる物がない' : '使える薬がない' }}</li>
+                >{{ listMode === 'equip' ? '装備できる物がない' : listMode === 'drop' ? '置けるアイテムがない' : '使える薬がない' }}</li>
             </ul>
             <div style="display: flex; gap: 4px; padding: 4px; border-top: 1px solid #666;">
                 <button

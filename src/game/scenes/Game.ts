@@ -2,6 +2,7 @@ import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 import { DungeonMap } from '../../lib/MapGenerator';
 import { MapObject, MapMark, newMapEvent } from '../../lib/MapObject';
+import type { ObjectEvent } from '../../lib/MapObject';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
@@ -9,6 +10,7 @@ import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
 import type { Item } from '../../lib/Item';
 import { ItemsLoader } from '../../lib/ItemsLoader';
+import type { ItemDefinition } from '../../lib/ItemsLoader';
 
 export class Game extends Scene {
     keys: {
@@ -31,7 +33,8 @@ export class Game extends Scene {
     params: Map<string, number | string>;
     player: Player;
 
-    private listMode: 'item' | 'equip' | null = null;
+    private listMode: 'item' | 'equip' | 'drop' | null = null;
+    private pendingPickup: { mapObject: MapObject, itemDef: ItemDefinition } | null = null;
 
     constructor() {
         super('Game');
@@ -87,6 +90,8 @@ export class Game extends Scene {
         EventBus.removeAllListeners('use-item');
         EventBus.removeAllListeners('equip-item');
         EventBus.removeAllListeners('close-item-list-request');
+        EventBus.removeAllListeners('open-drop-list-for-pickup');
+        EventBus.removeAllListeners('drop-item');
 
         const dun = new DungeonMap(15, 15);
 
@@ -134,21 +139,7 @@ export class Game extends Scene {
                 });
                 for (const pos of itemPositions) {
                     const itemDef = itemDefs[Phaser.Math.Between(0, itemDefs.length - 1)];
-                    const label = itemDef.label;
-                    dungeon.addObject(
-                        pos[0], pos[1],
-                        MapMark.CROSS,
-                        newMapEvent('around-0', () => {
-                            const newItem = Player.createItem(itemDef.name);
-                            if (newItem && this.player.getInventory().addItem(newItem)) {
-                                EventBus.emit('message-log', `${label}を入手した`);
-                                return false;
-                            }
-                            EventBus.emit('message-log', `${label}の上に乗った`);
-                            return true;
-                        }),
-                        0x00FFFF
-                    );
+                    this.addItemMapObject(pos[0], pos[1], itemDef);
                 }
             }
 
@@ -266,6 +257,35 @@ export class Game extends Scene {
             this.closeList();
         });
 
+        EventBus.on('open-drop-list-for-pickup', (payload: { mapObject: MapObject, itemDef: ItemDefinition }) => {
+            this.pendingPickup = payload;
+            this.openDropList();
+        });
+
+        EventBus.on('drop-item', (payload: { instanceId: string }) => {
+            const inventory = this.player.getInventory();
+            const droppedItem = inventory.getItemById(payload.instanceId);
+            if (!droppedItem) return;
+            const droppedDef = droppedItem.getDefinition();
+            const pos = this.dungeon.getPlayerPos();
+            inventory.removeItemById(payload.instanceId);
+            const pending = this.pendingPickup;
+            if (pending) {
+                const pickedItem = Player.createItem(pending.itemDef.name);
+                if (pickedItem) {
+                    inventory.addItem(pickedItem);
+                    EventBus.emit('message-log', `${pending.itemDef.label}を入手した`);
+                }
+                this.dungeon.removeMapObject(pending.mapObject);
+            }
+            this.addItemMapObject(pos.x, pos.y, droppedDef);
+            EventBus.emit('message-log', `${droppedDef.label}を置いた`);
+            this.closeList();
+            // 置く/入れ換えはターン非消費（dispatchObjectEvent を呼ばない）。
+            // 呼んでしまうと置いた直後の around-0 で自動拾得が走り、置いたアイテムを即回収してしまう
+            this.render();
+        });
+
         EventBus.emit('go-to-next-floor', this.dungeon);
         EventBus.emit('current-scene-ready', this);
 
@@ -273,6 +293,7 @@ export class Game extends Scene {
             { label: 'アイテム使用', onClick: () => this.toggleList('item') },
             { label: '装備変更', onClick: () => this.toggleList('equip') },
             { label: 'ステータス', onClick: () => EventBus.emit('message-log', 'ステータス確認機能は未実装です') },
+            { label: '足下', onClick: () => this.onUnderfoot() },
         ];
         EventBus.emit('scene-actions', sceneActions);
 
@@ -296,6 +317,31 @@ export class Game extends Scene {
                 if (a) a.onClick();
             });
         });
+    }
+
+    private addItemMapObject(x: integer, y: integer, itemDef: ItemDefinition): void {
+        const label = itemDef.label;
+        const onPickup: ObjectEvent = () => {
+            const newItem = Player.createItem(itemDef.name);
+            if (newItem && this.player.getInventory().addItem(newItem)) {
+                EventBus.emit('message-log', `${label}を入手した`);
+                return false;
+            }
+            EventBus.emit('message-log', `${label}の上に乗った`);
+            return true;
+        };
+        const onSelf: ObjectEvent = (_dungeon, object) => {
+            const newItem = Player.createItem(itemDef.name);
+            if (newItem && this.player.getInventory().addItem(newItem)) {
+                EventBus.emit('message-log', `${label}を入手した`);
+                return false;
+            }
+            EventBus.emit('open-drop-list-for-pickup', { mapObject: object, itemDef });
+            return true;
+        };
+        const events = newMapEvent('around-0', onPickup);
+        newMapEvent('around-0-self', onSelf, events);
+        this.dungeon.addObject(x, y, MapMark.CROSS, events, 0x00FFFF);
     }
 
     private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean; type: string; effectJson: string }> {
@@ -322,23 +368,61 @@ export class Game extends Scene {
         }
     }
 
-    private openList(mode: 'item' | 'equip'): void {
+    private onUnderfoot(): void {
+        if (this.listMode === 'drop') {
+            this.closeList();
+            return;
+        }
+        if (this.listMode !== null) {
+            this.closeList();
+        }
+        const dispatched = this.dungeon.dispatchSelfEvent();
+        if (!dispatched) {
+            // 足下に対応オブジェクトなし → 設置フロー（ターン非消費）
+            this.openDropList();
+            return;
+        }
+        // 足下アクションによる拾得・入替え・設置はすべてターン非消費
+        this.render();
+    }
+
+    private openList(mode: 'item' | 'equip' | 'drop'): void {
         if (this.listMode !== null) this.closeList();
-        const items = mode === 'item'
-            ? this.player.getInventory().getConsumableItems()
-            : this.player.getInventory().getEquippableItems();
+        let items: Item[];
+        let actionLabel: string;
+        if (mode === 'item') {
+            items = this.player.getInventory().getConsumableItems();
+            actionLabel = '使用';
+        } else if (mode === 'equip') {
+            items = this.player.getInventory().getEquippableItems();
+            actionLabel = '装備';
+        } else {
+            const equippedIds = new Set(
+                this.player.getAllEquippedItems()
+                    .filter((it): it is Item => it !== null)
+                    .map(it => it.getInstanceId())
+            );
+            items = this.player.getInventory().getItems()
+                .filter(it => !equippedIds.has(it.getInstanceId()));
+            actionLabel = '置く';
+        }
         this.listMode = mode;
         if (this.input.keyboard) this.input.keyboard.enabled = false;
         EventBus.emit('open-item-list', {
             items: this.buildItemListPayload(items),
             mode,
-            actionLabel: mode === 'item' ? '使用' : '装備',
+            actionLabel,
         });
+    }
+
+    private openDropList(): void {
+        this.openList('drop');
     }
 
     private closeList(): void {
         if (this.listMode === null) return;
         this.listMode = null;
+        this.pendingPickup = null;
         if (this.input.keyboard) {
             // enabled=false の間に取りこぼした keyup で Key.isDown が true 固定になるのを解消
             // （次回同じキー押下時に down が発火しない問題の対策）
