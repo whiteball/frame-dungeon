@@ -117,6 +117,17 @@ export class MapObjectStore {
       for (const entry of expired) {
         EventBus.emit('message-log', `${entry.sourceLabel}の効果が切れた`, dungeon.getTurnCount());
       }
+      const statusResult = player.tickStatusEffects();
+      for (const a of statusResult.applied) {
+        const sign = a.delta >= 0 ? '+' : '';
+        EventBus.emit('message-log', `${a.label}で${a.statName}が${sign}${a.delta}`, dungeon.getTurnCount());
+      }
+      for (const c of statusResult.cleared) {
+        EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
+      }
+      if (player.getStat('life') <= 0) {
+        EventBus.emit('game-over');
+      }
     }
   }
 

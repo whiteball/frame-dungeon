@@ -67,8 +67,9 @@ EventBus.on('event-name', callback);
 - **stats.yml**（`public/data/stats.yml`）: プレイヤーのステータス定義（HP、MP、攻撃力、防御力など）
 - **items.yml**（`public/data/items.yml`）: アイテム定義（武器、防具、消耗品）
 - **enemies.yml**（`public/data/enemies.yml`）: 敵の定義（HP、攻撃力、防御力、経験値、表示色）
+- **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
 
-各データファイルは対応するLoaderクラス（`StatsLoader`、`ItemsLoader`、`EnemyLoader`）によって読み込まれます。
+各データファイルは対応するLoaderクラス（`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`）によって読み込まれます。
 
 ## マップオブジェクトシステム
 
@@ -164,6 +165,60 @@ EventBus.on('event-name', callback);
 回転（`turnLeftPlayer`/`turnRightPlayer`/`turnBackPlayer`）は `dispatchObjectEvent` を呼ばずターン非消費のため、持続効果も進行しません。
 
 `turns: N` の効果は使用ターンを 1 ターン目として N ターン目までアクティブで、N+1 ターン目のプレイヤー行動時には既に切れている挙動になります（tick が敵反撃の後に行われるため、使用と同ターンの敵反撃にもバフ/デバフが乗る）。
+
+## 状態異常/強化システム
+
+`effects.yml` で定義された data-driven な状態異常/強化を管理します。アイテム使用時の持続効果（`activeContinuousEffects`、固定値ボーナス × 残ターン数）とは別系統で並存します。
+
+### 効果定義（effects.yml）
+
+```yaml
+- name: poison              # 識別子
+  label: 毒                  # 表示名
+  description: 徐々にダメージを受ける
+  effects:
+    onTurnEnd:              # ターンカウンタ加算直前に発動
+      target: life          # 変化対象のパラメータ名
+      formula: "(x - 5) <= 0 ? 1 : (x - 5)"  # 数式（x = 現在値）
+  clear:
+    formula: "(count ** 2) * 0.1"  # 0〜1 の確率（count = 経過ターン数）
+```
+
+発動タイミング：
+
+- `onPlayerAction`：プレイヤー入力受付前
+- `onTurnEnd`：ターン終了時（`dispatchObjectEvent` 内、`tickContinuousEffects` の後）
+- `permanent`：常時（`Player.getEffectiveStat` 計算時に formula を順次適用）
+
+特殊 target：
+
+- `_action: skip`：プレイヤーの W/Space 入力を無視してターン消費（麻痺・睡眠）
+
+`clear` セクション：
+
+- `formula`：`count` を変数とした 0〜1 の確率式。ターン終了時（`onTurnEnd` 適用後 → `count++` の後）に評価
+- `onDamage: true`：プレイヤーがダメージを被弾した時にも即座に解除
+
+数式評価には `expr-eval-fork` ライブラリを使用。`Parser` で事前パースして `Expression` をキャッシュします（`EffectsLoader.getCompiledEffect`）。
+
+### 主要 API（Player）
+
+- `applyStatusEffect(name)`：効果を付与。同名効果が既にあれば `count` を 0 にリセット（重複は 1 エントリのみ）
+- `getPlayerActionDirective()`：`_action: skip` などのディレクティブを返す
+- `tickStatusEffects()`：onTurnEnd 効果適用 → `count++` → clear 判定。`MapObjectStore.dispatchEvent` から呼ばれる
+- `notifyDamageTaken()`：被弾時に `clear.onDamage: true` のエントリを即座に解除。`Enemy` の around-1 攻撃ハンドラから呼ばれる
+- `getEffectiveStat(key)`：base + 装備 + 持続効果ボーナスに加え、`permanent` 効果の formula を順次適用した値を返す
+- `getActiveStatusEffects()`：UI 表示用のスナップショット（label, description, count）
+
+### `count` の進行ルール
+
+- 効果適用時は `count = 0`
+- `tickStatusEffects` の処理順序：(1) onTurnEnd を `count` 現在値で適用 → (2) `count++` → (3) clear 判定
+- 例：stun の `count > 1 ? 1 : 0` は適用ターン末で `count=1`（解除されず）、次ターン onPlayerAction で skip → そのターン末で `count=2`（解除）→ "1 ターン動けない" と一致
+
+### デバッグ用付与
+
+`Game.create()` で `window.applyStatusEffect(name)` を公開しているため、ブラウザの DevTools コンソールから動作確認可能です。トリガ機構（罠・敵・アイテム経由）はフレームワーク外で個別に実装します。
 
 ### EventBus イベント一覧（アイテム使用関連）
 

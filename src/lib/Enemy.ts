@@ -51,6 +51,10 @@ export class Enemy extends MapObject {
                 player.addStat('life', -damage);
                 EventBus.emit('attack-flash', 0xFF2222);
                 EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`, dungeon.getTurnCount());
+                const cleared = player.notifyDamageTaken();
+                for (const c of cleared) {
+                    EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
+                }
                 if (player.getStat('life') <= 0) {
                     EventBus.emit('game-over');
                 }

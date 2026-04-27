@@ -71,6 +71,11 @@ export class Game extends Scene {
             displayParams.set(data.abbreviation, displayValue);
         }
 
+        const statusEffects = this.player.getActiveStatusEffects();
+        if (statusEffects.length > 0) {
+            displayParams.set('状態', statusEffects.map(e => e.label).join('、'));
+        }
+
         return displayParams;
     }
 
@@ -183,8 +188,14 @@ export class Game extends Scene {
             keySpace: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         };
 
-        this.keys.keyW?.on('down', () => this.executeAction(() => this.dungeon.goPlayer() > 0))
-        this.keys.keySpace?.on('down', () => this.executeAction(() => this.dungeon.attackPlayer()))
+        this.keys.keyW?.on('down', () => {
+            if (this.handlePlayerActionDirective()) return;
+            this.executeAction(() => this.dungeon.goPlayer() > 0);
+        })
+        this.keys.keySpace?.on('down', () => {
+            if (this.handlePlayerActionDirective()) return;
+            this.executeAction(() => this.dungeon.attackPlayer());
+        })
         this.keys.keyA?.on('down', () => this.executeAction(() => this.dungeon.turnLeftPlayer()))
         this.keys.keyS?.on('down', () => this.executeAction(() => this.dungeon.turnBackPlayer()))
         this.keys.keyD?.on('down', () => this.executeAction(() => this.dungeon.turnRightPlayer()))
@@ -279,6 +290,16 @@ export class Game extends Scene {
 
         EventBus.emit('go-to-next-floor', this.dungeon);
         EventBus.emit('current-scene-ready', this);
+
+        // デバッグ用: コンソールから window.applyStatusEffect('poison') 等で状態異常を付与可能
+        (window as unknown as { applyStatusEffect: (name: string) => boolean }).applyStatusEffect = (name: string) => {
+            const ok = this.player.applyStatusEffect(name);
+            if (ok) {
+                EventBus.emit('message-log', `（debug）${name} を付与`, this.dungeon.getTurnCount());
+                this.render();
+            }
+            return ok;
+        };
 
         const sceneActions = [
             { label: 'アイテム使用', onClick: () => this.toggleList('item') },
@@ -516,6 +537,21 @@ export class Game extends Scene {
         }
 
         console.log(`Spawned ${enemyPositions.length} enemies on floor ${this.floor}`);
+    }
+
+    /**
+     * プレイヤー行動ディレクティブ（onPlayerAction の状態異常効果）を処理する
+     * skip ディレクティブの場合は空アクションでターン消費し true を返す
+     * @returns ディレクティブにより通常アクションをスキップした場合 true
+     */
+    private handlePlayerActionDirective(): boolean {
+        const directive = this.player?.getPlayerActionDirective();
+        if (directive === 'skip') {
+            EventBus.emit('message-log', '動けない！', this.dungeon.getTurnCount());
+            this.executeAction(() => { this.dungeon.dispatchObjectEvent(); return true; });
+            return true;
+        }
+        return false;
     }
 
     private async executeAction(action: () => boolean): Promise<void> {

@@ -5,11 +5,22 @@ import { Item } from './Item';
 import { ItemsLoader, type ImmediateEffect, type ContinuousEffect } from './ItemsLoader';
 import { Enemy } from './Enemy';
 import { EnemyLoader } from './EnemyLoader';
+import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 
 interface ActiveContinuousEffect {
     effects: Map<string, number>;
     remainingTurns: number;
     sourceLabel: string;
+}
+
+interface ActiveStatusEffect {
+    name: string;
+    count: number;
+}
+
+export interface StatusEffectTickResult {
+    applied: Array<{ label: string; statName: string; delta: number }>;
+    cleared: Array<{ label: string }>;
 }
 
 export class Player {
@@ -19,6 +30,7 @@ export class Player {
     private static statsLoader: StatsLoader;
     private static itemsLoader: ItemsLoader;
     private static enemyLoader: EnemyLoader;
+    private static effectsLoader: EffectsLoader;
 
     level: number = 1;
     exp: number = 0;
@@ -31,6 +43,9 @@ export class Player {
 
     // 持続効果スロット（同じアイテムを複数使用しても各エントリ独立に管理）
     private activeContinuousEffects: ActiveContinuousEffect[] = [];
+
+    // 状態異常/強化効果スロット（同名効果は 1 エントリのみ、count をリセット）
+    private activeStatusEffects: ActiveStatusEffect[] = [];
 
     constructor() {
         this.stats = new Map();
@@ -54,10 +69,16 @@ export class Player {
         await this.enemyLoader.loadEnemies();
     }
 
+    static async initializeEffectsSystem(): Promise<void> {
+        this.effectsLoader = EffectsLoader.getInstance();
+        await this.effectsLoader.loadEffects();
+    }
+
     static async initializeAllSystems(): Promise<void> {
         await this.initializeStatsSystem();
         await this.initializeItemsSystem();
         await this.initializeEnemySystem();
+        await this.initializeEffectsSystem();
     }
 
     private initializeStats(): void {
@@ -197,12 +218,200 @@ export class Player {
     }
 
     /**
-     * 基本能力値 + 装備ボーナス + 持続効果ボーナスの合算
+     * 基本能力値 + 装備ボーナス + 持続効果ボーナス + permanent 状態効果の合算
+     * permanent 効果は base+装備+持続 の値に formula(x) を順次適用する
      */
     getEffectiveStat(key: string): number {
-        return this.getStat(key)
+        let value = this.getStat(key)
             + (this.getEquipmentBonuses().get(key) ?? 0)
             + (this.getContinuousBonuses().get(key) ?? 0);
+
+        if (Player.effectsLoader) {
+            for (const entry of this.activeStatusEffects) {
+                const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+                if (!compiled) continue;
+                for (const spec of compiled.permanent) {
+                    if (spec.target !== key) continue;
+                    value = Player.evaluateTargetSpec(spec, value, entry.count) ?? value;
+                }
+            }
+        }
+
+        return value;
+    }
+
+    /**
+     * CompiledTargetSpec を評価して結果値を返す
+     * - formula があれば parser で評価（変数 x = currentValue, count = count）
+     * - value があればそれを直接返す（数値のみ。文字列は数値としては解釈しない）
+     */
+    private static evaluateTargetSpec(spec: CompiledTargetSpec, currentValue: number, count: number): number | null {
+        if (spec.formula) {
+            try {
+                const result = spec.formula.evaluate({ x: currentValue, count });
+                return typeof result === 'number' && Number.isFinite(result) ? result : null;
+            } catch (e) {
+                console.warn(`Failed to evaluate formula for target "${spec.target}":`, e);
+                return null;
+            }
+        }
+        if (typeof spec.value === 'number') return spec.value;
+        return null;
+    }
+
+    /**
+     * spec.value をリテラル文字列として取得（_action: skip など）
+     */
+    private static literalValueOf(spec: CompiledTargetSpec): string | number | null {
+        return spec.value ?? null;
+    }
+
+    /**
+     * 状態異常/強化効果を付与する
+     * 同名効果が既にあれば count を 0 にリセット（重複は 1 エントリのみ）
+     * @returns 付与に成功した場合 true。effects.yml に未定義の name を渡された場合 false
+     */
+    applyStatusEffect(name: string): boolean {
+        if (!Player.effectsLoader) {
+            console.warn('EffectsLoader not initialized');
+            return false;
+        }
+        if (!Player.effectsLoader.hasEffect(name)) {
+            console.warn(`Status effect not found: ${name}`);
+            return false;
+        }
+        const existing = this.activeStatusEffects.find(e => e.name === name);
+        if (existing) {
+            existing.count = 0;
+        } else {
+            this.activeStatusEffects.push({ name, count: 0 });
+        }
+        return true;
+    }
+
+    /**
+     * onPlayerAction の効果を走査し、プレイヤーの行動を上書きするディレクティブを返す
+     * 現状は _action: skip のみサポート
+     */
+    getPlayerActionDirective(): 'skip' | null {
+        if (!Player.effectsLoader) return null;
+        for (const entry of this.activeStatusEffects) {
+            const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+            if (!compiled) continue;
+            for (const spec of compiled.onPlayerAction) {
+                if (spec.target === '_action') {
+                    const v = Player.literalValueOf(spec);
+                    if (v === 'skip') return 'skip';
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * ターン終了時の状態効果処理：
+     *   1. onTurnEnd 効果を適用（formula で対象パラメータを書き換え）
+     *   2. count++ → clear 判定（formula 評価結果を 0〜1 にクランプして Math.random と比較）
+     * @returns 適用結果と解除されたエントリのログ用情報
+     */
+    tickStatusEffects(): StatusEffectTickResult {
+        const result: StatusEffectTickResult = { applied: [], cleared: [] };
+        if (!Player.effectsLoader) return result;
+
+        // 1. onTurnEnd 効果を適用
+        for (const entry of this.activeStatusEffects) {
+            const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+            if (!compiled) continue;
+            for (const spec of compiled.onTurnEnd) {
+                // _action 等の特殊 target は onTurnEnd では無視（仕様上、数値パラメータのみ対象）
+                if (spec.target.startsWith('_')) continue;
+                const before = this.getStat(spec.target);
+                const evaluated = Player.evaluateTargetSpec(spec, before, entry.count);
+                if (evaluated === null) continue;
+                let next = Math.floor(evaluated);
+                // life などの fluctuation 許可ステータスは [0, max] でクランプ
+                if (Player.statsLoader?.isFluctuationAllowed(spec.target)) {
+                    next = Math.max(0, Math.min(next, this.getMaxStat(spec.target)));
+                } else {
+                    next = Math.max(0, next);
+                }
+                if (next !== before) {
+                    this.setStat(spec.target, next);
+                    result.applied.push({
+                        label: compiled.definition.label,
+                        statName: spec.target,
+                        delta: next - before,
+                    });
+                }
+            }
+        }
+
+        // 2. count++ → clear 判定
+        const remaining: ActiveStatusEffect[] = [];
+        for (const entry of this.activeStatusEffects) {
+            entry.count++;
+            const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+            let cleared = false;
+            if (compiled?.clearFormula) {
+                try {
+                    const p = compiled.clearFormula.evaluate({ count: entry.count });
+                    const probability = typeof p === 'number' && Number.isFinite(p)
+                        ? Math.max(0, Math.min(1, p))
+                        : 0;
+                    if (Math.random() < probability) {
+                        cleared = true;
+                    }
+                } catch (e) {
+                    console.warn(`Failed to evaluate clear formula for "${entry.name}":`, e);
+                }
+            }
+            if (cleared && compiled) {
+                result.cleared.push({ label: compiled.definition.label });
+            } else {
+                remaining.push(entry);
+            }
+        }
+        this.activeStatusEffects = remaining;
+        return result;
+    }
+
+    /**
+     * ダメージ被弾時の通知。clear.onDamage が true のエントリを即座に解除する
+     * @returns 解除されたエントリのラベル一覧（ログ用）
+     */
+    notifyDamageTaken(): Array<{ label: string }> {
+        const cleared: Array<{ label: string }> = [];
+        if (!Player.effectsLoader) return cleared;
+        const remaining: ActiveStatusEffect[] = [];
+        for (const entry of this.activeStatusEffects) {
+            const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+            if (compiled?.clearOnDamage) {
+                cleared.push({ label: compiled.definition.label });
+            } else {
+                remaining.push(entry);
+            }
+        }
+        this.activeStatusEffects = remaining;
+        return cleared;
+    }
+
+    /**
+     * アクティブな状態異常のスナップショット（UI 表示用）
+     */
+    getActiveStatusEffects(): Array<{ name: string; label: string; description: string; count: number }> {
+        const list: Array<{ name: string; label: string; description: string; count: number }> = [];
+        if (!Player.effectsLoader) return list;
+        for (const entry of this.activeStatusEffects) {
+            const def = Player.effectsLoader.getEffect(entry.name);
+            if (!def) continue;
+            list.push({
+                name: entry.name,
+                label: def.label,
+                description: def.description,
+                count: entry.count,
+            });
+        }
+        return list;
     }
 
     /**
