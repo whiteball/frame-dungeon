@@ -117,6 +117,7 @@ export class Game extends Scene {
                 // 階段の追加
                 dungeon.addObject(step[0], step[1], MapMark.CIRCLE, newMapEvent('around-0', (dungeon: DungeonMap) => {
                     this.floor++;
+                    EventBus.emit('message-log', `${this.floor}階に移動した`, dungeon.getTurnCount());
                     EventBus.emit('go-to-next-floor', dungeon)
                     return true;
                 }), 0x00FF00)
