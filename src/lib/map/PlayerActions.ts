@@ -71,6 +71,7 @@ export function attackPlayer(dungeon: DungeonMap): boolean {
 
   const playerPower = player.getEffectiveStat('power');
   const damage = enemy.takeDamageFromPlayer(playerPower);
+  EventBus.emit('attack-flash', 0xFFFFFF);
   EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`, dungeon.getTurnCount());
 
   if (!enemy.isAlive()) {

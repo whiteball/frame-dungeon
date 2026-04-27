@@ -19,6 +19,8 @@ export class MainView {
 
   private blockSize: integer;
 
+  private flashColor: number | null = null;
+
   /**
    * メインビューを初期化する
    * @param factory Phaserのゲームオブジェクトファクトリー
@@ -51,6 +53,10 @@ export class MainView {
    * 3D透視投影のための描画ポイントを事前計算する
    * 距離と角度に基づいて、各ブロックの描画用ポリゴンと中心点を計算する
    */
+  flash(color: number): void {
+    this.flashColor = color;
+  }
+
   private prepareDrawPoints() {
     const polygonList: typeof this.polygonList = [];
     const centerList: typeof this.centerList = [];
@@ -371,6 +377,13 @@ export class MainView {
           }
         }
       }
+    }
+
+    // フラッシュエフェクト
+    if (this.flashColor !== null) {
+      graph.fillStyle(this.flashColor, 0.4);
+      graph.fillRectShape(frame);
+      this.flashColor = null;
     }
 
     // 枠線の描画

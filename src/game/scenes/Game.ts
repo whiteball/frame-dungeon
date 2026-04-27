@@ -183,31 +183,11 @@ export class Game extends Scene {
             keySpace: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         };
 
-        this.keys.keyW?.on('down', () => {
-            if (this.dungeon.goPlayer() > 0) {
-                this.render()
-            }
-        })
-        this.keys.keySpace?.on('down', () => {
-            if (this.dungeon.attackPlayer()) {
-                this.render()
-            }
-        })
-        this.keys.keyA?.on('down', () => {
-            if (this.dungeon.turnLeftPlayer()) {
-                this.render()
-            }
-        })
-        this.keys.keyS?.on('down', () => {
-            if (this.dungeon.turnBackPlayer()) {
-                this.render()
-            }
-        })
-        this.keys.keyD?.on('down', () => {
-            if (this.dungeon.turnRightPlayer()) {
-                this.render()
-            }
-        })
+        this.keys.keyW?.on('down', () => this.executeAction(() => this.dungeon.goPlayer() > 0))
+        this.keys.keySpace?.on('down', () => this.executeAction(() => this.dungeon.attackPlayer()))
+        this.keys.keyA?.on('down', () => this.executeAction(() => this.dungeon.turnLeftPlayer()))
+        this.keys.keyS?.on('down', () => this.executeAction(() => this.dungeon.turnBackPlayer()))
+        this.keys.keyD?.on('down', () => this.executeAction(() => this.dungeon.turnRightPlayer()))
         // this.keys.keyE?.on('down', () => {
         //     if (this.dungeon.turnRightPlayer()) {
         //         this.render()
@@ -536,6 +516,23 @@ export class Game extends Scene {
         }
 
         console.log(`Spawned ${enemyPositions.length} enemies on floor ${this.floor}`);
+    }
+
+    private async executeAction(action: () => boolean): Promise<void> {
+        const flashQueue: number[] = [];
+        const flashListener = (color: number) => flashQueue.push(color);
+        EventBus.on('attack-flash', flashListener);
+        const result = action();
+        EventBus.off('attack-flash', flashListener);
+
+        if (result) {
+            for (const color of flashQueue) {
+                this.mainView.flash(color);
+                this.render();
+                await new Promise(resolve => setTimeout(resolve, 120));
+            }
+            this.render();
+        }
     }
 
     changeScene() {
