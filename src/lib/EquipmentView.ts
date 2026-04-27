@@ -52,6 +52,11 @@ export class EquipmentView {
     this.textValueList = [];
   }
 
+  private truncateLabel(label: string, maxLen = 10): string {
+    if (label.length <= maxLen) return label;
+    return label.slice(0, 4) + '…' + label.slice(-4);
+  }
+
   render(equipped: EquippedSnapshot) {
     const graph = this.graph;
     graph.fillRect(0, 0, this.width, this.height);
@@ -71,7 +76,7 @@ export class EquipmentView {
       if (!this.textValueList[cur]) {
         this.textValueList[cur] = this.factory.text(this.graph.x, this.graph.y + y, '').setFontFamily(this.fontFamily).setDepth(10);
       }
-      const valueText = item ? item.getLabel() : '-';
+      const valueText = item ? this.truncateLabel(item.getLabel()) : '-';
       this.textValueList[cur]
         .setText(valueText)
         .setY(this.graph.y + y)
