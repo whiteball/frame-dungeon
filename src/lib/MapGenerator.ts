@@ -417,8 +417,11 @@ export class DungeonMap {
    */
   public getRandomPosList(count: integer, permitSamePos: boolean = false, config: RandomPosConfig = { withoutCorridor: false, withoutDoor: false, withoutPlayer: false, excludePositionList: [] }) {
     const result: integer[][] = [];
+    // excludePositionListの変更が呼び出し元に影響を与えないようにコピーを作る
+    const configLocal: RandomPosConfig = {...config};
+    configLocal.excludePositionList = config.excludePositionList ? [...config.excludePositionList] : [];
     for (let i = 0; i < count; i++) {
-      const res = this.getRandomPos(config);
+      const res = this.getRandomPos(configLocal);
       if (res.length > 0) {
         result.push(res);
       } else {
@@ -426,7 +429,7 @@ export class DungeonMap {
         break;
       }
       if (!permitSamePos) {
-        config.excludePositionList = result;
+        configLocal.excludePositionList.push(res);
       }
     }
 
