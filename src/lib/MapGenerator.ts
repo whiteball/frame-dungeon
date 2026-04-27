@@ -362,7 +362,7 @@ export class DungeonMap {
    */
   public getRandomPos({ withoutCorridor = false, withoutDoor = false, withoutPlayer = false, excludePositionList = [] }: RandomPosConfig): integer[] {
     let x: integer = 0, y: integer = 0, pos = -1;
-    const limit = 1000, playerPos = this._calcPos(this._player.x, this._player.y);
+    const limit = 1000;
     for (let i = 0; i < limit && pos === -1; i++) {
       x = getRandomInt(1, this._width - 1);
       y = getRandomInt(1, this._height - 1);
@@ -384,14 +384,14 @@ export class DungeonMap {
         }
       }
       if (pos !== -1 && withoutPlayer) {
-        if (pos === playerPos) {
+        if (x === this._player.x && y === this._player.y) {
           // プレイヤー直上をキャンセル
           pos = -1;
         }
       }
       if (excludePositionList.length > 0) {
         for (const exPos of excludePositionList) {
-          if (pos === this._calcPos(exPos[0], exPos[1])) {
+          if (x === exPos[0] && y === exPos[1]) {
             // 除外リストに一致すればキャンセル
             pos = -1;
             break;
