@@ -380,7 +380,15 @@ export class Player {
     }
 
     // 表示用の能力値を取得（略称付き、装備ボーナス・持続効果ボーナス込み）
-    getDisplayStats(): Map<string, { value: number; abbreviation: string; description: string }> {
+    getDisplayStats(): Map<string, {
+        value: number;
+        abbreviation: string;
+        description: string;
+        currentValue: number;
+        bonus: number;
+        maxValue: number | null;
+        hasFluctuation: boolean;
+    }> {
         const displayStats = new Map();
         const equipmentBonuses = this.getEquipmentBonuses();
         const continuousBonuses = this.getContinuousBonuses();
@@ -388,10 +396,13 @@ export class Player {
         for (const [key, baseValue] of this.stats) {
             const equipBonus = equipmentBonuses.get(key) || 0;
             const continuousBonus = continuousBonuses.get(key) || 0;
-            const totalValue = baseValue + equipBonus + continuousBonus;
+            const bonus = equipBonus + continuousBonus;
+            const totalValue = baseValue + bonus;
             const abbreviation = Player.statsLoader?.getAbbreviation(key) || key.toUpperCase();
             const description = Player.statsLoader?.getDescription(key) || key;
-            displayStats.set(key, { value: totalValue, abbreviation, description });
+            const hasFluctuation = Player.statsLoader?.isFluctuationAllowed(key) ?? false;
+            const maxValue = hasFluctuation ? (this.maxStats.get(key) ?? null) : null;
+            displayStats.set(key, { value: totalValue, abbreviation, description, currentValue: baseValue, bonus, maxValue, hasFluctuation });
         }
 
         return displayStats;

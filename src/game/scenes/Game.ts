@@ -56,11 +56,21 @@ export class Game extends Scene {
     private getDisplayParams(): Map<string, number | string> {
         const displayParams = new Map<string, number | string>();
         const displayStats = this.player.getDisplayStats();
-        
+
         for (const data of displayStats.values()) {
-            displayParams.set(data.abbreviation, data.value);
+            let displayValue: number | string;
+            const bonusStr = data.bonus > 0 ? `(+${data.bonus})` : `(${data.bonus})`;
+            if (data.hasFluctuation && data.maxValue !== null) {
+                const maxPart = data.bonus !== 0 ? `${data.maxValue}${bonusStr}` : `${data.maxValue}`;
+                displayValue = `${data.currentValue}/${maxPart}`;
+            } else if (data.bonus !== 0) {
+                displayValue = `${data.currentValue}${bonusStr}`;
+            } else {
+                displayValue = data.currentValue;
+            }
+            displayParams.set(data.abbreviation, displayValue);
         }
-        
+
         return displayParams;
     }
 
