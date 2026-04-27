@@ -14,6 +14,7 @@ const logs = ref<string[]>([]);
 const MAX_LOGS = 50;
 const logVisible = ref(false);
 const logRef = ref<HTMLDivElement | null>(null);
+const lastLogTurn = ref(0);
 const actions = ref<SceneAction[]>([]);
 
 const itemList = ref<ItemListEntry[]>([]);
@@ -83,7 +84,11 @@ onMounted(() => {
         logVisible.value = true;
     });
 
-    EventBus.on('message-log', (message: string) => {
+    EventBus.on('message-log', (message: string, turn?: number) => {
+        if (turn && turn !== lastLogTurn.value) {
+            logs.value.push(`(${turn}ターン目)`);
+            lastLogTurn.value = turn;
+        }
         logs.value.push(message);
         if (logs.value.length > MAX_LOGS) logs.value.splice(0, logs.value.length - MAX_LOGS);
         nextTick(() => {
@@ -97,6 +102,7 @@ onMounted(() => {
 
     EventBus.on('reset-message-log', () => {
         logs.value = [];
+        lastLogTurn.value = 0;
         logVisible.value = false;
         itemListVisible.value = false;
         itemList.value = [];
@@ -171,7 +177,11 @@ defineExpose({ scene, game });
                    font-size: 13px; border: 1px solid #444;
                    overflow-y: auto; box-sizing: border-box; padding: 6px;"
         >
-            <div v-for="(log, i) in logs" :key="i" style="white-space: pre-wrap;">{{ log }}</div>
+            <div
+                v-for="(log, i) in logs"
+                :key="i"
+                :style="{ whiteSpace: 'pre-wrap', ...(/^\(\d+ターン目\)$/.test(log) ? {opacity: '0.55', fontSize: '11px', marginTop: '6px'} : {})}"
+            >{{ log }}</div>
         </div>
         <div
             v-show="itemListVisible"

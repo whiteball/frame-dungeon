@@ -115,7 +115,7 @@ export class MapObjectStore {
     if (player) {
       const expired = player.tickContinuousEffects();
       for (const entry of expired) {
-        EventBus.emit('message-log', `${entry.sourceLabel}の効果が切れた`);
+        EventBus.emit('message-log', `${entry.sourceLabel}の効果が切れた`, dungeon.getTurnCount());
       }
     }
   }

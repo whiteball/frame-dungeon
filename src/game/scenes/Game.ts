@@ -284,12 +284,12 @@ export class Game extends Scene {
                 const pickedItem = Player.createItem(pending.itemDef.name);
                 if (pickedItem) {
                     inventory.addItem(pickedItem);
-                    EventBus.emit('message-log', `${pending.itemDef.label}を入手した`);
+                    EventBus.emit('message-log', `${pending.itemDef.label}を入手した`, this.dungeon.getTurnCount());
                 }
                 this.dungeon.removeMapObject(pending.mapObject);
             }
             this.addItemMapObject(pos.x, pos.y, droppedDef);
-            EventBus.emit('message-log', `${droppedDef.label}を置いた`);
+            EventBus.emit('message-log', `${droppedDef.label}を置いた`, this.dungeon.getTurnCount());
             this.closeList();
             // 置く/入れ換えはターン非消費（dispatchObjectEvent を呼ばない）。
             // 呼んでしまうと置いた直後の around-0 で自動拾得が走り、置いたアイテムを即回収してしまう
@@ -302,7 +302,7 @@ export class Game extends Scene {
         const sceneActions = [
             { label: 'アイテム使用', onClick: () => this.toggleList('item') },
             { label: '装備変更', onClick: () => this.toggleList('equip') },
-            { label: 'ステータス', onClick: () => EventBus.emit('message-log', 'ステータス確認機能は未実装です') },
+            { label: 'ステータス', onClick: () => EventBus.emit('message-log', 'ステータス確認機能は未実装です', this.dungeon.getTurnCount()) },
             { label: '足下', onClick: () => this.onUnderfoot() },
         ];
         EventBus.emit('scene-actions', sceneActions);
@@ -334,16 +334,16 @@ export class Game extends Scene {
         const onPickup: ObjectEvent = () => {
             const newItem = Player.createItem(itemDef.name);
             if (newItem && this.player.getInventory().addItem(newItem)) {
-                EventBus.emit('message-log', `${label}を入手した`);
+                EventBus.emit('message-log', `${label}を入手した`, this.dungeon.getTurnCount());
                 return false;
             }
-            EventBus.emit('message-log', `${label}の上に乗った`);
+            EventBus.emit('message-log', `${label}の上に乗った`, this.dungeon.getTurnCount());
             return true;
         };
         const onSelf: ObjectEvent = (_dungeon, object) => {
             const newItem = Player.createItem(itemDef.name);
             if (newItem && this.player.getInventory().addItem(newItem)) {
-                EventBus.emit('message-log', `${label}を入手した`);
+                EventBus.emit('message-log', `${label}を入手した`, this.dungeon.getTurnCount());
                 return false;
             }
             EventBus.emit('open-drop-list-for-pickup', { mapObject: object, itemDef });

@@ -48,6 +48,7 @@ export class DungeonMap {
 
   private _objectStore: MapObjectStore = new MapObjectStore();
   private _playerInstance: Player | null = null;
+  private _turnCount: number = 0;
 
   constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
     this._width = width + 2;
@@ -660,6 +661,7 @@ export class DungeonMap {
    */
   public dispatchObjectEvent(): void {
     this._objectStore.dispatchEvent(this, this._player.x, this._player.y, this._playerInstance);
+    this._turnCount++;
   }
 
   /**
@@ -737,5 +739,9 @@ export class DungeonMap {
    */
   public getPlayerInstance(): Player | null {
     return this._playerInstance;
+  }
+
+  public getTurnCount(): number {
+    return this._turnCount;
   }
 }

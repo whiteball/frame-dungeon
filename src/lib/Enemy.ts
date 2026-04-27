@@ -49,7 +49,7 @@ export class Enemy extends MapObject {
                 const playerDefense = player.getEffectiveStat('defense');
                 const damage = this.calculateDamageToPlayer(playerDefense);
                 player.addStat('life', -damage);
-                EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`);
+                EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`, dungeon.getTurnCount());
                 if (player.getStat('life') <= 0) {
                     EventBus.emit('game-over');
                 }

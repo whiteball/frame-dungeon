@@ -71,14 +71,14 @@ export function attackPlayer(dungeon: DungeonMap): boolean {
 
   const playerPower = player.getEffectiveStat('power');
   const damage = enemy.takeDamageFromPlayer(playerPower);
-  EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`);
+  EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`, dungeon.getTurnCount());
 
   if (!enemy.isAlive()) {
     dungeon.removeEnemy(destX, destY);
     const levelsGained = player.addExp(enemy.getExp());
-    EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`);
+    EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`, dungeon.getTurnCount());
     for (let i = 0; i < levelsGained; i++) {
-      EventBus.emit('message-log', `レベルアップ！Lv${player.level}`);
+      EventBus.emit('message-log', `レベルアップ！Lv${player.level}`, dungeon.getTurnCount());
     }
   }
 
@@ -103,7 +103,7 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
   const continuous = item.getContinuousEffect();
 
   if (!immediate && !continuous) {
-    EventBus.emit('message-log', `${item.getLabel()}は何の効果も無い`);
+    EventBus.emit('message-log', `${item.getLabel()}は何の効果も無い`, dungeon.getTurnCount());
     return false;
   }
 
@@ -128,7 +128,7 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
   }
 
   inventory.removeItemById(instanceId);
-  EventBus.emit('message-log', `${item.getLabel()}を使った！${messageParts.length ? '（' + messageParts.join('、') + '）' : ''}`);
+  EventBus.emit('message-log', `${item.getLabel()}を使った！${messageParts.length ? '（' + messageParts.join('、') + '）' : ''}`, dungeon.getTurnCount());
 
   dungeon.dispatchObjectEvent();
   return true;
@@ -152,15 +152,15 @@ export function changeEquipment(dungeon: DungeonMap, instanceId: string): Change
   const slot = player.getEquippedSlotOf(item);
   if (slot !== null) {
     player.unequipItem(slot);
-    EventBus.emit('message-log', `${item.getLabel()}を外した`);
+    EventBus.emit('message-log', `${item.getLabel()}を外した`, dungeon.getTurnCount());
     return { success: true, consumedTurn: false, action: 'unequipped' };
   }
 
   const previous = player.equipItem(item);
   if (previous) {
-    EventBus.emit('message-log', `${previous.getLabel()}を外して${item.getLabel()}を装備した`);
+    EventBus.emit('message-log', `${previous.getLabel()}を外して${item.getLabel()}を装備した`, dungeon.getTurnCount());
   } else {
-    EventBus.emit('message-log', `${item.getLabel()}を装備した`);
+    EventBus.emit('message-log', `${item.getLabel()}を装備した`, dungeon.getTurnCount());
   }
 
   dungeon.dispatchObjectEvent();
