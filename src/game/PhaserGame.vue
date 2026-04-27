@@ -13,6 +13,7 @@ const game = ref();
 const logs = ref<string[]>([]);
 const MAX_LOGS = 50;
 const logVisible = ref(false);
+const logRef = ref<HTMLDivElement | null>(null);
 const actions = ref<SceneAction[]>([]);
 
 const itemList = ref<ItemListEntry[]>([]);
@@ -83,8 +84,11 @@ onMounted(() => {
     });
 
     EventBus.on('message-log', (message: string) => {
-        logs.value.unshift(message);
-        if (logs.value.length > MAX_LOGS) logs.value.length = MAX_LOGS;
+        logs.value.push(message);
+        if (logs.value.length > MAX_LOGS) logs.value.splice(0, logs.value.length - MAX_LOGS);
+        nextTick(() => {
+            if (logRef.value) logRef.value.scrollTop = logRef.value.scrollHeight;
+        });
     });
 
     EventBus.on('scene-actions', (list: SceneAction[]) => {
@@ -157,17 +161,18 @@ defineExpose({ scene, game });
                 @click="a.onClick"
             >{{ a.label }}</button>
         </div>
-        <textarea
+        <div
+            ref="logRef"
             v-show="logVisible"
-            readonly
-            :value="logs.join('\n')"
             style="position: absolute; left: 10px; top: 590px;
                    width: 760px; height: 170px;
                    background: rgba(0,0,0,0.7); color: white;
                    font-family: 'BIZ UDゴシック', Consolas, monospace;
                    font-size: 13px; border: 1px solid #444;
-                   resize: none; box-sizing: border-box; padding: 6px;"
-        ></textarea>
+                   overflow-y: auto; box-sizing: border-box; padding: 6px;"
+        >
+            <div v-for="(log, i) in logs" :key="i" style="white-space: pre-wrap;">{{ log }}</div>
+        </div>
         <div
             v-show="itemListVisible"
             style="position: absolute; left: 10px; top: 10px;
