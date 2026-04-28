@@ -5,7 +5,6 @@ import { EventBus } from '../EventBus';
 export class MainMenu extends Scene
 {
     background: GameObjects.Image;
-    logo: GameObjects.Image;
     title: GameObjects.Text;
 
     constructor ()
@@ -19,10 +18,8 @@ export class MainMenu extends Scene
 
         this.background = this.add.image(502, 260, 'background');
 
-        this.logo = this.add.image(502, 200, 'logo').setDepth(100);
-
-        this.title = this.add.text(502, 380, 'Main Menu', {
-            fontFamily: 'Arial Black', fontSize: 38, color: '#ffffff',
+        this.title = this.add.text(502, 200, 'Main Menu', {
+            fontFamily: 'Arial Black', fontSize: 54, color: '#ffffff',
             stroke: '#000000', strokeThickness: 8,
             align: 'center'
         }).setOrigin(0.5).setDepth(100);
