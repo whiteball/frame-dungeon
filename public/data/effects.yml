@@ -1,7 +1,7 @@
 - name: poison
   label: 毒
   description: 徐々にダメージを受ける
-  effects:
+  timing:
     onTurnEnd:
       target: life
       formula: "(x - 5) <= 0 ? 1 : (x - 5)"
@@ -10,7 +10,7 @@
 - name: unfocused
   label: 散漫
   description: 徐々にMPが減る
-  effects:
+  timing:
     onTurnEnd:
       target: magic
       formula: "x - 1"
@@ -19,7 +19,7 @@
 - name: stun
   label: 麻痺
   description: 1ターン動けない
-  effects:
+  timing:
     onPlayerAction:
       target: _action
       value: skip
@@ -28,7 +28,7 @@
 - name: sleep
   label: 睡眠
   description: しばらく動けない
-  effects:
+  timing:
     onPlayerAction:
       target: _action
       value: skip
@@ -38,7 +38,7 @@
 - name: fear
   label: 恐怖
   description: 攻撃力が下がる
-  effects:
+  timing:
     permanent:
       target: power
       formula: "x * 0.6"
@@ -47,7 +47,7 @@
 - name: frail
   label: 虚弱
   description: 防御力が下がる
-  effects:
+  timing:
     permanent:
       target: defense
       formula: "x * 0.4"
@@ -56,7 +56,7 @@
 - name: powerful
   label: 元気はつらつ
   description: 攻撃力と防御力が上がる
-  effects:
+  timing:
     permanent:
       - target: power
         formula: "x * 1.2"

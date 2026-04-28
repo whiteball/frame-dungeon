@@ -30,7 +30,7 @@ export interface EffectDefinition {
     name: string;
     label: string;
     description: string;
-    effects: {
+    timing: {
         onPlayerAction?: EffectTargetSpec | EffectTargetSpec[];
         onTurnEnd?: EffectTargetSpec | EffectTargetSpec[];
         permanent?: EffectTargetSpec | EffectTargetSpec[];
@@ -146,9 +146,9 @@ export class EffectsLoader {
 
         return {
             definition: def,
-            onPlayerAction: compileSpecs(EffectsLoader.normalizeSpecs(def.effects?.onPlayerAction)),
-            onTurnEnd: compileSpecs(EffectsLoader.normalizeSpecs(def.effects?.onTurnEnd)),
-            permanent: compileSpecs(EffectsLoader.normalizeSpecs(def.effects?.permanent)),
+            onPlayerAction: compileSpecs(EffectsLoader.normalizeSpecs(def.timing?.onPlayerAction)),
+            onTurnEnd: compileSpecs(EffectsLoader.normalizeSpecs(def.timing?.onTurnEnd)),
+            permanent: compileSpecs(EffectsLoader.normalizeSpecs(def.timing?.permanent)),
             clearFormula,
             clearOnDamage: def.clear?.onDamage === true,
         };
