@@ -148,17 +148,47 @@ export class Player {
 
     /**
      * 即座効果を能力値へ反映する
+     * - 数値キーは能力値変動
+     * - applyEffect: <name> は状態異常の付与
+     * - clearEffect: <name> は状態異常の解除
      * @param effect 即座効果
-     * @returns 能力値名 → 実際に変動した量（クランプ後の差分）
+     * @returns 適用結果（能力値変動 + 付与/解除した状態異常名）
      */
-    applyImmediateEffect(effect: ImmediateEffect): Map<string, number> {
-        const applied = new Map<string, number>();
-        for (const [statName, value] of Object.entries(effect)) {
-            const before = this.getStat(statName);
-            this.addStat(statName, value);
-            applied.set(statName, this.getStat(statName) - before);
+    applyImmediateEffect(effect: ImmediateEffect): {
+        stats: Map<string, number>;
+        appliedEffects: string[];
+        clearedEffects: string[];
+    } {
+        const stats = new Map<string, number>();
+        const appliedEffects: string[] = [];
+        const clearedEffects: string[] = [];
+        for (const [key, value] of Object.entries(effect)) {
+            if (key === 'applyEffect') {
+                if (typeof value === 'string' && this.applyStatusEffect(value)) {
+                    appliedEffects.push(value);
+                }
+            } else if (key === 'clearEffect') {
+                if (typeof value === 'string' && this.clearStatusEffect(value)) {
+                    clearedEffects.push(value);
+                }
+            } else if (typeof value === 'number') {
+                const before = this.getStat(key);
+                this.addStat(key, value);
+                stats.set(key, this.getStat(key) - before);
+            }
         }
-        return applied;
+        return { stats, appliedEffects, clearedEffects };
+    }
+
+    /**
+     * 指定 name の状態異常を解除する
+     * @returns 解除に成功した場合 true（未付与なら false）
+     */
+    clearStatusEffect(name: string): boolean {
+        const idx = this.activeStatusEffects.findIndex(e => e.name === name);
+        if (idx < 0) return false;
+        this.activeStatusEffects.splice(idx, 1);
+        return true;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 import type { DungeonMap } from '../MapGenerator';
 import { MapDirection } from './MapDirection';
+import { EffectsLoader } from '../EffectsLoader';
 import { EventBus } from '../../game/EventBus';
 
 /**
@@ -100,32 +101,42 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
   const item = inventory.getItemById(instanceId);
   if (!item || !item.isConsumable()) return false;
 
-  const immediate = item.getImmediateEffect();
-  const continuous = item.getContinuousEffect();
+  const specs = item.getEffectSpecs();
+  const hasAnyEffect = specs.some(s => s.immediate || s.continuous);
 
-  if (!immediate && !continuous) {
+  if (!hasAnyEffect) {
     EventBus.emit('message-log', `${item.getLabel()}は何の効果も無い`, dungeon.getTurnCount());
     return false;
   }
 
   const messageParts: string[] = [];
+  const effectsLoader = EffectsLoader.getInstance();
 
-  if (immediate) {
-    const applied = player.applyImmediateEffect(immediate);
-    const parts: string[] = [];
-    for (const [stat, delta] of applied) {
-      if (delta !== 0) parts.push(`${stat}が${delta > 0 ? '+' : ''}${delta}`);
+  for (const spec of specs) {
+    if (spec.immediate) {
+      const result = player.applyImmediateEffect(spec.immediate);
+      const parts: string[] = [];
+      for (const [stat, delta] of result.stats) {
+        if (delta !== 0) parts.push(`${stat}が${delta > 0 ? '+' : ''}${delta}`);
+      }
+      for (const effName of result.appliedEffects) {
+        const label = effectsLoader.getEffect(effName)?.label ?? effName;
+        parts.push(`${label}状態になった`);
+      }
+      for (const effName of result.clearedEffects) {
+        const label = effectsLoader.getEffect(effName)?.label ?? effName;
+        parts.push(`${label}状態が消えた`);
+      }
+      if (parts.length) messageParts.push(parts.join('、'));
     }
-    if (parts.length) messageParts.push(parts.join('、'));
-  }
-
-  if (continuous) {
-    const applied = player.applyContinuousEffect(continuous, item.getLabel());
-    const parts: string[] = [];
-    for (const [stat, value] of applied) {
-      parts.push(`${stat}が${value > 0 ? '+' : ''}${value}`);
+    if (spec.continuous) {
+      const applied = player.applyContinuousEffect(spec.continuous, item.getLabel());
+      const parts: string[] = [];
+      for (const [stat, value] of applied) {
+        parts.push(`${stat}が${value > 0 ? '+' : ''}${value}`);
+      }
+      if (parts.length) messageParts.push(`${spec.continuous.turns}ターンの間 ${parts.join('、')}`);
     }
-    if (parts.length) messageParts.push(`${continuous.turns}ターンの間 ${parts.join('、')}`);
   }
 
   inventory.removeItemById(instanceId);

@@ -2,8 +2,15 @@ import yaml from 'js-yaml';
 
 export type ItemType = 'weapon' | 'main_armor' | 'sub_armor' | 'consumable';
 
+/**
+ * 即座効果。能力値変動（statName: number）に加え、状態異常付与/解除の特殊キーを持つ
+ * - applyEffect: <effectName> — 状態異常を付与
+ * - clearEffect: <effectName> — 状態異常を解除
+ */
 export interface ImmediateEffect {
-    [statName: string]: number;
+    applyEffect?: string;
+    clearEffect?: string;
+    [statName: string]: number | string | undefined;
 }
 
 export interface ContinuousEffect {
@@ -11,11 +18,20 @@ export interface ContinuousEffect {
     [statName: string]: number;
 }
 
-export interface ItemEffect {
+/**
+ * 単一の効果スペック（即座・持続を含む）
+ * 装備系の能力値ボーナス（power, defense 等）はトップレベルの数値として記述
+ */
+export interface ItemEffectSpec {
     immediate?: ImmediateEffect;
     continuous?: ContinuousEffect;
     [statName: string]: number | ImmediateEffect | ContinuousEffect | undefined;
 }
+
+/**
+ * アイテム効果。装備系は単一スペック、消耗品は単一/配列両方サポート
+ */
+export type ItemEffect = ItemEffectSpec | ItemEffectSpec[];
 
 export interface ItemDefinition {
     /**
@@ -105,6 +121,20 @@ export class ItemsLoader {
         if (!item.effect || typeof item.effect !== 'object') {
             throw new Error(`Invalid item '${item.name}': missing or invalid 'effect' field`);
         }
+        // effect は単一オブジェクトまたは配列のいずれかを許容
+        const specs: any[] = Array.isArray(item.effect) ? item.effect : [item.effect];
+        for (let i = 0; i < specs.length; i++) {
+            const spec = specs[i];
+            if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
+                throw new Error(`Invalid item '${item.name}': effect[${i}] must be an object`);
+            }
+            if (spec.immediate !== undefined && (typeof spec.immediate !== 'object' || spec.immediate === null || Array.isArray(spec.immediate))) {
+                throw new Error(`Invalid item '${item.name}': effect[${i}].immediate must be an object`);
+            }
+            if (spec.continuous !== undefined && (typeof spec.continuous !== 'object' || spec.continuous === null || Array.isArray(spec.continuous))) {
+                throw new Error(`Invalid item '${item.name}': effect[${i}].continuous must be an object`);
+            }
+        }
         if (!item.description || typeof item.description !== 'string') {
             throw new Error(`Invalid item '${item.name}': missing or invalid 'description' field`);
         }
@@ -142,35 +172,4 @@ export class ItemsLoader {
         return this.getItemsByType('consumable');
     }
 
-    /**
-     * アイテムの即座効果を取得
-     */
-    getImmediateEffects(itemName: string): ImmediateEffect | undefined {
-        const item = this.getItem(itemName);
-        return item?.effect.immediate;
-    }
-
-    /**
-     * アイテムの持続効果を取得
-     */
-    getContinuousEffect(itemName: string): ContinuousEffect | undefined {
-        const item = this.getItem(itemName);
-        return item?.effect.continuous;
-    }
-
-    /**
-     * アイテムの装備効果を取得（即座・持続以外の効果）
-     */
-    getEquipmentEffects(itemName: string): { [statName: string]: number } {
-        const item = this.getItem(itemName);
-        if (!item) return {};
-
-        const effects: { [statName: string]: number } = {};
-        for (const [key, value] of Object.entries(item.effect)) {
-            if (key !== 'immediate' && key !== 'continuous' && typeof value === 'number') {
-                effects[key] = value;
-            }
-        }
-        return effects;
-    }
 }

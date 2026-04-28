@@ -1,4 +1,4 @@
-import type { ItemDefinition, ItemType, ImmediateEffect, ContinuousEffect } from './ItemsLoader';
+import type { ItemDefinition, ItemType, ItemEffectSpec } from './ItemsLoader';
 
 /**
  * ゲーム内のアイテムインスタンスを表すクラス
@@ -58,21 +58,23 @@ export class Item {
     }
 
     // アイテム効果関連
-    getImmediateEffect(): ImmediateEffect | undefined {
-        return this.definition.effect.immediate;
+    /**
+     * 効果スペックを正規化された配列として取得
+     * 単一オブジェクト形式は [単一] に、配列形式はそのまま返す
+     */
+    getEffectSpecs(): ItemEffectSpec[] {
+        const e = this.definition.effect;
+        return Array.isArray(e) ? e : [e];
     }
 
-    getContinuousEffect(): ContinuousEffect | undefined {
-        return this.definition.effect.continuous;
-    }
-
-    hasImmediateEffect(): boolean {
-        return this.definition.effect.immediate !== undefined;
-    }
-
+    /**
+     * 装備効果（武器・防具）を取得。配列形式の効果（消耗品想定）は対象外
+     */
     getEquipmentEffects(): { [statName: string]: number } {
+        const effect = this.definition.effect;
+        if (Array.isArray(effect)) return {};
         const effects: { [statName: string]: number } = {};
-        for (const [key, value] of Object.entries(this.definition.effect)) {
+        for (const [key, value] of Object.entries(effect)) {
             if (key !== 'immediate' && key !== 'continuous' && typeof value === 'number') {
                 effects[key] = value;
             }

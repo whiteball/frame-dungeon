@@ -31,3 +31,19 @@
       turns: 5
       power: 10
   description: 一時的に力を高める薬
+- name: poison potion
+  label: 毒薬
+  type: consumable
+  effect:
+    immediate:
+      applyEffect: poison
+  description: 飲むと毒状態になる怪しい瓶
+- name: antidote
+  label: 毒消し
+  type: consumable
+  effect:
+    - immediate:
+        clearEffect: poison
+    - immediate:
+        life: 10
+  description: 毒状態を消し、わずかに体力も回復する
