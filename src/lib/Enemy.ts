@@ -1,6 +1,7 @@
 import type { EnemyDefinition } from './EnemyLoader';
 import { MapObject, MapMark, newMapEvent } from './MapObject';
 import { StatsLoader } from './StatsLoader';
+import { EffectsLoader } from './EffectsLoader';
 import { EventBus } from '../game/EventBus';
 
 /**
@@ -55,6 +56,22 @@ export class Enemy extends MapObject {
                 for (const c of cleared) {
                     EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
                 }
+
+                // 敵の追加効果（ability）を処理：攻撃命中時に確率で状態異常を付与
+                const abilities = this.definition.ability;
+                if (abilities && player.getStat('life') > 0) {
+                    for (const ab of abilities) {
+                        if (ab.effectAttack) {
+                            const { name, rate } = ab.effectAttack;
+                            if (Math.random() < rate && player.applyStatusEffect(name)) {
+                                const effDef = EffectsLoader.getInstance().getEffect(name);
+                                const effLabel = effDef?.label ?? name;
+                                EventBus.emit('message-log', `${this.getLabel()}の攻撃で${effLabel}状態になった！`, dungeon.getTurnCount());
+                            }
+                        }
+                    }
+                }
+
                 if (player.getStat('life') <= 0) {
                     EventBus.emit('game-over');
                 }

@@ -1,6 +1,22 @@
 import yaml from 'js-yaml';
 import { StatsLoader } from './StatsLoader';
 
+/**
+ * 攻撃時に確率で状態異常を付与する追加効果
+ */
+export interface EffectAttackSpec {
+    name: string;
+    rate: number;
+}
+
+/**
+ * 敵の追加能力（ability）の単一エントリ
+ * 現在は effectAttack のみサポート。将来的なタイプ拡張も同パターンで可能
+ */
+export interface EnemyAbility {
+    effectAttack?: EffectAttackSpec;
+}
+
 export interface EnemyDefinition {
     /**
      * 敵内部ID（英語）
@@ -23,10 +39,14 @@ export interface EnemyDefinition {
      */
     description: string;
     /**
+     * 敵の追加能力リスト
+     */
+    ability?: EnemyAbility[];
+    /**
      * ステータス値（stats.ymlのnameをキーとする）
      * 例: { life: 20, power: 5, defense: 2 }
      */
-    [statName: string]: string | number | undefined;
+    [statName: string]: string | number | EnemyAbility[] | undefined;
 }
 
 export class EnemyLoader {
@@ -101,6 +121,35 @@ export class EnemyLoader {
         for (const statName of statNames) {
             if (statName in enemy && typeof enemy[statName] !== 'number') {
                 throw new Error(`Invalid enemy '${enemy.name}': '${statName}' must be a number`);
+            }
+        }
+
+        // ability フィールドのバリデーション
+        if (enemy.ability !== undefined) {
+            if (!Array.isArray(enemy.ability)) {
+                throw new Error(`Invalid enemy '${enemy.name}': 'ability' must be an array`);
+            }
+            for (let i = 0; i < enemy.ability.length; i++) {
+                const ab = enemy.ability[i];
+                if (!ab || typeof ab !== 'object') {
+                    throw new Error(`Invalid enemy '${enemy.name}': ability[${i}] must be an object`);
+                }
+                let recognized = false;
+                if (ab.effectAttack !== undefined) {
+                    recognized = true;
+                    if (typeof ab.effectAttack !== 'object' || ab.effectAttack === null) {
+                        throw new Error(`Invalid enemy '${enemy.name}': ability[${i}].effectAttack must be an object`);
+                    }
+                    if (typeof ab.effectAttack.name !== 'string') {
+                        throw new Error(`Invalid enemy '${enemy.name}': ability[${i}].effectAttack.name must be a string`);
+                    }
+                    if (typeof ab.effectAttack.rate !== 'number' || ab.effectAttack.rate < 0 || ab.effectAttack.rate > 1) {
+                        throw new Error(`Invalid enemy '${enemy.name}': ability[${i}].effectAttack.rate must be a number between 0 and 1`);
+                    }
+                }
+                if (!recognized) {
+                    console.warn(`Enemy '${enemy.name}': ability[${i}] has no recognized type key`);
+                }
             }
         }
     }
