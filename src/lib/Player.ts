@@ -6,6 +6,7 @@ import { ItemsLoader, type ImmediateEffect, type ContinuousEffect } from './Item
 import { Enemy } from './Enemy';
 import { EnemyLoader } from './EnemyLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
+import { TrapsLoader } from './TrapsLoader';
 
 interface ActiveContinuousEffect {
     effects: Map<string, number>;
@@ -31,6 +32,7 @@ export class Player {
     private static itemsLoader: ItemsLoader;
     private static enemyLoader: EnemyLoader;
     private static effectsLoader: EffectsLoader;
+    private static trapsLoader: TrapsLoader;
 
     level: number = 1;
     exp: number = 0;
@@ -74,11 +76,17 @@ export class Player {
         await this.effectsLoader.loadEffects();
     }
 
+    static async initializeTrapsSystem(): Promise<void> {
+        this.trapsLoader = TrapsLoader.getInstance();
+        await this.trapsLoader.loadTraps();
+    }
+
     static async initializeAllSystems(): Promise<void> {
         await this.initializeStatsSystem();
         await this.initializeItemsSystem();
         await this.initializeEnemySystem();
         await this.initializeEffectsSystem();
+        await this.initializeTrapsSystem();
     }
 
     private initializeStats(): void {

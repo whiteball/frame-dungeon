@@ -68,8 +68,9 @@ EventBus.on('event-name', callback);
 - **items.yml**（`public/data/items.yml`）: アイテム定義（武器、防具、消耗品）
 - **enemies.yml**（`public/data/enemies.yml`）: 敵の定義（HP、攻撃力、防御力、経験値、表示色）
 - **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
+- **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
 
-各データファイルは対応するLoaderクラス（`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`）によって読み込まれます。
+各データファイルは対応するLoaderクラス（`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`）によって読み込まれます。
 
 ## マップオブジェクトシステム
 
@@ -228,6 +229,39 @@ EventBus.on('event-name', callback);
 | `close-item-list` | Phaser→Vue | なし | 一覧 UI を閉じる確定通知 |
 | `close-item-list-request` | Vue→Phaser | なし | Vue 側（ESC/キャンセル/外側トリガ）からのクローズ要求 |
 | `use-item` | Vue→Phaser | `{ instanceId: string }` | 使用確定 |
+
+## トラップシステム
+
+`traps.yml` で定義された data-driven なトラップを `Game.ts` でフロアごとに 10 個ランダム配置します。各位置には `TrapsLoader.getTraps()` から均等ランダムで 1 種を選択。
+
+### YAML 構造
+
+```yaml
+- name: spike
+  label: トゲの床
+  description: トゲが生えた床
+  effect:
+    - type: stat
+      target: life
+      value: -10
+```
+
+`effect` は配列。各要素は `{ type: string, target?: string, value?: string | number }` で、以下の type をサポート：
+
+- `stat`：ステータス変動（target: ステータス名、value: number）。`Player.addStat(target, value)` を経由。`target === 'life' && value < 0` の場合は従来のダメージ形式ログ + `notifyDamageTaken()` + 死亡時 `game-over`、それ以外は汎用的な変動ログ
+- `addEffect`：状態異常付与（value: string、effects.yml の effect 名）。`Player.applyStatusEffect(value)` を経由
+- `unequip`：weapon / main_armor / sub_armor1 / sub_armor2 の全スロットを解除（装備中のもののみ）
+
+複数 effect がある場合は配列順に全て適用。`stat` で life が 0 以下になった場合は早期 return で後続を打ち切る。
+
+### 発動条件
+
+未発見状態（`object.visible === false`）で踏んだときのみ effect が発動し、`visible = true` になります。一度踏んで visible になったトラップは、再度踏んでも何も起きません。
+
+### 関連ファイル
+
+- **TrapsLoader**（`src/lib/TrapsLoader.ts`）: traps.yml の読み込み + 検証 + ランダム取得
+- **Game.ts**: `addTrapMapObject(x, y, trapDef)` でトラップ配置、`applyTrapEffects(trapDef)` で effect 配列を順次処理
 
 ## シーンアクションボタン
 

@@ -11,6 +11,9 @@ import { Player } from '../../lib/Player';
 import type { Item } from '../../lib/Item';
 import { ItemsLoader } from '../../lib/ItemsLoader';
 import type { ItemDefinition } from '../../lib/ItemsLoader';
+import { TrapsLoader } from '../../lib/TrapsLoader';
+import type { TrapDefinition } from '../../lib/TrapsLoader';
+import { EffectsLoader } from '../../lib/EffectsLoader';
 
 export class Game extends Scene {
     keys: {
@@ -129,13 +132,11 @@ export class Game extends Scene {
             }
 
             const traps = dungeon.getRandomPosList(10, false, { withoutPlayer: true, excludePositionList: [step] });
-            for (const trap of traps) {
-                // トラップの追加
-                dungeon.addObject(trap[0], trap[1], MapMark.X_CROSS, newMapEvent('around-0', (_, object: MapObject) => {
-                    console.log('trap!!' + object.x + ',' + object.y)
-                    object.visible = true;
-                    return true;
-                }), 0xFF0000, 1, false, false);
+            const trapDefs = TrapsLoader.getInstance().getTraps();
+            for (const trapPos of traps) {
+                if (trapDefs.length === 0) break;
+                const trapDef = trapDefs[Phaser.Math.Between(0, trapDefs.length - 1)];
+                this.addTrapMapObject(trapPos[0], trapPos[1], trapDef);
             }
 
             // アイテムの配置
@@ -329,6 +330,75 @@ export class Game extends Scene {
                 if (a) a.onClick();
             });
         });
+    }
+
+    /**
+     * トラップを MapObject として配置する。未発見状態（visible=false）で踏むと
+     * effect が発動し visible=true になる。既発見トラップを再度踏んでも何も起きない。
+     */
+    private addTrapMapObject(x: integer, y: integer, trapDef: TrapDefinition): void {
+        const onTrigger: ObjectEvent = (_, object) => {
+            if (object.visible) return true;
+            object.visible = true;
+            this.applyTrapEffects(trapDef);
+            return true;
+        };
+        const events = newMapEvent('around-0', onTrigger);
+        this.dungeon.addObject(x, y, MapMark.X_CROSS, events, 0xFF0000, 1, false, false);
+    }
+
+    /**
+     * トラップの effect 配列を順次適用する。damage で死亡した場合は早期 return
+     */
+    private applyTrapEffects(trapDef: TrapDefinition): void {
+        const turn = this.dungeon.getTurnCount();
+        EventBus.emit('message-log', `${trapDef.label}を踏んだ！`, turn);
+
+        for (const effect of trapDef.effect) {
+            if (effect.type === 'stat' && typeof effect.target === 'string' && typeof effect.value === 'number') {
+                const target = effect.target;
+                const value = effect.value;
+                const before = this.player.getStat(target);
+                this.player.addStat(target, value);
+                const delta = this.player.getStat(target) - before;
+
+                if (target === 'life' && value < 0) {
+                    // life ダメージは従来形式 + notifyDamageTaken + game-over 判定
+                    const damage = -delta;
+                    EventBus.emit('attack-flash', 0xFF2222);
+                    EventBus.emit('message-log',
+                        `${damage}のダメージ！(残りHP: ${this.player.getStat('life')}/${this.player.getMaxStat('life')})`,
+                        turn);
+                    const cleared = this.player.notifyDamageTaken();
+                    for (const c of cleared) {
+                        EventBus.emit('message-log', `${c.label}が解けた`, turn);
+                    }
+                    if (this.player.getStat('life') <= 0) {
+                        EventBus.emit('game-over');
+                        return;
+                    }
+                } else if (delta !== 0) {
+                    // それ以外は汎用的な変動ログ
+                    EventBus.emit('message-log', `${target}が${delta > 0 ? '+' : ''}${delta}`, turn);
+                }
+            } else if (effect.type === 'addEffect' && typeof effect.value === 'string') {
+                const effName = effect.value;
+                if (this.player.applyStatusEffect(effName)) {
+                    const def = EffectsLoader.getInstance().getEffect(effName);
+                    const label = def?.label ?? effName;
+                    EventBus.emit('message-log', `${label}状態になった！`, turn);
+                }
+            } else if (effect.type === 'unequip') {
+                const slots: Array<'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2'> =
+                    ['weapon', 'main_armor', 'sub_armor1', 'sub_armor2'];
+                for (const slot of slots) {
+                    const removed = this.player.unequipItem(slot);
+                    if (removed) {
+                        EventBus.emit('message-log', `${removed.getLabel()}が外れた`, turn);
+                    }
+                }
+            }
+        }
     }
 
     private addItemMapObject(x: integer, y: integer, itemDef: ItemDefinition): void {

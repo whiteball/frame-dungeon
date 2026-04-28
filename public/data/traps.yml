@@ -1,0 +1,18 @@
+- name: spike
+  label: トゲの床
+  description: トゲが生えた床
+  effect:
+    - type: stat
+      target: life
+      value: -10
+- name: swamp
+  label: 毒の沼
+  description: 怪しく濁った毒の沼
+  effect:
+    - type: addEffect
+      value: poison
+- name: strip
+  description: 装備を解除させてくる機械の罠
+  label: 装備解除罠
+  effect:
+    - type: unequip
