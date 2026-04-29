@@ -16,6 +16,9 @@ import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { EffectsLoader } from '../../lib/EffectsLoader';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
+import { getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
+
+type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 
 export class Game extends Scene {
     keys: {
@@ -40,6 +43,9 @@ export class Game extends Scene {
 
     private listMode: 'item' | 'equip' | 'drop' | null = null;
     private pendingPickup: { mapObject: MapObject, itemDef: ItemDefinition } | null = null;
+    private inAttackDirectionMode: boolean = false;
+    private defaultSceneActions: SceneAction[] = [];
+    private currentSceneActions: SceneAction[] = [];
 
     constructor() {
         super('Game');
@@ -192,16 +198,27 @@ export class Game extends Scene {
         };
 
         this.keys.keyW?.on('down', () => {
+            if (this.inAttackDirectionMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.executeAction(() => this.dungeon.goPlayer() > 0);
         })
         this.keys.keySpace?.on('down', () => {
+            if (this.inAttackDirectionMode) return;
             if (this.handlePlayerActionDirective()) return;
-            this.executeAction(() => this.dungeon.attackPlayer());
+            this.tryAttackOrShowDirections();
         })
-        this.keys.keyA?.on('down', () => this.executeAction(() => this.dungeon.turnLeftPlayer()))
-        this.keys.keyS?.on('down', () => this.executeAction(() => this.dungeon.turnBackPlayer()))
-        this.keys.keyD?.on('down', () => this.executeAction(() => this.dungeon.turnRightPlayer()))
+        this.keys.keyA?.on('down', () => {
+            if (this.inAttackDirectionMode) return;
+            this.executeAction(() => this.dungeon.turnLeftPlayer());
+        })
+        this.keys.keyS?.on('down', () => {
+            if (this.inAttackDirectionMode) return;
+            this.executeAction(() => this.dungeon.turnBackPlayer());
+        })
+        this.keys.keyD?.on('down', () => {
+            if (this.inAttackDirectionMode) return;
+            this.executeAction(() => this.dungeon.turnRightPlayer());
+        })
         // this.keys.keyE?.on('down', () => {
         //     if (this.dungeon.turnRightPlayer()) {
         //         this.render()
@@ -304,13 +321,13 @@ export class Game extends Scene {
             return ok;
         };
 
-        const sceneActions = [
+        this.defaultSceneActions = [
             { label: 'アイテム使用', onClick: () => this.toggleList('item') },
             { label: '装備変更', onClick: () => this.toggleList('equip') },
             { label: 'ステータス', onClick: () => EventBus.emit('message-log', 'ステータス確認機能は未実装です', this.dungeon.getTurnCount()) },
             { label: '足下', onClick: () => this.onUnderfoot() },
         ];
-        EventBus.emit('scene-actions', sceneActions);
+        this.setSceneActions(this.defaultSceneActions);
 
         // 数字キー 1〜0 をアクションボタンの左から順に割り当てる
         // アイテム一覧表示中は keyboard.enabled = false により自動的に無効化される
@@ -328,8 +345,8 @@ export class Game extends Scene {
         ];
         numberKeyCodes.forEach((code, i) => {
             this.input.keyboard?.addKey(code)?.on('down', () => {
-                const a = sceneActions[i];
-                if (a) a.onClick();
+                const a = this.currentSceneActions[i];
+                if (a && !a.disabled) a.onClick();
             });
         });
     }
@@ -610,6 +627,81 @@ export class Game extends Scene {
         }
 
         console.log(`Spawned ${enemyPositions.length} enemies on floor ${this.floor}`);
+    }
+
+    private setSceneActions(actions: SceneAction[]): void {
+        this.currentSceneActions = actions;
+        EventBus.emit('scene-actions', actions);
+    }
+
+    /**
+     * Space 押下時の処理。前方斜めに敵がいれば3択ボタンを提示し、
+     * いなければ従来通り正面を即時攻撃する。
+     */
+    private tryAttackOrShowDirections(): void {
+        const { x, y, direction } = this.dungeon.getPlayerPos();
+        const [fdx, fdy] = getDirectionOffset(direction);
+        const [rdx, rdy] = getDirectionOffset(rotateDirection(direction, 1));
+        const centerCell: [integer, integer] = [x + fdx, y + fdy];
+        const rightCell: [integer, integer] = [centerCell[0] + rdx, centerCell[1] + rdy];
+        const leftCell: [integer, integer] = [centerCell[0] - rdx, centerCell[1] - rdy];
+
+        const hasRightEnemy = !!this.dungeon.getEnemy(rightCell[0], rightCell[1]);
+        const hasLeftEnemy = !!this.dungeon.getEnemy(leftCell[0], leftCell[1]);
+
+        if (!hasRightEnemy && !hasLeftEnemy) {
+            this.executeAction(() => this.dungeon.attackPlayer());
+            return;
+        }
+
+        this.enterAttackDirectionMode(centerCell, rightCell, leftCell);
+    }
+
+    private enterAttackDirectionMode(
+        centerCell: [integer, integer],
+        rightCell: [integer, integer],
+        leftCell: [integer, integer],
+    ): void {
+        const { x, y } = this.dungeon.getPlayerPos();
+        const isAttackable = (cell: [integer, integer]): boolean => {
+            return !!this.dungeon.getEnemy(cell[0], cell[1])
+                && this.dungeon.canAttack(x, y, cell[0], cell[1]);
+        };
+
+        const actions: SceneAction[] = [
+            {
+                label: '左',
+                disabled: !isAttackable(leftCell),
+                onClick: () => this.executeAttackDirection(leftCell[0], leftCell[1]),
+            },
+            {
+                label: '中央',
+                disabled: !isAttackable(centerCell),
+                onClick: () => this.executeAttackDirection(centerCell[0], centerCell[1]),
+            },
+            {
+                label: '右',
+                disabled: !isAttackable(rightCell),
+                onClick: () => this.executeAttackDirection(rightCell[0], rightCell[1]),
+            },
+            {
+                label: 'キャンセル',
+                onClick: () => this.exitAttackDirectionMode(),
+            },
+        ];
+
+        this.inAttackDirectionMode = true;
+        this.setSceneActions(actions);
+    }
+
+    private executeAttackDirection(targetX: integer, targetY: integer): void {
+        this.exitAttackDirectionMode();
+        this.executeAction(() => this.dungeon.attackEnemyAt(targetX, targetY));
+    }
+
+    private exitAttackDirectionMode(): void {
+        this.inAttackDirectionMode = false;
+        this.setSceneActions(this.defaultSceneActions);
     }
 
     /**

@@ -31,6 +31,21 @@ export const getRandomDirection = (): MapDirection => {
 }
 
 /**
+ * 指定した方向に対応する座標オフセットを取得する
+ * @param direction 方向
+ * @returns [dx, dy] のタプル
+ */
+export const getDirectionOffset = (direction: MapDirection): [integer, integer] => {
+  switch (direction) {
+    case MapDirection.EAST:  return [1, 0];
+    case MapDirection.SOUTH: return [0, 1];
+    case MapDirection.WEST:  return [-1, 0];
+    case MapDirection.NORTH: return [0, -1];
+  }
+  return [0, 0];
+}
+
+/**
  * 指定した方向を時計回りに回転させる
  * @param direction 回転させる元の方向
  * @param value 回転量（1=90度時計回り）

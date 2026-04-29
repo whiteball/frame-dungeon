@@ -524,6 +524,13 @@ export class DungeonMap {
   }
 
   /**
+   * 指定座標の敵を攻撃する（隣接かつ攻撃可の場合のみ）
+   */
+  public attackEnemyAt(targetX: integer, targetY: integer): boolean {
+    return PlayerActions.attackEnemyAt(this, targetX, targetY);
+  }
+
+  /**
    * プレイヤーが消耗品を使用する
    */
   public useConsumableItem(instanceId: string): boolean {

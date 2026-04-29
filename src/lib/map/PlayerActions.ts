@@ -1,7 +1,7 @@
 'use strict';
 
 import type { DungeonMap } from '../MapGenerator';
-import { MapDirection } from './MapDirection';
+import { MapDirection, getDirectionOffset } from './MapDirection';
 import { EffectsLoader } from '../EffectsLoader';
 import { EventBus } from '../../game/EventBus';
 
@@ -50,22 +50,14 @@ export function canAttack(dungeon: DungeonMap, fromX: integer, fromY: integer, t
 }
 
 /**
- * プレイヤーが正面の敵を攻撃する
- * @returns 攻撃が実行された場合true、正面に敵がいない場合false
+ * 指定座標の敵を攻撃する。隣接かつ canAttack を満たす必要がある。
+ * @returns 攻撃が実行された場合true、対象なし／攻撃不可の場合false
  */
-export function attackPlayer(dungeon: DungeonMap): boolean {
-  const { x, y, direction } = dungeon.getPlayerPos();
-  let destX = x;
-  let destY = y;
-  switch (direction) {
-    case MapDirection.EAST:  destX += 1; break;
-    case MapDirection.SOUTH: destY += 1; break;
-    case MapDirection.WEST:  destX -= 1; break;
-    case MapDirection.NORTH: destY -= 1; break;
-  }
-  const enemy = dungeon.getEnemy(destX, destY);
+export function attackEnemyAt(dungeon: DungeonMap, targetX: integer, targetY: integer): boolean {
+  const { x, y } = dungeon.getPlayerPos();
+  const enemy = dungeon.getEnemy(targetX, targetY);
   if (!enemy) return false;
-  if (!canAttack(dungeon, x, y, destX, destY)) return false;
+  if (!canAttack(dungeon, x, y, targetX, targetY)) return false;
 
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
@@ -76,7 +68,7 @@ export function attackPlayer(dungeon: DungeonMap): boolean {
   EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`, dungeon.getTurnCount());
 
   if (!enemy.isAlive()) {
-    dungeon.removeEnemy(destX, destY);
+    dungeon.removeEnemy(targetX, targetY);
     const levelsGained = player.addExp(enemy.getExp());
     EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`, dungeon.getTurnCount());
     for (let i = 0; i < levelsGained; i++) {
@@ -86,6 +78,16 @@ export function attackPlayer(dungeon: DungeonMap): boolean {
 
   dungeon.dispatchObjectEvent();
   return true;
+}
+
+/**
+ * プレイヤーが正面の敵を攻撃する
+ * @returns 攻撃が実行された場合true、正面に敵がいない場合false
+ */
+export function attackPlayer(dungeon: DungeonMap): boolean {
+  const { x, y, direction } = dungeon.getPlayerPos();
+  const [dx, dy] = getDirectionOffset(direction);
+  return attackEnemyAt(dungeon, x + dx, y + dy);
 }
 
 /**

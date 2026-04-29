@@ -4,7 +4,7 @@ import { EventBus } from './EventBus';
 import StartGame from './main';
 import Phaser from 'phaser';
 
-type SceneAction = { label: string, onClick: () => void };
+type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 type ListMode = 'item' | 'equip' | 'drop';
 type ItemListEntry = { id: string, label: string, description: string, isEquipped?: boolean, type?: string, effectJson?: string };
 
@@ -164,6 +164,7 @@ defineExpose({ scene, game });
                 v-for="(a, i) in actions"
                 :key="i"
                 class="button"
+                :disabled="a.disabled"
                 @click="a.onClick"
             >{{ a.label }}</button>
         </div>
