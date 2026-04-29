@@ -5,7 +5,7 @@ import type { MapObject, ObjectEvent } from './MapObject';
 import type { Player } from './Player';
 import { getRandomInt } from './util/random';
 import type { Rect } from './map/Rect';
-import { MapDirection, getRandomDirection, rotateDirection } from './map/MapDirection';
+import { MapDirection, getRandomDirection, rotateDirection, getDirectionOffset } from './map/MapDirection';
 import { MapBuilder, type RoomWithCorridors } from './map/MapBuilder';
 import { MapObjectStore } from './map/MapObjectStore';
 import * as PlayerActions from './map/PlayerActions';
@@ -668,10 +668,49 @@ export class DungeonMap {
    * プレイヤーとオブジェクトの距離に応じてイベントをディスパッチする
    * around-0: プレイヤーと同じマス
    * around-1: プレイヤーの周囲8マス（チェビシェフ距離1）
+   *
+   * 敵ターンはターン番号インクリメント前に実行する。これによりプレイヤー行動と
+   * 敵反応のメッセージが同一ターン番号で message-log に並ぶ
    */
   public dispatchObjectEvent(): void {
     this._objectStore.dispatchEvent(this, this._player.x, this._player.y, this._playerInstance);
+    this.tickEnemies();
     this._turnCount++;
+  }
+
+  /**
+   * 敵を指定方向に1マス移動させる
+   * 壁・閉じた扉・進入不可マス・プレイヤー位置・他の敵位置のいずれかに該当する場合は失敗
+   * @returns 移動に成功した場合true、移動できない場合false
+   */
+  public tryMoveEnemy(enemy: Enemy, direction: MapDirection): boolean {
+    const value = this.getAt(enemy.x, enemy.y);
+    if (value & (2 ** direction)) {
+      if (!(value & (2 ** (direction + 4)))) return false;
+    }
+
+    const [dx, dy] = getDirectionOffset(direction);
+    const nx = enemy.x + dx;
+    const ny = enemy.y + dy;
+
+    if (this.getAt(nx, ny) === -1) return false;
+    if (this._player.x === nx && this._player.y === ny) return false;
+    if (this.getEnemy(nx, ny)) return false;
+
+    enemy.x = nx;
+    enemy.y = ny;
+    return true;
+  }
+
+  /**
+   * 全ての生存している敵に行動の機会を与える
+   */
+  public tickEnemies(): void {
+    const enemies = this.getEnemies();
+    for (const enemy of enemies) {
+      if (!enemy.isAlive()) continue;
+      enemy.act(this);
+    }
   }
 
   /**

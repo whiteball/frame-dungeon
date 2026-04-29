@@ -1,8 +1,11 @@
 import type { EnemyDefinition } from './EnemyLoader';
-import { MapObject, MapMark, newMapEvent } from './MapObject';
+import { MapObject, MapMark } from './MapObject';
 import { StatsLoader } from './StatsLoader';
 import { EffectsLoader } from './EffectsLoader';
 import { EventBus } from '../game/EventBus';
+import type { DungeonMap } from './MapGenerator';
+import { MapDirection } from './map/MapDirection';
+import { getRandomInt } from './util/random';
 
 /**
  * ゲーム内の敵インスタンスを表すクラス
@@ -40,44 +43,61 @@ export class Enemy extends MapObject {
         this.sphere = true;
         this.visible = true;
 
-        // デフォルトのイベント設定
-        // around-1: 周囲8マスにプレイヤーがいる場合に攻撃する
-        this.events = newMapEvent('around-1', (dungeon) => {
-            const { x: px, y: py } = dungeon.getPlayerPos();
-            if (!dungeon.canAttack(this.x, this.y, px, py)) return true;
-            const player = dungeon.getPlayerInstance();
-            if (player) {
-                const playerDefense = player.getEffectiveStat('defense');
-                const damage = this.calculateDamageToPlayer(playerDefense);
-                player.addStat('life', -damage);
-                EventBus.emit('attack-flash', 0xFF2222);
-                EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`, dungeon.getTurnCount());
-                const cleared = player.notifyDamageTaken();
-                for (const c of cleared) {
-                    EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
-                }
+    }
 
-                // 敵の追加効果（ability）を処理：攻撃命中時に確率で状態異常を付与
-                const abilities = this.definition.ability;
-                if (abilities && player.getStat('life') > 0) {
-                    for (const ab of abilities) {
-                        if (ab.effectAttack) {
-                            const { name, rate } = ab.effectAttack;
-                            if (Math.random() < rate && player.applyStatusEffect(name)) {
-                                const effDef = EffectsLoader.getInstance().getEffect(name);
-                                const effLabel = effDef?.label ?? name;
-                                EventBus.emit('message-log', `${this.getLabel()}の攻撃で${effLabel}状態になった！`, dungeon.getTurnCount());
-                            }
-                        }
+    /**
+     * 敵の自律行動を実行する。プレイヤーが攻撃可能範囲（canAttack 判定）にいる場合は
+     * 攻撃を行い、そうでなければ {EAST/SOUTH/WEST/NORTH/その場} の5択でランダムウォークする。
+     * 移動先が塞がっていれば再抽選せずその場に留まる。
+     */
+    public act(dungeon: DungeonMap): void {
+        if (!this.isAlive()) return;
+
+        const { x: px, y: py } = dungeon.getPlayerPos();
+        if (dungeon.canAttack(this.x, this.y, px, py)) {
+            this.attackPlayer(dungeon);
+            return;
+        }
+
+        const dir = getRandomInt(-1, 4);
+        if (dir === -1) return;
+        dungeon.tryMoveEnemy(this, dir as MapDirection);
+    }
+
+    /**
+     * プレイヤーへの攻撃を実行する。ダメージ計算・状態異常付与・game-over 判定を行う
+     */
+    private attackPlayer(dungeon: DungeonMap): void {
+        const player = dungeon.getPlayerInstance();
+        if (!player) return;
+
+        const playerDefense = player.getEffectiveStat('defense');
+        const damage = this.calculateDamageToPlayer(playerDefense);
+        player.addStat('life', -damage);
+        EventBus.emit('attack-flash', 0xFF2222);
+        EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`, dungeon.getTurnCount());
+        const cleared = player.notifyDamageTaken();
+        for (const c of cleared) {
+            EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
+        }
+
+        const abilities = this.definition.ability;
+        if (abilities && player.getStat('life') > 0) {
+            for (const ab of abilities) {
+                if (ab.effectAttack) {
+                    const { name, rate } = ab.effectAttack;
+                    if (Math.random() < rate && player.applyStatusEffect(name)) {
+                        const effDef = EffectsLoader.getInstance().getEffect(name);
+                        const effLabel = effDef?.label ?? name;
+                        EventBus.emit('message-log', `${this.getLabel()}の攻撃で${effLabel}状態になった！`, dungeon.getTurnCount());
                     }
                 }
-
-                if (player.getStat('life') <= 0) {
-                    EventBus.emit('game-over');
-                }
             }
-            return true;
-        });
+        }
+
+        if (player.getStat('life') <= 0) {
+            EventBus.emit('game-over');
+        }
     }
 
     private generateInstanceId(): string {
