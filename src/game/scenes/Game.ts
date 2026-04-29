@@ -14,6 +14,8 @@ import type { ItemDefinition } from '../../lib/ItemsLoader';
 import { TrapsLoader } from '../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { EffectsLoader } from '../../lib/EffectsLoader';
+import { makeStatFluctuatedMessage } from '../../lib/util/text';
+import { StatsLoader } from '../../lib/StatsLoader';
 
 export class Game extends Scene {
     keys: {
@@ -379,7 +381,8 @@ export class Game extends Scene {
                     }
                 } else if (delta !== 0) {
                     // それ以外は汎用的な変動ログ
-                    EventBus.emit('message-log', `${target}が${delta > 0 ? '+' : ''}${delta}`, turn);
+                    const statName = StatsLoader.getInstance().getAbbreviation(target) || target;
+                    EventBus.emit('message-log', makeStatFluctuatedMessage(statName, delta), turn);
                 }
             } else if (effect.type === 'addEffect' && typeof effect.value === 'string') {
                 const effName = effect.value;

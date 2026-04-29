@@ -6,6 +6,8 @@ import type { ObjectEvent } from '../MapObject';
 import type { Player } from '../Player';
 import type { DungeonMap } from '../MapGenerator';
 import { EventBus } from '../../game/EventBus';
+import { makeStatFluctuatedMessage } from '../util/text';
+import { StatsLoader } from '../StatsLoader';
 
 /**
  * マップ上のオブジェクト（階段・トラップ・敵など）を一元管理するストア。
@@ -118,9 +120,10 @@ export class MapObjectStore {
         EventBus.emit('message-log', `${entry.sourceLabel}の効果が切れた`, dungeon.getTurnCount());
       }
       const statusResult = player.tickStatusEffects();
+      const statsLoader = StatsLoader.getInstance();
       for (const a of statusResult.applied) {
-        const sign = a.delta >= 0 ? '+' : '';
-        EventBus.emit('message-log', `${a.label}で${a.statName}が${sign}${a.delta}`, dungeon.getTurnCount());
+        const statName = statsLoader.getAbbreviation(a.statName) || a.statName;
+        EventBus.emit('message-log', `${a.label}で ${makeStatFluctuatedMessage(statName, a.delta)}`, dungeon.getTurnCount());
       }
       for (const c of statusResult.cleared) {
         EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
