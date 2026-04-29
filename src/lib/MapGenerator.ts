@@ -239,119 +239,63 @@ export class DungeonMap {
   /**
    * プレイヤーの視界範囲内のフォグをクリアする
    * プレイヤーの向きと視界範囲に基づいて、見える範囲のフォグを除去する
+   *
+   * マップ値のビット構成（東=bit0、南=bit1、西=bit2、北=bit3 が壁、bit4〜7 が対応する扉）:
+   *   壁ビット = 1 << direction、扉ビット = 16 << direction
    */
   public clearFogWithinPlayer(): void {
     const direction = this._player.direction;
+    const [dx, dy] = getDirectionOffset(direction);
+
+    // 進行方向の壁・扉ビット
+    const forwardWallBit = 1 << direction;
+    const forwardDoorBit = 16 << direction;
+
+    // 左右の側面方向（進行方向から ±90 度）
+    const leftDir  = (direction + 1) % 4 as MapDirection;
+    const rightDir = (direction + 3) % 4 as MapDirection;
+    const [lx, ly] = getDirectionOffset(leftDir);
+    const [rx, ry] = getDirectionOffset(rightDir);
+    const leftWallBit  = 1 << leftDir,  leftDoorBit  = 16 << leftDir;
+    const rightWallBit = 1 << rightDir, rightDoorBit = 16 << rightDir;
 
     let x = this._player.x, y = this._player.y;
     for (let i = 0; i < this._viewRange; i++) {
       this.setFogAt(x, y, 0);
       const value = this.getAt(x, y);
 
-      switch (direction) {
-        case MapDirection.EAST:
-          if (!(value & 2)) {
-            this.setFogAt(x, y + 1, 0);
-            if (!(this.getAt(x, y + 1) & 1)) {
-              this.setFogAt(x + 1, y + 1, 0);
-            }
-          } else if (value & 32) {
-            this.setFogAt(x, y + 1, 0);
-          }
-          if (!(value & 8)) {
-            this.setFogAt(x, y - 1, 0);
-            if (!(this.getAt(x, y - 1) & 1)) {
-              this.setFogAt(x + 1, y - 1, 0);
-            }
-          } else if (value & 128) {
-            this.setFogAt(x, y - 1, 0);
-          }
-          x += 1;
-          if (value & 1) {
-            if (value & 16) {
-              this.setFogAt(x, y, 0);
-            }
-            return;
-          }
-          break;
-        case MapDirection.SOUTH:
-          if (!(value & 4)) {
-            this.setFogAt(x - 1, y, 0);
-            if (!(this.getAt(x - 1, y) & 2)) {
-              this.setFogAt(x - 1, y + 1, 0);
-            }
-          } else if (value & 64) {
-            this.setFogAt(x - 1, y, 0);
-          }
-          if (!(value & 1)) {
-            this.setFogAt(x + 1, y, 0);
-            if (!(this.getAt(x + 1, y) & 2)) {
-              this.setFogAt(x + 1, y + 1, 0);
-            }
-          } else if (value & 16) {
-            this.setFogAt(x + 1, y, 0);
-          }
-          y += 1;
-          if (value & 2) {
-            if (value & 32) {
-              this.setFogAt(x, y, 0);
-            }
-            return;
-          }
-          break;
-        case MapDirection.WEST:
-          if (!(value & 8)) {
-            this.setFogAt(x, y - 1, 0);
-            if (!(this.getAt(x, y - 1) & 4)) {
-              this.setFogAt(x - 1, y - 1, 0);
-            }
-          } else if (value & 128) {
-            this.setFogAt(x, y - 1, 0);
-          }
-          if (!(value & 2)) {
-            this.setFogAt(x, y + 1, 0);
-            if (!(this.getAt(x, y + 1) & 4)) {
-              this.setFogAt(x - 1, y + 1, 0);
-            }
-          } else if (value & 32) {
-            this.setFogAt(x, y + 1, 0);
-          }
-          x -= 1;
-          if (value & 4) {
-            if (value & 64) {
-              this.setFogAt(x, y, 0);
-            }
-            return;
-          }
-          break;
-        case MapDirection.NORTH:
-          if (!(value & 1)) {
-            this.setFogAt(x + 1, y, 0);
-            if (!(this.getAt(x + 1, y) & 8)) {
-              this.setFogAt(x + 1, y - 1, 0);
-            }
-          } else if (value & 16) {
-            this.setFogAt(x + 1, y, 0);
-          }
-          if (!(value & 4)) {
-            this.setFogAt(x - 1, y, 0);
-            if (!(this.getAt(x - 1, y) & 8)) {
-              this.setFogAt(x - 1, y - 1, 0);
-            }
-          } else if (value & 64) {
-            this.setFogAt(x - 1, y, 0);
-          }
-          y -= 1;
-          if (value & 8) {
-            if (value & 128) {
-              this.setFogAt(x, y, 0);
-            }
-            return;
-          }
-          break;
+      // 左側の視界：壁がなければ横隣 + その先の斜め1マスも開示
+      // 扉があれば横隣（扉マス）だけ開示
+      if (!(value & leftWallBit)) {
+        this.setFogAt(x + lx, y + ly, 0);
+        if (!(this.getAt(x + lx, y + ly) & forwardWallBit)) {
+          this.setFogAt(x + lx + dx, y + ly + dy, 0);
+        }
+      } else if (value & leftDoorBit) {
+        this.setFogAt(x + lx, y + ly, 0);
       }
 
-      this.setFogAt(x, y, 0);
+      // 右側の視界（左と対称）
+      if (!(value & rightWallBit)) {
+        this.setFogAt(x + rx, y + ry, 0);
+        if (!(this.getAt(x + rx, y + ry) & forwardWallBit)) {
+          this.setFogAt(x + rx + dx, y + ry + dy, 0);
+        }
+      } else if (value & rightDoorBit) {
+        this.setFogAt(x + rx, y + ry, 0);
+      }
+
+      x += dx; y += dy; // 1マス前進
+
+      // 前方に壁がある場合：扉なら向こう側の1マスだけ開示して終了
+      if (value & forwardWallBit) {
+        if (value & forwardDoorBit) {
+          this.setFogAt(x, y, 0);
+        }
+        return;
+      }
+
+      this.setFogAt(x, y, 0); // 前進先を先読みして開示（最終ステップでは次イテレーションがないため必要）
     }
   }
 
