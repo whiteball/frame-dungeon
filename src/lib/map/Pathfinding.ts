@@ -34,7 +34,7 @@ function inRect(x: integer, y: integer, rect: Rect): boolean {
   return rect.x1 <= x && x <= rect.x2 && rect.y1 <= y && y <= rect.y2;
 }
 
-function findContainingZone(
+export function findContainingZone(
   x: integer,
   y: integer,
   rwcList: RoomWithCorridors[],
@@ -48,7 +48,7 @@ function findContainingZone(
   return null;
 }
 
-function isInZone(x: integer, y: integer, rwc: RoomWithCorridors): boolean {
+export function isInZone(x: integer, y: integer, rwc: RoomWithCorridors): boolean {
   if (inRect(x, y, rwc.room)) return true;
   return rwc.corridors.some((c) => inRect(x, y, c));
 }

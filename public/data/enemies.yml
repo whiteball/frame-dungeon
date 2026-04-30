@@ -6,6 +6,7 @@
   exp: 10
   color: 0x00FF00
   description: 最も弱い魔物。ぷよぷよしている
+  walk: random
 - name: goblin
   label: ゴブリン
   life: 35
@@ -62,6 +63,7 @@
   exp: 25
   color: 0x220022
   description: 毒を持つ大きな蜘蛛
+  walk: none
   ability:
     - effectAttack:
         name: poison

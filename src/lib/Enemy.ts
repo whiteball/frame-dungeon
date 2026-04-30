@@ -17,6 +17,7 @@ export class Enemy extends MapObject {
     private stats: Map<string, number>;
     private maxStats: Map<string, number>;
     private isDead: boolean = false;
+    private target: { x: integer; y: integer } | null = null;
 
     constructor(definition: EnemyDefinition, x: integer, y: integer, instanceId?: string) {
         super();
@@ -46,22 +47,64 @@ export class Enemy extends MapObject {
     }
 
     /**
-     * 敵の自律行動を実行する。プレイヤーが攻撃可能範囲（canAttack 判定）にいる場合は
-     * 攻撃を行い、そうでなければ {EAST/SOUTH/WEST/NORTH/その場} の5択でランダムウォークする。
-     * 移動先が塞がっていれば再抽選せずその場に留まる。
+     * 敵の自律行動を実行する。walk フィールドに応じて移動パターンを切り替える。
+     * 'none': 移動せず、攻撃可能なら攻撃のみ
+     * 'random': ランダムウォーク（レガシー動作）
+     * 'default'（未指定含む）: 扉を目標に巡回し、同ゾーンのプレイヤーを追跡する
      */
     public act(dungeon: DungeonMap): void {
         if (!this.isAlive()) return;
 
+        const walkMode = this.definition.walk ?? 'default';
         const { x: px, y: py } = dungeon.getPlayerPos();
+
         if (dungeon.canAttack(this.x, this.y, px, py)) {
             this.attackPlayer(dungeon);
             return;
         }
 
-        const dir = getRandomInt(-1, 4);
-        if (dir === -1) return;
-        dungeon.tryMoveEnemy(this, dir as MapDirection);
+        if (walkMode === 'none') return;
+
+        if (walkMode === 'random') {
+            const dir = getRandomInt(-1, 4);
+            if (dir === -1) return;
+            dungeon.tryMoveEnemy(this, dir as MapDirection);
+            return;
+        }
+
+        // default: パターン移動
+        if (dungeon.isInSameZone(this.x, this.y, px, py)) {
+            this.target = { x: px, y: py };
+        }
+
+        if (this.target === null) {
+            const doorTargets = dungeon.getDoorTargetsInZone(this.x, this.y);
+            if (doorTargets.length > 0) {
+                const [tx, ty] = doorTargets[getRandomInt(0, doorTargets.length)];
+                this.target = { x: tx, y: ty };
+            }
+        }
+
+        if (this.target === null) {
+            const dir = getRandomInt(-1, 4);
+            if (dir !== -1) dungeon.tryMoveEnemy(this, dir as MapDirection);
+            return;
+        }
+
+        if (this.x === this.target.x && this.y === this.target.y) {
+            this.target = null;
+            return;
+        }
+
+        const path = dungeon.findPath(this.x, this.y, this.target.x, this.target.y);
+        if (path === undefined || path.length === 0) {
+            this.target = null;
+            const dir = getRandomInt(-1, 4);
+            if (dir !== -1) dungeon.tryMoveEnemy(this, dir as MapDirection);
+            return;
+        }
+
+        dungeon.tryMoveEnemy(this, path[0]);
     }
 
     /**
@@ -217,6 +260,7 @@ export class Enemy extends MapObject {
             clone.stats.set(key, value);
         }
         clone.isDead = this.isDead;
+        clone.target = this.target ? { ...this.target } : null;
         return clone;
     }
 

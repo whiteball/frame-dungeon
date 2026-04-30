@@ -10,7 +10,7 @@ import { MapBuilder, type RoomWithCorridors } from './map/MapBuilder';
 import { MapObjectStore } from './map/MapObjectStore';
 import * as PlayerActions from './map/PlayerActions';
 import { dumpDungeon } from './map/MapDebug';
-import { findPath, type FindPathOptions } from './map/Pathfinding';
+import { findPath, findContainingZone, isInZone, type FindPathOptions } from './map/Pathfinding';
 
 export type RandomPosConfig = {
   withoutCorridor?: boolean,
@@ -737,6 +737,52 @@ export class DungeonMap {
 
   public getTurnCount(): number {
     return this._turnCount;
+  }
+
+  /**
+   * 2点が同じゾーン（部屋または通路ゾーン）に属するか判定する
+   */
+  public isInSameZone(x1: integer, y1: integer, x2: integer, y2: integer): boolean {
+    const zone = findContainingZone(x1, y1, this._roomsWithCorridors);
+    if (zone === null) return false;
+    return isInZone(x2, y2, zone);
+  }
+
+  /**
+   * 敵の現在ゾーン内の扉から1マス外側の座標リストを返す。
+   * (enemyX, enemyY) のMooreネイバーフッド（チェビシェフ距離1）に含まれる座標は除外する。
+   */
+  public getDoorTargetsInZone(enemyX: integer, enemyY: integer): [integer, integer][] {
+    const zone = findContainingZone(enemyX, enemyY, this._roomsWithCorridors);
+    if (zone === null) return [];
+
+    const targets: [integer, integer][] = [];
+    const seen = new Set<integer>();
+
+    const checkRect = (rect: Rect): void => {
+      for (let x = rect.x1; x <= rect.x2; x++) {
+        for (let y = rect.y1; y <= rect.y2; y++) {
+          const val = this.getAt(x, y);
+          for (let d = 0; d < 4; d++) {
+            if (val & (16 << d)) {
+              const [dx, dy] = getDirectionOffset(d as MapDirection);
+              const tx = x + dx;
+              const ty = y + dy;
+              if (Math.abs(tx - enemyX) <= 1 && Math.abs(ty - enemyY) <= 1) continue;
+              const key = ty * this._width + tx;
+              if (!seen.has(key)) {
+                seen.add(key);
+                targets.push([tx, ty]);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    checkRect(zone.room);
+    for (const corridor of zone.corridors) checkRect(corridor);
+    return targets;
   }
 
   /**

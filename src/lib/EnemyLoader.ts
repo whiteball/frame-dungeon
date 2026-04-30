@@ -43,6 +43,13 @@ export interface EnemyDefinition {
      */
     ability?: EnemyAbility[];
     /**
+     * 移動パターン。未指定時は 'default' として扱う
+     * 'default': 扉を目標にゾーン内巡回・プレイヤー追跡
+     * 'random': ランダムウォーク
+     * 'none': 移動しない（隣接時のみ攻撃）
+     */
+    walk?: 'random' | 'none' | 'default';
+    /**
      * ステータス値（stats.ymlのnameをキーとする）
      * 例: { life: 20, power: 5, defense: 2 }
      */
@@ -150,6 +157,12 @@ export class EnemyLoader {
                 if (!recognized) {
                     console.warn(`Enemy '${enemy.name}': ability[${i}] has no recognized type key`);
                 }
+            }
+        }
+
+        if (enemy.walk !== undefined) {
+            if (!['random', 'none', 'default'].includes(enemy.walk)) {
+                throw new Error(`Invalid enemy '${enemy.name}': 'walk' must be 'random', 'none', or 'default'`);
             }
         }
     }

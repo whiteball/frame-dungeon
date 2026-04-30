@@ -45,6 +45,7 @@ EventBus.on('event-name', callback);
 - **MapBuilder**（`src/lib/map/MapBuilder.ts`）: 部屋・通路・壁・扉の生成アルゴリズム。`DungeonMap.build()` から呼ばれ、生成結果（`Rect[]` と `RoomWithCorridors[]`）を返す
 - **MapObjectStore**（`src/lib/map/MapObjectStore.ts`）: マップ上のオブジェクト・敵を `Map<integer, MapObject>` で一元管理。プレイヤー位置を引数で受け取り `around-N` イベントをディスパッチ。`Player.tickContinuousEffects()` の呼び出しもここで行う
 - **PlayerActions**（`src/lib/map/PlayerActions.ts`）: ターン消費アクションの純粋関数群（`canAttack` / `attackPlayer` / `useConsumableItem` / `changeEquipment`）。`EventBus` を介したメッセージログ通知を集約
+- **Pathfinding**（`src/lib/map/Pathfinding.ts`）: A* 法による2点間経路探索（`findPath`）。ゾーン（部屋+通路）の所属判定ユーティリティ（`findContainingZone`、`isInZone`）も公開しており、`DungeonMap` の `isInSameZone` / `getDoorTargetsInZone` から利用される
 - **MapDebug**（`src/lib/map/MapDebug.ts`）: `dumpDungeon()` によるコンソール用デバッグ出力（Box-drawing 文字でグリッド描画）
 - **MapDirection**（`src/lib/map/MapDirection.ts`）: 方向定数 `MapDirection`（東=0/南=1/西=2/北=3）と `getRandomDirection` / `rotateDirection`
 - **Rect**（`src/lib/map/Rect.ts`）: 部屋・通路の矩形プリミティブ。`isContact` で隣接判定
@@ -66,7 +67,7 @@ EventBus.on('event-name', callback);
 
 - **stats.yml**（`public/data/stats.yml`）: プレイヤーのステータス定義（HP、MP、攻撃力、防御力など）
 - **items.yml**（`public/data/items.yml`）: アイテム定義（武器、防具、消耗品）
-- **enemies.yml**（`public/data/enemies.yml`）: 敵の定義（HP、攻撃力、防御力、経験値、表示色）
+- **enemies.yml**（`public/data/enemies.yml`）: 敵の定義（HP、攻撃力、防御力、経験値、表示色）。`walk` フィールドで移動パターンを指定（後述「敵システム」参照）
 - **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
 - **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
 
@@ -85,11 +86,35 @@ EventBus.on('event-name', callback);
 敵システムの構成：
 
 - **EnemyLoader**: `enemies.yml`から敵データを読み込み、フロアに応じた敵を提供
-- **Enemy**: `MapObject`を継承した敵クラス。座標は`MapObject`のプロパティとして自身が保持するため、敵の移動時にキーの差し替えが不要
+- **Enemy**: `MapObject`を継承した敵クラス。座標は`MapObject`のプロパティとして自身が保持するため、敵の移動時にキーの差し替えが不要。`target` フィールド（プライベート）でターゲット座標を保持し、ターン間で持続する
 - **DungeonMap / MapObjectStore**: 敵を他のオブジェクトと統一管理（`addEnemy`、`getEnemy`、`removeEnemy` などを `DungeonMap` 経由で呼び出すと `MapObjectStore` に委譲。`instanceof Enemy` によるフィルタリングを内部で実施）
 - **Game Scene**: フロアごとに敵を自動生成・配置（フロア数に応じて難易度調整）
 
 敵は3Dビュー上で球体（ダイアモンド形マーク）として表示され、各敵は`enemies.yml`で定義された色で描画されます。
+
+### 敵の移動パターン（`walk` フィールド）
+
+`enemies.yml` の各エントリに `walk` フィールドを指定することで、敵ごとに移動AIを切り替えられます（未指定時は `default`）：
+
+| 値 | 動作 |
+| --- | --- |
+| `default`（未指定） | **パターン移動**: 扉の先をターゲットに巡回。同ゾーンにプレイヤーがいれば追跡。A*経路探索（`DungeonMap.findPath()`）で移動 |
+| `random` | **ランダムウォーク**: 東西南北＋その場の5択をランダム選択 |
+| `none` | **移動なし**: 定位置に留まり、プレイヤーが `canAttack` 判定圏内に入ったときのみ攻撃 |
+
+`default` モードの詳細な処理順序：
+
+1. `canAttack()` が真 → 攻撃して終了
+2. `isInSameZone(敵, プレイヤー)` が真 → ターゲットをプレイヤー位置に更新
+3. ターゲットなし → `getDoorTargetsInZone(敵位置)` で扉出口候補を取得し、Mooreネイバーフッド（チェビシェフ距離1）外からランダム選択
+4. ターゲット設定不能 → ランダムウォーク（フォールバック）
+5. ターゲット到達 → ターゲットをクリア
+6. `findPath(現在地, ターゲット)` で経路取得 → 先頭方向へ1歩移動。到達不能時はターゲットをクリアしてランダムウォーク
+
+関連する `DungeonMap` の公開メソッド：
+
+- `isInSameZone(x1, y1, x2, y2)`: 2点が同じ `RoomWithCorridors` ゾーンに属するかを判定
+- `getDoorTargetsInZone(enemyX, enemyY)`: 敵の現在ゾーン内の全扉から1マス外側の座標リストを返す
 
 ## 戦闘システム
 
