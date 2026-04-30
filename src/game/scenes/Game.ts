@@ -321,6 +321,27 @@ export class Game extends Scene {
             return ok;
         };
 
+        // デバッグ用: コンソールから window.window.findPath(1,1,2,7,false) 等で経路を表示
+        (window as unknown as { findPath: (
+            startX: integer,
+            startY: integer,
+            endX: integer,
+            endY: integer,
+            room: boolean,
+            blacked: [number, number][]
+        ) => any }).findPath = (
+            startX: integer,
+            startY: integer,
+            endX: integer,
+            endY: integer,
+            room: boolean,
+            blacked: [number, number][] = []
+        ) => {
+            const result = this.dungeon.findPath(startX, startY, endX, endY, {scope: room ? 'room' : 'full', blockedPositions: blacked});
+            console.debug(result);
+            return;
+        };
+
         this.defaultSceneActions = [
             { label: 'アイテム使用', onClick: () => this.toggleList('item') },
             { label: '装備変更', onClick: () => this.toggleList('equip') },

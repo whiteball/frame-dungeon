@@ -10,6 +10,7 @@ import { MapBuilder, type RoomWithCorridors } from './map/MapBuilder';
 import { MapObjectStore } from './map/MapObjectStore';
 import * as PlayerActions from './map/PlayerActions';
 import { dumpDungeon } from './map/MapDebug';
+import { findPath, type FindPathOptions } from './map/Pathfinding';
 
 export type RandomPosConfig = {
   withoutCorridor?: boolean,
@@ -736,5 +737,24 @@ export class DungeonMap {
 
   public getTurnCount(): number {
     return this._turnCount;
+  }
+
+  /**
+   * A* 法で2点間の経路を求める
+   * @param startX 開始X座標
+   * @param startY 開始Y座標
+   * @param endX 終了X座標
+   * @param endY 終了Y座標
+   * @param options scope:'room' を指定すると開始地点が属する部屋/通路ゾーン内だけを探索する
+   * @returns 移動方向の配列。同一地点なら空配列、到達不可なら undefined
+   */
+  public findPath(
+    startX: integer,
+    startY: integer,
+    endX: integer,
+    endY: integer,
+    options?: FindPathOptions,
+  ): MapDirection[] | undefined {
+    return findPath(this, this._roomsWithCorridors, startX, startY, endX, endY, options);
   }
 }
