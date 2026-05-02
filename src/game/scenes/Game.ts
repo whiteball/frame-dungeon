@@ -45,6 +45,7 @@ export class Game extends Scene {
     private pendingPickup: { mapObject: MapObject, itemDef: ItemDefinition } | null = null;
     private inAttackDirectionMode: boolean = false;
     private inStairMode: boolean = false;
+    private inTrapConfirmMode: boolean = false;
     private defaultSceneActions: SceneAction[] = [];
     private currentSceneActions: SceneAction[] = [];
 
@@ -132,10 +133,15 @@ export class Game extends Scene {
             const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true });
             if (step.length >= 2) {
                 // 階段の追加
-                dungeon.addObject(step[0], step[1], MapMark.CIRCLE, newMapEvent('around-0', (dungeon: DungeonMap) => {
+                const stairEvents = newMapEvent('around-0', (dungeon: DungeonMap) => {
                     this.enterStairMode(dungeon);
                     return true;
-                }), 0x00FF00)
+                });
+                newMapEvent('around-0-self', (dungeon: DungeonMap) => {
+                    this.enterStairMode(dungeon);
+                    return true;
+                }, stairEvents);
+                dungeon.addObject(step[0], step[1], MapMark.CIRCLE, stairEvents, 0x00FF00)
             }
 
             const traps = dungeon.getRandomPosList(10, false, { withoutPlayer: true, excludePositionList: [step] });
@@ -199,28 +205,33 @@ export class Game extends Scene {
         this.keys.keyW?.on('down', () => {
             if (this.inAttackDirectionMode) return;
             if (this.inStairMode) return;
+            if (this.inTrapConfirmMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.executeAction(() => this.dungeon.goPlayer() > 0);
         })
         this.keys.keySpace?.on('down', () => {
             if (this.inAttackDirectionMode) return;
             if (this.inStairMode) return;
+            if (this.inTrapConfirmMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.tryAttackOrShowDirections();
         })
         this.keys.keyA?.on('down', () => {
             if (this.inAttackDirectionMode) return;
             if (this.inStairMode) return;
+            if (this.inTrapConfirmMode) return;
             this.executeAction(() => this.dungeon.turnLeftPlayer());
         })
         this.keys.keyS?.on('down', () => {
             if (this.inAttackDirectionMode) return;
             if (this.inStairMode) return;
+            if (this.inTrapConfirmMode) return;
             this.executeAction(() => this.dungeon.turnBackPlayer());
         })
         this.keys.keyD?.on('down', () => {
             if (this.inAttackDirectionMode) return;
             if (this.inStairMode) return;
+            if (this.inTrapConfirmMode) return;
             this.executeAction(() => this.dungeon.turnRightPlayer());
         })
         // this.keys.keyE?.on('down', () => {
@@ -387,7 +398,12 @@ export class Game extends Scene {
             this.applyTrapEffects(trapDef);
             return true;
         };
+        const onSelfTrigger: ObjectEvent = (_, object) => {
+            this.enterTrapConfirmMode(trapDef, object);
+            return true;
+        };
         const events = newMapEvent('around-0', onTrigger);
+        newMapEvent('around-0-self', onSelfTrigger, events);
         this.dungeon.addObject(x, y, MapMark.X_CROSS, events, 0xFF0000, 1, false, false);
     }
 
@@ -752,6 +768,38 @@ export class Game extends Scene {
 
     private exitStairMode(): void {
         this.inStairMode = false;
+        this.setSceneActions(this.defaultSceneActions);
+    }
+
+    private enterTrapConfirmMode(trapDef: TrapDefinition, trapObject: MapObject): void {
+        const turn = this.dungeon.getTurnCount();
+        EventBus.emit('message-log', `トラップ：${trapDef.label}`, turn);
+        EventBus.emit('message-log', `説明：${trapDef.description}`, turn);
+        EventBus.emit('message-log', `このトラップを起動しますか？`, turn);
+        const actions: SceneAction[] = [
+            {
+                label: '起動',
+                onClick: () => {
+                    this.exitTrapConfirmMode();
+                    trapObject.visible = true;
+                    this.executeAction(() => {
+                        this.applyTrapEffects(trapDef);
+                        this.dungeon.dispatchObjectEvent();
+                        return true;
+                    });
+                },
+            },
+            {
+                label: 'やめる',
+                onClick: () => this.exitTrapConfirmMode(),
+            },
+        ];
+        this.inTrapConfirmMode = true;
+        this.setSceneActions(actions);
+    }
+
+    private exitTrapConfirmMode(): void {
+        this.inTrapConfirmMode = false;
         this.setSceneActions(this.defaultSceneActions);
     }
 
