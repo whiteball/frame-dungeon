@@ -31,7 +31,8 @@
 ゲームロジックは `src/lib/` 配下のモジュール群と `src/game/scenes/Game.ts` で構成されます。各モジュールの責務と関係性の詳細は [docs/architecture.md](docs/architecture.md) を参照のこと。
 
 - **Vue-Phaser通信**: `EventBus.emit` / `EventBus.on` を介する（`src/game/EventBus.ts`）
-- **マップ上のオブジェクト**: 階段・トラップ・敵などは全て `MapObject` を継承し、`DungeonMap._objects` で統一管理（`instanceof` で型別フィルタ）
+- **マップ上のオブジェクト**: 階段・トラップ・敵などは全て `MapObject` を継承し、`DungeonMap._objects` で統一管理（`instanceof` で型別フィルタ）。`around-0` は踏んだとき自動発火、`around-0-self` は「足下」ボタンで明示発火（`dispatchSelfEvent`）
+- **モーダルモード**: `isModalMode`（`currentSceneActions !== defaultSceneActions`）が真のとき全キー入力をブロック。攻撃方向選択・階段確認・トラップ確認がこれを使用
 - **データ駆動**: `public/data/*.yml` を対応する Loader クラス（`StatsLoader`、`ItemsLoader`、`EnemyLoader`）が読み込む
 - **キー操作**: W=前進、A=左回転、S=後退（180°回転）、D=右回転、スペース=正面の敵を攻撃
 - **メッセージログ**: `EventBus.emit('message-log', text)` で発行 → `PhaserGame.vue` の `<textarea>` に表示。戦闘・アイテム・フロア移動など全イベントをこのチャンネルに流すこと

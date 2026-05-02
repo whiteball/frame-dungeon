@@ -294,4 +294,22 @@ EventBus.on('event-name', callback);
 
 シーンごとの操作ボタン（画面下部の「アイテム使用」「ステータス」等）は `EventBus.emit('scene-actions', [{ label, onClick }, ...])` で発行します。`PhaserGame.vue` が受け取り、ボタン列として左寄せで表示します。
 
-Game シーンでは、これらのボタンに数字キー `1〜0`（10 個まで）を左から順に割り当てます（`Phaser.Input.Keyboard.KeyCodes.ONE`〜`ZERO` を `addKey` で登録し、`down` イベントで該当 `onClick` を呼び出す）。アイテム一覧表示中は `keyboard.enabled = false` によりこれらのショートカットも自動的に無効化されます。
+Game シーンのデフォルト SceneActions は「アイテム使用」「装備変更」「ステータス」「足下」の4ボタンです。数字キー `1〜0`（10 個まで）を左から順に割り当てます（`Phaser.Input.Keyboard.KeyCodes.ONE`〜`ZERO` を `addKey` で登録し、`down` イベントで該当 `onClick` を呼び出す）。アイテム一覧表示中は `keyboard.enabled = false` によりこれらのショートカットも自動的に無効化されます。
+
+### 足下アクション
+
+「足下」ボタン（または `4` キー）は `DungeonMap.dispatchSelfEvent()` を呼び出します。プレイヤーの現在マスに `around-0-self` イベントを持つオブジェクトがあればそのイベントを発火します。対応オブジェクトがない場合は `openDropList()`（アイテム設置フロー）を起動します。足下アクションはターン非消費です。
+
+### モーダルモードとキーブロック（`isModalMode`）
+
+`Game` シーンは `isModalMode` ゲッター（`currentSceneActions !== defaultSceneActions`）でモーダル状態を判定し、W/A/S/D/スペースキーの入力を一律ブロックします。以下の状態が該当します：
+
+- **攻撃方向選択**: 正面斜め方向に複数敵がいるとき「左/中央/右/キャンセル」を表示
+- **階段確認**: 階段マスを踏む（`around-0`）または足下アクション（`around-0-self`）で `enterStairMode` → 「進む/やめる」
+- **トラップ確認**: 既知のトラップで足下アクションを使用したとき `enterTrapConfirmMode` → 「起動/やめる」
+
+各モードの終了（「やめる」「キャンセル」含む）で `setSceneActions(defaultSceneActions)` を呼び、`isModalMode` が偽に戻ります。
+
+### `around-0-self` イベント
+
+`'around-0'`（プレイヤーが踏んだとき自動発火）とは別に、`'around-0-self'` を登録すると「足下アクション」による明示的な発火が可能です。`MapObjectStore.dispatchSelfEvent()` / `DungeonMap.dispatchSelfEvent()` がプレイヤー位置のオブジェクトを走査して呼び出します。階段とトラップはどちらのイベントも持ち、踏む・足下どちらからでも同じダイアログを起動します。
