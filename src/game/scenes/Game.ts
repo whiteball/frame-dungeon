@@ -44,6 +44,7 @@ export class Game extends Scene {
     private listMode: 'item' | 'equip' | 'drop' | null = null;
     private pendingPickup: { mapObject: MapObject, itemDef: ItemDefinition } | null = null;
     private inAttackDirectionMode: boolean = false;
+    private inStairMode: boolean = false;
     private defaultSceneActions: SceneAction[] = [];
     private currentSceneActions: SceneAction[] = [];
 
@@ -132,9 +133,7 @@ export class Game extends Scene {
             if (step.length >= 2) {
                 // 階段の追加
                 dungeon.addObject(step[0], step[1], MapMark.CIRCLE, newMapEvent('around-0', (dungeon: DungeonMap) => {
-                    this.floor++;
-                    EventBus.emit('message-log', `${this.floor}階に移動した`, dungeon.getTurnCount());
-                    EventBus.emit('go-to-next-floor', dungeon)
+                    this.enterStairMode(dungeon);
                     return true;
                 }), 0x00FF00)
             }
@@ -199,24 +198,29 @@ export class Game extends Scene {
 
         this.keys.keyW?.on('down', () => {
             if (this.inAttackDirectionMode) return;
+            if (this.inStairMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.executeAction(() => this.dungeon.goPlayer() > 0);
         })
         this.keys.keySpace?.on('down', () => {
             if (this.inAttackDirectionMode) return;
+            if (this.inStairMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.tryAttackOrShowDirections();
         })
         this.keys.keyA?.on('down', () => {
             if (this.inAttackDirectionMode) return;
+            if (this.inStairMode) return;
             this.executeAction(() => this.dungeon.turnLeftPlayer());
         })
         this.keys.keyS?.on('down', () => {
             if (this.inAttackDirectionMode) return;
+            if (this.inStairMode) return;
             this.executeAction(() => this.dungeon.turnBackPlayer());
         })
         this.keys.keyD?.on('down', () => {
             if (this.inAttackDirectionMode) return;
+            if (this.inStairMode) return;
             this.executeAction(() => this.dungeon.turnRightPlayer());
         })
         // this.keys.keyE?.on('down', () => {
@@ -722,6 +726,32 @@ export class Game extends Scene {
 
     private exitAttackDirectionMode(): void {
         this.inAttackDirectionMode = false;
+        this.setSceneActions(this.defaultSceneActions);
+    }
+
+    private enterStairMode(dungeon: DungeonMap): void {
+        EventBus.emit('message-log', `${this.floor + 1}階への階段だ`, dungeon.getTurnCount());
+        const actions: SceneAction[] = [
+            {
+                label: '進む',
+                onClick: () => {
+                    this.exitStairMode();
+                    this.floor++;
+                    EventBus.emit('message-log', `${this.floor}階に移動した`, dungeon.getTurnCount());
+                    EventBus.emit('go-to-next-floor', dungeon);
+                },
+            },
+            {
+                label: 'やめる',
+                onClick: () => this.exitStairMode(),
+            },
+        ];
+        this.inStairMode = true;
+        this.setSceneActions(actions);
+    }
+
+    private exitStairMode(): void {
+        this.inStairMode = false;
         this.setSceneActions(this.defaultSceneActions);
     }
 
