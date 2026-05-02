@@ -4,7 +4,7 @@ import { StatsLoader } from './StatsLoader';
 import { EffectsLoader } from './EffectsLoader';
 import { EventBus } from '../game/EventBus';
 import type { DungeonMap } from './MapGenerator';
-import { MapDirection } from './map/MapDirection';
+import { getDirectionOffset, MapDirection } from './map/MapDirection';
 import { getRandomInt } from './util/random';
 
 /**
@@ -73,6 +73,11 @@ export class Enemy extends MapObject {
         }
 
         // default: パターン移動
+        if (this.target !== null && this.x === this.target.x && this.y === this.target.y) {
+            // すでに目標地点にいるなら、新たな目標を探す
+            this.target = null;
+        }
+
         if (dungeon.isInSameZone(this.x, this.y, px, py)) {
             this.target = { x: px, y: py };
         }
@@ -91,20 +96,28 @@ export class Enemy extends MapObject {
             return;
         }
 
+        let path: MapDirection[] | undefined = [];
+        const blocked: [number, number][] = [];
+        do {
+            // 経路がブロックされていたなら、別の経路を探す
+            if (path && path.length > 0) {
+                const [dx, dy] = getDirectionOffset(path[0]);
+                blocked.push([this.x + dx, this.y + dy]);
+            }
+            
+            path = dungeon.findPath(this.x, this.y, this.target.x, this.target.y, { blockedPositions: blocked });
+            if (path === undefined || path.length === 0) {
+                this.target = null;
+                const dir = getRandomInt(-1, 4);
+                if (dir !== -1) dungeon.tryMoveEnemy(this, dir as MapDirection);
+                return;
+            }
+        } while (!dungeon.tryMoveEnemy(this, path[0]));
+
+        // 目標地点に到達したなら、それを解除する
         if (this.x === this.target.x && this.y === this.target.y) {
             this.target = null;
-            return;
         }
-
-        const path = dungeon.findPath(this.x, this.y, this.target.x, this.target.y);
-        if (path === undefined || path.length === 0) {
-            this.target = null;
-            const dir = getRandomInt(-1, 4);
-            if (dir !== -1) dungeon.tryMoveEnemy(this, dir as MapDirection);
-            return;
-        }
-
-        dungeon.tryMoveEnemy(this, path[0]);
     }
 
     /**
