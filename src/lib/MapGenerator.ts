@@ -10,7 +10,7 @@ import { MapBuilder, type RoomWithCorridors } from './map/MapBuilder';
 import { MapObjectStore } from './map/MapObjectStore';
 import * as PlayerActions from './map/PlayerActions';
 import { dumpDungeon } from './map/MapDebug';
-import { findPath, findContainingZone, isInZone, type FindPathOptions } from './map/Pathfinding';
+import { findPath, findContainingZone, isInZone, hasLineOfSight, type FindPathOptions } from './map/Pathfinding';
 
 export type RandomPosConfig = {
   withoutCorridor?: boolean,
@@ -746,6 +746,10 @@ export class DungeonMap {
     const zone = findContainingZone(x1, y1, this._roomsWithCorridors);
     if (zone === null) return false;
     return isInZone(x2, y2, zone);
+  }
+
+  public hasLineOfSight(x1: integer, y1: integer, x2: integer, y2: integer): boolean {
+    return hasLineOfSight(this, x1, y1, x2, y2);
   }
 
   /**

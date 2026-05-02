@@ -228,3 +228,50 @@ export function findPath(
 
   return undefined;
 }
+
+export function hasLineOfSight(
+  dungeon: DungeonMap,
+  x1: integer,
+  y1: integer,
+  x2: integer,
+  y2: integer,
+): boolean {
+  if (x1 === x2 && y1 === y2) return true;
+
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const nx = Math.abs(dx);
+  const ny = Math.abs(dy);
+  const signX = dx > 0 ? 1 : -1;
+  const signY = dy > 0 ? 1 : -1;
+  const dirX: MapDirection = dx > 0 ? MapDirection.EAST : MapDirection.WEST;
+  const dirY: MapDirection = dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH;
+
+  const isBoundaryBlocked = (x: integer, y: integer, dir: MapDirection): boolean => {
+    const val = dungeon.getAt(x, y);
+    return val === -1 || (val & (1 << dir)) !== 0 || (val & (16 << dir)) !== 0;
+  };
+
+  let cx = x1, cy = y1, ix = 0, iy = 0;
+  while (ix < nx || iy < ny) {
+    if ((2 * ix + 1) * ny < (2 * iy + 1) * nx) {
+      if (isBoundaryBlocked(cx, cy, dirX)) return false;
+      cx += signX;
+      ix++;
+    } else if ((2 * iy + 1) * nx < (2 * ix + 1) * ny) {
+      if (isBoundaryBlocked(cx, cy, dirY)) return false;
+      cy += signY;
+      iy++;
+    } else {
+      // 斜め（光線がコーナーを正通過）: 両方のL字経路がどちらも遮へいされる場合のみブロック
+      const path1Blocked = isBoundaryBlocked(cx, cy, dirX) || isBoundaryBlocked(cx + signX, cy, dirY);
+      const path2Blocked = isBoundaryBlocked(cx, cy, dirY) || isBoundaryBlocked(cx, cy + signY, dirX);
+      if (path1Blocked && path2Blocked) return false;
+      cx += signX;
+      cy += signY;
+      ix++;
+      iy++;
+    }
+  }
+  return true;
+}

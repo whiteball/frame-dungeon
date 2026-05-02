@@ -50,7 +50,7 @@ export class Enemy extends MapObject {
      * 敵の自律行動を実行する。walk フィールドに応じて移動パターンを切り替える。
      * 'none': 移動せず、攻撃可能なら攻撃のみ
      * 'random': ランダムウォーク（レガシー動作）
-     * 'default'（未指定含む）: 扉を目標に巡回し、同ゾーンのプレイヤーを追跡する
+     * 'default'（未指定含む）: 扉を目標に巡回し、視線（壁・扉で遮られない）が通るプレイヤーを追跡する
      */
     public act(dungeon: DungeonMap): void {
         if (!this.isAlive()) return;
@@ -59,6 +59,7 @@ export class Enemy extends MapObject {
         const { x: px, y: py } = dungeon.getPlayerPos();
 
         if (dungeon.canAttack(this.x, this.y, px, py)) {
+            this.target = { x: px, y: py };
             this.attackPlayer(dungeon);
             return;
         }
@@ -78,9 +79,9 @@ export class Enemy extends MapObject {
             this.target = null;
         }
 
-        if (dungeon.isInSameZone(this.x, this.y, px, py)) {
+        if (dungeon.hasLineOfSight(this.x, this.y, px, py)) {
             this.target = { x: px, y: py };
-        } else if (this.target !== null && dungeon.isInSameZone(this.x, this.y, this.target.x, this.target.y)) {
+        } else if (this.target !== null && dungeon.hasLineOfSight(this.x, this.y, this.target.x, this.target.y)) {
             // 目標地点が部屋内で、プレイヤーが部屋内にいない場合
             const outsides = [];
             const val = dungeon.getAt(this.target.x, this.target.y);
