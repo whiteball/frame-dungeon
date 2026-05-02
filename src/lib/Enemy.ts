@@ -80,6 +80,22 @@ export class Enemy extends MapObject {
 
         if (dungeon.isInSameZone(this.x, this.y, px, py)) {
             this.target = { x: px, y: py };
+        } else if (this.target !== null && dungeon.isInSameZone(this.x, this.y, this.target.x, this.target.y)) {
+            // 目標地点が部屋内で、プレイヤーが部屋内にいない場合
+            const outsides = [];
+            const val = dungeon.getAt(this.target.x, this.target.y);
+            for (let d = 0; d < 4; d++) {
+                if (val & (16 << d)) {
+                    // その方向がドアならば候補に追加
+                    const [dx, dy] = getDirectionOffset(d as MapDirection);
+                    outsides.push([this.target.x + dx, this.target.y + dy]);
+                }
+            }
+            if (outsides.length > 0) {
+                // 目標地点の隣の部屋の外を、新たな目標地点にする
+                const newTarget = outsides[getRandomInt(0, outsides.length)];
+                this.target = { x: newTarget[0], y: newTarget[1] };
+            }
         }
 
         if (this.target === null) {
