@@ -116,7 +116,7 @@ EventBus.on('event-name', callback);
 関連する `DungeonMap` の公開メソッド：
 
 - `hasLineOfSight(x1, y1, x2, y2)`: 2点間に壁・扉がなく視線が通るかを直線走査（DDA）で判定
-- `getDoorTargetsInZone(enemyX, enemyY)`: 敵の現在ゾーン内の全扉から1マス外側の座標リストを返す
+- `getDoorTargetsInZone(enemyX, enemyY)`: 敵位置から壁・扉のない境界を BFS で展開し、視覚的に繋がった開放空間内の全扉から1マス外側の座標リストを返す
 
 ## 戦闘システム
 

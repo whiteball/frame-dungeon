@@ -753,39 +753,47 @@ export class DungeonMap {
   }
 
   /**
-   * 敵の現在ゾーン内の扉から1マス外側の座標リストを返す。
+   * 壁・扉のない境界を BFS で展開し、視覚的に繋がった開放空間内の扉から
+   * 1マス外側の座標リストを返す。
    * (enemyX, enemyY) のMooreネイバーフッド（チェビシェフ距離1）に含まれる座標は除外する。
    */
   public getDoorTargetsInZone(enemyX: integer, enemyY: integer): [integer, integer][] {
-    const zone = findContainingZone(enemyX, enemyY, this._roomsWithCorridors);
-    if (zone === null) return [];
-
     const targets: [integer, integer][] = [];
     const seen = new Set<integer>();
+    const visited = new Set<integer>();
 
-    const checkRect = (rect: Rect): void => {
-      for (let x = rect.x1; x <= rect.x2; x++) {
-        for (let y = rect.y1; y <= rect.y2; y++) {
-          const val = this.getAt(x, y);
-          for (let d = 0; d < 4; d++) {
-            if (val & (16 << d)) {
-              const [dx, dy] = getDirectionOffset(d as MapDirection);
-              const tx = x + dx;
-              const ty = y + dy;
-              if (Math.abs(tx - enemyX) <= 1 && Math.abs(ty - enemyY) <= 1) continue;
-              const key = ty * this._width + tx;
-              if (!seen.has(key)) {
-                seen.add(key);
-                targets.push([tx, ty]);
-              }
-            }
+    const queue: [integer, integer][] = [[enemyX, enemyY]];
+    visited.add(enemyY * this._width + enemyX);
+
+    while (queue.length > 0) {
+      const [cx, cy] = queue.shift()!;
+      const val = this.getAt(cx, cy);
+      if (val === -1) continue;
+
+      for (let d = 0; d < 4; d++) {
+        if (val & (16 << d)) {
+          const [dx, dy] = getDirectionOffset(d as MapDirection);
+          const tx = cx + dx;
+          const ty = cy + dy;
+          if (Math.abs(tx - enemyX) <= 1 && Math.abs(ty - enemyY) <= 1) continue;
+          const key = ty * this._width + tx;
+          if (!seen.has(key)) {
+            seen.add(key);
+            targets.push([tx, ty]);
           }
+        } else if (!(val & (1 << d))) {
+          const [dx, dy] = getDirectionOffset(d as MapDirection);
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= this._width || ny >= this._height) continue;
+          const nKey = ny * this._width + nx;
+          if (visited.has(nKey)) continue;
+          visited.add(nKey);
+          queue.push([nx, ny]);
         }
       }
-    };
+    }
 
-    checkRect(zone.room);
-    for (const corridor of zone.corridors) checkRect(corridor);
     return targets;
   }
 
