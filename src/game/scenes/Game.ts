@@ -43,11 +43,11 @@ export class Game extends Scene {
 
     private listMode: 'item' | 'equip' | 'drop' | null = null;
     private pendingPickup: { mapObject: MapObject, itemDef: ItemDefinition } | null = null;
-    private inAttackDirectionMode: boolean = false;
-    private inStairMode: boolean = false;
-    private inTrapConfirmMode: boolean = false;
     private defaultSceneActions: SceneAction[] = [];
     private currentSceneActions: SceneAction[] = [];
+    private get isModalMode(): boolean {
+        return this.currentSceneActions !== this.defaultSceneActions;
+    }
 
     constructor() {
         super('Game');
@@ -203,35 +203,25 @@ export class Game extends Scene {
         };
 
         this.keys.keyW?.on('down', () => {
-            if (this.inAttackDirectionMode) return;
-            if (this.inStairMode) return;
-            if (this.inTrapConfirmMode) return;
+            if (this.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.executeAction(() => this.dungeon.goPlayer() > 0);
         })
         this.keys.keySpace?.on('down', () => {
-            if (this.inAttackDirectionMode) return;
-            if (this.inStairMode) return;
-            if (this.inTrapConfirmMode) return;
+            if (this.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.tryAttackOrShowDirections();
         })
         this.keys.keyA?.on('down', () => {
-            if (this.inAttackDirectionMode) return;
-            if (this.inStairMode) return;
-            if (this.inTrapConfirmMode) return;
+            if (this.isModalMode) return;
             this.executeAction(() => this.dungeon.turnLeftPlayer());
         })
         this.keys.keyS?.on('down', () => {
-            if (this.inAttackDirectionMode) return;
-            if (this.inStairMode) return;
-            if (this.inTrapConfirmMode) return;
+            if (this.isModalMode) return;
             this.executeAction(() => this.dungeon.turnBackPlayer());
         })
         this.keys.keyD?.on('down', () => {
-            if (this.inAttackDirectionMode) return;
-            if (this.inStairMode) return;
-            if (this.inTrapConfirmMode) return;
+            if (this.isModalMode) return;
             this.executeAction(() => this.dungeon.turnRightPlayer());
         })
         // this.keys.keyE?.on('down', () => {
@@ -731,7 +721,6 @@ export class Game extends Scene {
             },
         ];
 
-        this.inAttackDirectionMode = true;
         this.setSceneActions(actions);
     }
 
@@ -741,7 +730,6 @@ export class Game extends Scene {
     }
 
     private exitAttackDirectionMode(): void {
-        this.inAttackDirectionMode = false;
         this.setSceneActions(this.defaultSceneActions);
     }
 
@@ -762,12 +750,10 @@ export class Game extends Scene {
                 onClick: () => this.exitStairMode(),
             },
         ];
-        this.inStairMode = true;
         this.setSceneActions(actions);
     }
 
     private exitStairMode(): void {
-        this.inStairMode = false;
         this.setSceneActions(this.defaultSceneActions);
     }
 
@@ -794,12 +780,10 @@ export class Game extends Scene {
                 onClick: () => this.exitTrapConfirmMode(),
             },
         ];
-        this.inTrapConfirmMode = true;
         this.setSceneActions(actions);
     }
 
     private exitTrapConfirmMode(): void {
-        this.inTrapConfirmMode = false;
         this.setSceneActions(this.defaultSceneActions);
     }
 
