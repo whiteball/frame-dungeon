@@ -71,23 +71,35 @@ export class EnemyLoader {
     }
 
     async loadEnemies(): Promise<void> {
+        const response = await fetch('/data/enemies.yml');
+        if (!response.ok) {
+            console.log(`enemies.yml が見つかりません (HTTP ${response.status})。敵なしで続行します。`);
+            return;
+        }
+
+        const yamlText = await response.text();
+        if (!yamlText.trim()) {
+            console.log('enemies.yml が空です。敵なしで続行します。');
+            return;
+        }
+
         try {
-            const response = await fetch('/data/enemies.yml');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const parsed = yaml.load(yamlText) as any;
+
+            if (parsed === null || parsed === undefined) {
+                console.log('enemies.yml にデータが定義されていません。敵なしで続行します。');
+                return;
             }
 
-            const yamlText = await response.text();
-            if (!yamlText.trim()) {
-                throw new Error('enemies.yml is empty');
+            if (!Array.isArray(parsed)) {
+                throw new Error('enemies.yml does not contain a valid array');
             }
 
-            const parsed = yaml.load(yamlText) as EnemyDefinition[];
-            if (!Array.isArray(parsed) || parsed.length === 0) {
-                throw new Error('enemies.yml does not contain valid enemy definitions');
+            if (parsed.length === 0) {
+                console.log('enemies.yml の敵定義が空の配列です。敵なしで続行します。');
+                return;
             }
 
-            // 敵定義の検証
             for (const enemy of parsed) {
                 this.validateEnemyDefinition(enemy);
             }

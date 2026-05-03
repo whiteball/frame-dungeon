@@ -41,20 +41,33 @@ export class TrapsLoader {
     }
 
     async loadTraps(): Promise<void> {
+        const response = await fetch('/data/traps.yml');
+        if (!response.ok) {
+            console.log(`traps.yml が見つかりません (HTTP ${response.status})。トラップなしで続行します。`);
+            return;
+        }
+
+        const yamlText = await response.text();
+        if (!yamlText.trim()) {
+            console.log('traps.yml が空です。トラップなしで続行します。');
+            return;
+        }
+
         try {
-            const response = await fetch('/data/traps.yml');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const parsed = yaml.load(yamlText) as any;
+
+            if (parsed === null || parsed === undefined) {
+                console.log('traps.yml にデータが定義されていません。トラップなしで続行します。');
+                return;
             }
 
-            const yamlText = await response.text();
-            if (!yamlText.trim()) {
-                throw new Error('traps.yml is empty');
+            if (!Array.isArray(parsed)) {
+                throw new Error('traps.yml does not contain a valid array');
             }
 
-            const parsed = yaml.load(yamlText) as TrapDefinition[];
-            if (!Array.isArray(parsed) || parsed.length === 0) {
-                throw new Error('traps.yml does not contain valid trap definitions');
+            if (parsed.length === 0) {
+                console.log('traps.yml のトラップ定義が空の配列です。トラップなしで続行します。');
+                return;
             }
 
             for (const trap of parsed) {

@@ -75,20 +75,33 @@ export class EffectsLoader {
     }
 
     async loadEffects(): Promise<void> {
+        const response = await fetch('/data/effects.yml');
+        if (!response.ok) {
+            console.log(`effects.yml が見つかりません (HTTP ${response.status})。状態異常なしで続行します。`);
+            return;
+        }
+
+        const yamlText = await response.text();
+        if (!yamlText.trim()) {
+            console.log('effects.yml が空です。状態異常なしで続行します。');
+            return;
+        }
+
         try {
-            const response = await fetch('/data/effects.yml');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const parsed = yaml.load(yamlText) as any;
+
+            if (parsed === null || parsed === undefined) {
+                console.log('effects.yml にデータが定義されていません。状態異常なしで続行します。');
+                return;
             }
 
-            const yamlText = await response.text();
-            if (!yamlText.trim()) {
-                throw new Error('effects.yml is empty');
-            }
-
-            const parsed = yaml.load(yamlText) as EffectDefinition[];
             if (!Array.isArray(parsed)) {
                 throw new Error('effects.yml does not contain a valid array');
+            }
+
+            if (parsed.length === 0) {
+                console.log('effects.yml の状態異常定義が空の配列です。状態異常なしで続行します。');
+                return;
             }
 
             this.effects = parsed;

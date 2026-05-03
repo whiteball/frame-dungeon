@@ -71,30 +71,42 @@ export class ItemsLoader {
     }
 
     async loadItems(): Promise<void> {
+        const response = await fetch('/data/items.yml');
+        if (!response.ok) {
+            console.log(`items.yml が見つかりません (HTTP ${response.status})。アイテムなしで続行します。`);
+            return;
+        }
+
+        const yamlText = await response.text();
+        if (!yamlText.trim()) {
+            console.log('items.yml が空です。アイテムなしで続行します。');
+            return;
+        }
+
         try {
-            const response = await fetch('/data/items.yml');
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const parsed = yaml.load(yamlText) as any;
+
+            if (parsed === null || parsed === undefined) {
+                console.log('items.yml にデータが定義されていません。アイテムなしで続行します。');
+                return;
             }
-            
-            const yamlText = await response.text();
-            if (!yamlText.trim()) {
-                throw new Error('items.yml is empty');
+
+            if (!Array.isArray(parsed)) {
+                throw new Error('items.yml does not contain a valid array');
             }
-            
-            const parsed = yaml.load(yamlText) as ItemDefinition[];
-            if (!Array.isArray(parsed) || parsed.length === 0) {
-                throw new Error('items.yml does not contain valid item definitions');
+
+            if (parsed.length === 0) {
+                console.log('items.yml のアイテム定義が空の配列です。アイテムなしで続行します。');
+                return;
             }
-            
-            // アイテム定義の検証
+
             for (const item of parsed) {
                 this.validateItemDefinition(item);
             }
-            
+
             this.items = parsed;
             this.itemsByName.clear();
-            
+
             for (const item of this.items) {
                 this.itemsByName.set(item.name, item);
             }
