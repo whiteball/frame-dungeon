@@ -17,6 +17,8 @@ import { EffectsLoader } from '../../lib/EffectsLoader';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
+import { BaseLoader } from '../../lib/BaseLoader';
+import type { ResolvedFloorConfig } from '../../lib/BaseLoader';
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 
@@ -115,6 +117,7 @@ export class Game extends Scene {
         EventBus.removeAllListeners('go-to-next-floor');
         EventBus.removeAllListeners('update-view');
         EventBus.removeAllListeners('game-over');
+        EventBus.removeAllListeners('game-clear');
         EventBus.removeAllListeners('use-item');
         EventBus.removeAllListeners('equip-item');
         EventBus.removeAllListeners('close-item-list-request');
@@ -124,6 +127,9 @@ export class Game extends Scene {
         const dun = new DungeonMap(15, 15);
 
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
+            // フロア設定を取得してマップをリサイズ
+            const floorConfig = BaseLoader.getInstance().getFloorConfig(this.floor);
+            dungeon.resize(floorConfig.width, floorConfig.height);
             dungeon.build();
             // dungeon.dump();
 
@@ -144,11 +150,13 @@ export class Game extends Scene {
                 dungeon.addObject(step[0], step[1], MapMark.CIRCLE, stairEvents, 0x00FF00)
             }
 
-            const traps = dungeon.getRandomPosList(10, false, { withoutPlayer: true, excludePositionList: [step] });
-            const trapDefs = TrapsLoader.getInstance().getTraps();
+            // トラップ配置（base.yml の設定に従う）
+            const trapCount = Phaser.Math.Between(floorConfig.trapMin, floorConfig.trapMax);
+            const traps = dungeon.getRandomPosList(trapCount, false, { withoutPlayer: true, excludePositionList: [step] });
             for (const trapPos of traps) {
-                if (trapDefs.length === 0) break;
-                const trapDef = trapDefs[Phaser.Math.Between(0, trapDefs.length - 1)];
+                if (floorConfig.trapPool.length === 0) break;
+                const trapName = floorConfig.trapPool[Phaser.Math.Between(0, floorConfig.trapPool.length - 1)];
+                const trapDef = TrapsLoader.getInstance().getTrap(trapName)!;
                 this.addTrapMapObject(trapPos[0], trapPos[1], trapDef);
             }
 
@@ -174,7 +182,7 @@ export class Game extends Scene {
             }
 
             // 敵の配置
-            this.spawnEnemies(dungeon);
+            this.spawnEnemies(dungeon, floorConfig);
 
             EventBus.emit('update-view')
         })
@@ -245,6 +253,11 @@ export class Game extends Scene {
         EventBus.on('game-over', () => {
             this.closeList();
             this.scene.start('GameOver');
+        })
+
+        EventBus.on('game-clear', () => {
+            this.closeList();
+            this.scene.start('GameClear');
         })
 
         EventBus.on('use-item', (payload: { instanceId: string }) => {
@@ -638,26 +651,38 @@ export class Game extends Scene {
         console.log('=== Test Complete ===');
     }
 
-    private spawnEnemies(dungeon: DungeonMap): void {
-        // フロアに応じた敵の数を決定
-        const enemyCount = Math.min(3 + this.floor, 10);
+    private spawnEnemies(dungeon: DungeonMap, config: ResolvedFloorConfig): void {
+        const excludePositions: integer[][] = [];
 
-        // 敵を配置する位置のリストを取得
-        const enemyPositions = dungeon.getRandomPosList(
-            enemyCount,
-            false,
-            { withoutCorridor: false, withoutPlayer: true }
-        );
-
-        // 各位置に敵を配置
-        for (const pos of enemyPositions) {
-            const enemy = Player.createRandomEnemy(this.floor, pos[0], pos[1]);
-            if (enemy) {
-                dungeon.addEnemy(enemy);
+        // 固定敵を先に配置
+        for (const { name, count } of config.fixedEnemies) {
+            const positions = dungeon.getRandomPosList(count, false, {
+                withoutPlayer: true,
+                excludePositionList: excludePositions,
+            });
+            for (const pos of positions) {
+                const enemy = Player.createEnemyByName(name, pos[0], pos[1]);
+                if (enemy) dungeon.addEnemy(enemy);
+                excludePositions.push(pos);
             }
         }
 
-        console.log(`Spawned ${enemyPositions.length} enemies on floor ${this.floor}`);
+        // 残りスロットをランダムプールから配置
+        const fixedTotal = config.fixedEnemies.reduce((sum, e) => sum + e.count, 0);
+        const randomCount = Math.max(0, config.enemyCount - fixedTotal);
+        if (randomCount > 0 && config.randomEnemyPool.length > 0) {
+            const positions = dungeon.getRandomPosList(randomCount, false, {
+                withoutPlayer: true,
+                excludePositionList: excludePositions,
+            });
+            for (const pos of positions) {
+                const name = config.randomEnemyPool[Math.floor(Math.random() * config.randomEnemyPool.length)];
+                const enemy = Player.createEnemyByName(name, pos[0], pos[1]);
+                if (enemy) dungeon.addEnemy(enemy);
+            }
+        }
+
+        console.log(`Spawned enemies on floor ${this.floor} (fixed: ${fixedTotal}, random: ${randomCount})`);
     }
 
     private setSceneActions(actions: SceneAction[]): void {
@@ -734,6 +759,12 @@ export class Game extends Scene {
     }
 
     private enterStairMode(dungeon: DungeonMap): void {
+        const goalFloor = BaseLoader.getInstance().getGoalFloor();
+        if (this.floor >= goalFloor) {
+            EventBus.emit('message-log', `${this.floor}階の階段を登り切った！クリア！`, dungeon.getTurnCount());
+            EventBus.emit('game-clear');
+            return;
+        }
         EventBus.emit('message-log', `${this.floor + 1}階への階段だ`, dungeon.getTurnCount());
         const actions: SceneAction[] = [
             {
