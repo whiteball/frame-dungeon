@@ -1,5 +1,5 @@
-import yaml from 'js-yaml';
 import { Parser, type Expression } from 'expr-eval-fork';
+import { YamlDefinitionStore } from './YamlDefinitionStore';
 
 /**
  * 効果（状態異常/強化）の単一ターゲット指定
@@ -60,8 +60,7 @@ interface CompiledEffect {
 
 export class EffectsLoader {
     private static instance: EffectsLoader;
-    private effects: EffectDefinition[] = [];
-    private effectsByName: Map<string, EffectDefinition> = new Map();
+    private store = new YamlDefinitionStore<EffectDefinition>();
     private compiledByName: Map<string, CompiledEffect> = new Map();
     private parser: Parser = new Parser();
 
@@ -75,50 +74,10 @@ export class EffectsLoader {
     }
 
     async loadEffects(): Promise<void> {
-        const response = await fetch('/data/effects.yml');
-        if (!response.ok) {
-            console.log(`effects.yml が見つかりません (HTTP ${response.status})。状態異常なしで続行します。`);
-            return;
-        }
-
-        const yamlText = await response.text();
-        if (!yamlText.trim()) {
-            console.log('effects.yml が空です。状態異常なしで続行します。');
-            return;
-        }
-
-        try {
-            const parsed = yaml.load(yamlText) as any;
-
-            if (parsed === null || parsed === undefined) {
-                console.log('effects.yml にデータが定義されていません。状態異常なしで続行します。');
-                return;
-            }
-
-            if (!Array.isArray(parsed)) {
-                throw new Error('effects.yml does not contain a valid array');
-            }
-
-            if (parsed.length === 0) {
-                console.log('effects.yml の状態異常定義が空の配列です。状態異常なしで続行します。');
-                return;
-            }
-
-            this.effects = parsed;
-            this.effectsByName.clear();
-            this.compiledByName.clear();
-
-            for (const effect of this.effects) {
-                this.effectsByName.set(effect.name, effect);
-                this.compiledByName.set(effect.name, this.compile(effect));
-            }
-        } catch (error) {
-            console.error('Failed to load effects.yml:', error);
-            alert(`ゲームデータの読み込みに失敗しました。\n\n` +
-                `public/data/effects.yml ファイルが正しく配置されており、\n` +
-                `内容が正しい形式であることを確認してください。\n\n` +
-                `エラー詳細: ${error instanceof Error ? error.message : String(error)}`);
-            throw error;
+        this.compiledByName.clear();
+        await this.store.load('/data/effects.yml', '状態異常', () => {});
+        for (const effect of this.store.getAll()) {
+            this.compiledByName.set(effect.name, this.compile(effect));
         }
     }
 
@@ -168,11 +127,11 @@ export class EffectsLoader {
     }
 
     getEffects(): EffectDefinition[] {
-        return [...this.effects];
+        return this.store.getAll();
     }
 
     getEffect(name: string): EffectDefinition | undefined {
-        return this.effectsByName.get(name);
+        return this.store.getByName(name);
     }
 
     getCompiledEffect(name: string): CompiledEffect | undefined {
@@ -180,7 +139,7 @@ export class EffectsLoader {
     }
 
     hasEffect(name: string): boolean {
-        return this.effectsByName.has(name);
+        return this.store.has(name);
     }
 }
 

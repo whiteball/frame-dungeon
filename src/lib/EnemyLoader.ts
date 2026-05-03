@@ -1,5 +1,5 @@
-import yaml from 'js-yaml';
 import { StatsLoader } from './StatsLoader';
+import { YamlDefinitionStore } from './YamlDefinitionStore';
 
 /**
  * 攻撃時に確率で状態異常を付与する追加効果
@@ -58,8 +58,7 @@ export interface EnemyDefinition {
 
 export class EnemyLoader {
     private static instance: EnemyLoader;
-    private enemies: EnemyDefinition[] = [];
-    private enemiesByName: Map<string, EnemyDefinition> = new Map();
+    private store = new YamlDefinitionStore<EnemyDefinition>();
 
     private constructor() {}
 
@@ -71,53 +70,7 @@ export class EnemyLoader {
     }
 
     async loadEnemies(): Promise<void> {
-        const response = await fetch('/data/enemies.yml');
-        if (!response.ok) {
-            console.log(`enemies.yml が見つかりません (HTTP ${response.status})。敵なしで続行します。`);
-            return;
-        }
-
-        const yamlText = await response.text();
-        if (!yamlText.trim()) {
-            console.log('enemies.yml が空です。敵なしで続行します。');
-            return;
-        }
-
-        try {
-            const parsed = yaml.load(yamlText) as any;
-
-            if (parsed === null || parsed === undefined) {
-                console.log('enemies.yml にデータが定義されていません。敵なしで続行します。');
-                return;
-            }
-
-            if (!Array.isArray(parsed)) {
-                throw new Error('enemies.yml does not contain a valid array');
-            }
-
-            if (parsed.length === 0) {
-                console.log('enemies.yml の敵定義が空の配列です。敵なしで続行します。');
-                return;
-            }
-
-            for (const enemy of parsed) {
-                this.validateEnemyDefinition(enemy);
-            }
-
-            this.enemies = parsed;
-            this.enemiesByName.clear();
-
-            for (const enemy of this.enemies) {
-                this.enemiesByName.set(enemy.name, enemy);
-            }
-        } catch (error) {
-            console.error('Failed to load enemies.yml:', error);
-            alert(`敵データの読み込みに失敗しました。\n\n` +
-                  `public/data/enemies.yml ファイルが正しく配置されており、\n` +
-                  `内容が正しい形式であることを確認してください。\n\n` +
-                  `エラー詳細: ${error instanceof Error ? error.message : String(error)}`);
-            throw error;
-        }
+        await this.store.load('/data/enemies.yml', '敵', enemy => this.validateEnemyDefinition(enemy));
     }
 
     private validateEnemyDefinition(enemy: any): void {
@@ -180,15 +133,15 @@ export class EnemyLoader {
     }
 
     getEnemies(): EnemyDefinition[] {
-        return [...this.enemies];
+        return this.store.getAll();
     }
 
     getEnemy(name: string): EnemyDefinition | undefined {
-        return this.enemiesByName.get(name);
+        return this.store.getByName(name);
     }
 
     getEnemyNames(): string[] {
-        return this.enemies.map(enemy => enemy.name);
+        return this.store.getNames();
     }
 
     /**
@@ -211,10 +164,10 @@ export class EnemyLoader {
         } else if (floor <= 9) {
             maxLife = 100;
         } else {
-            return [...this.enemies]; // 全ての敵
+            return this.store.getAll();
         }
 
-        return this.enemies.filter(enemy => {
+        return this.store.getAll().filter(enemy => {
             const life = enemy['life'];
             return typeof life === 'number' && life <= maxLife;
         });

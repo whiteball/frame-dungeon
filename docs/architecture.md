@@ -73,6 +73,41 @@ EventBus.on('event-name', callback);
 
 各データファイルは対応するLoaderクラス（`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`）によって読み込まれます。
 
+### Loader クラスと YamlDefinitionStore
+
+各Loaderはシングルトンパターンを持つクラスで、固有のバリデーションとドメイン固有ゲッターのみを実装します。fetch・YAMLパース・格納・基本ゲッターの共通処理は `YamlDefinitionStore<T>`（`src/lib/YamlDefinitionStore.ts`）に委譲されます（コンポジション）。
+
+```text
+StatsLoader ──────┐
+ItemsLoader ──────┤
+EnemyLoader ──────┼─── YamlDefinitionStore<T>（fetch / parse / store / getAll / getByName）
+EffectsLoader ────┤
+TrapsLoader ──────┘
+```
+
+`YamlDefinitionStore<T extends { name: string }>` が提供するメソッド：
+
+| メソッド | 概要 |
+| --- | --- |
+| `load(filePath, dataLabel, validate, options?)` | fetch → YAML パース → バリデーション → 格納。エラー時は `alert` + throw |
+| `getAll()` | 全定義の配列コピーを返す |
+| `getByName(name)` | 名前で1件取得（Map ルックアップ） |
+| `getNames()` | 全名前の配列を返す |
+| `has(name)` | 名前の存在確認（`EffectsLoader.hasEffect()` が使用） |
+
+**ファイル不存在・空ファイルの扱い:**
+
+`stats.yml` 以外のデータファイルは存在しなくても起動可能です（敵なし・アイテムなし等のカスタムダンジョン）。`load()` の `options.required` で挙動を切り替えます：
+
+- `required: false`（デフォルト）: 不存在・空・空配列のとき `console.log` して空状態で続行
+- `required: true`（`StatsLoader` のみ使用）: 不存在・空・空配列でも `alert` + throw
+
+不正な定義（必須キー欠落など）は `required` の値によらず常に `alert` + throw となります。
+
+**EffectsLoader の特殊構成:**
+
+`EffectsLoader` は `YamlDefinitionStore<EffectDefinition>` に加え、`compiledByName: Map<string, CompiledEffect>` を独自に保持します。`loadEffects()` では `store.load()` 完了後に全エントリの数式を `expr-eval-fork` でコンパイルし、`getCompiledEffect(name)` で高速参照できるようキャッシュします。
+
 ## マップオブジェクトシステム
 
 マップ上に配置されるオブジェクト（階段、トラップ、敵など）は`MapObject`基底クラスで統一管理されます：

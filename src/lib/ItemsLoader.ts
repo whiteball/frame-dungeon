@@ -1,4 +1,4 @@
-import yaml from 'js-yaml';
+import { YamlDefinitionStore } from './YamlDefinitionStore';
 
 export type ItemType = 'weapon' | 'main_armor' | 'sub_armor' | 'consumable';
 
@@ -58,8 +58,7 @@ export interface ItemDefinition {
 
 export class ItemsLoader {
     private static instance: ItemsLoader;
-    private items: ItemDefinition[] = [];
-    private itemsByName: Map<string, ItemDefinition> = new Map();
+    private store = new YamlDefinitionStore<ItemDefinition>();
 
     private constructor() {}
 
@@ -71,53 +70,7 @@ export class ItemsLoader {
     }
 
     async loadItems(): Promise<void> {
-        const response = await fetch('/data/items.yml');
-        if (!response.ok) {
-            console.log(`items.yml が見つかりません (HTTP ${response.status})。アイテムなしで続行します。`);
-            return;
-        }
-
-        const yamlText = await response.text();
-        if (!yamlText.trim()) {
-            console.log('items.yml が空です。アイテムなしで続行します。');
-            return;
-        }
-
-        try {
-            const parsed = yaml.load(yamlText) as any;
-
-            if (parsed === null || parsed === undefined) {
-                console.log('items.yml にデータが定義されていません。アイテムなしで続行します。');
-                return;
-            }
-
-            if (!Array.isArray(parsed)) {
-                throw new Error('items.yml does not contain a valid array');
-            }
-
-            if (parsed.length === 0) {
-                console.log('items.yml のアイテム定義が空の配列です。アイテムなしで続行します。');
-                return;
-            }
-
-            for (const item of parsed) {
-                this.validateItemDefinition(item);
-            }
-
-            this.items = parsed;
-            this.itemsByName.clear();
-
-            for (const item of this.items) {
-                this.itemsByName.set(item.name, item);
-            }
-        } catch (error) {
-            console.error('Failed to load items.yml:', error);
-            alert(`アイテムデータの読み込みに失敗しました。\n\n` +
-                  `public/data/items.yml ファイルが正しく配置されており、\n` +
-                  `内容が正しい形式であることを確認してください。\n\n` +
-                  `エラー詳細: ${error instanceof Error ? error.message : String(error)}`);
-            throw error;
-        }
+        await this.store.load('/data/items.yml', 'アイテム', item => this.validateItemDefinition(item));
     }
 
     private validateItemDefinition(item: any): void {
@@ -153,19 +106,19 @@ export class ItemsLoader {
     }
 
     getItems(): ItemDefinition[] {
-        return [...this.items];
+        return this.store.getAll();
     }
 
     getItem(name: string): ItemDefinition | undefined {
-        return this.itemsByName.get(name);
+        return this.store.getByName(name);
     }
 
     getItemNames(): string[] {
-        return this.items.map(item => item.name);
+        return this.store.getNames();
     }
 
     getItemsByType(type: ItemType): ItemDefinition[] {
-        return this.items.filter(item => item.type === type);
+        return this.store.getAll().filter(item => item.type === type);
     }
 
     getWeapons(): ItemDefinition[] {
@@ -183,5 +136,4 @@ export class ItemsLoader {
     getConsumables(): ItemDefinition[] {
         return this.getItemsByType('consumable');
     }
-
 }

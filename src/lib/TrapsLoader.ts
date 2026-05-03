@@ -1,4 +1,4 @@
-import yaml from 'js-yaml';
+import { YamlDefinitionStore } from './YamlDefinitionStore';
 
 export type TrapEffectType = 'stat' | 'addEffect' | 'unequip';
 
@@ -28,8 +28,7 @@ const KNOWN_EFFECT_TYPES: ReadonlySet<string> = new Set(['stat', 'addEffect', 'u
 
 export class TrapsLoader {
     private static instance: TrapsLoader;
-    private traps: TrapDefinition[] = [];
-    private trapsByName: Map<string, TrapDefinition> = new Map();
+    private store = new YamlDefinitionStore<TrapDefinition>();
 
     private constructor() { }
 
@@ -41,53 +40,7 @@ export class TrapsLoader {
     }
 
     async loadTraps(): Promise<void> {
-        const response = await fetch('/data/traps.yml');
-        if (!response.ok) {
-            console.log(`traps.yml が見つかりません (HTTP ${response.status})。トラップなしで続行します。`);
-            return;
-        }
-
-        const yamlText = await response.text();
-        if (!yamlText.trim()) {
-            console.log('traps.yml が空です。トラップなしで続行します。');
-            return;
-        }
-
-        try {
-            const parsed = yaml.load(yamlText) as any;
-
-            if (parsed === null || parsed === undefined) {
-                console.log('traps.yml にデータが定義されていません。トラップなしで続行します。');
-                return;
-            }
-
-            if (!Array.isArray(parsed)) {
-                throw new Error('traps.yml does not contain a valid array');
-            }
-
-            if (parsed.length === 0) {
-                console.log('traps.yml のトラップ定義が空の配列です。トラップなしで続行します。');
-                return;
-            }
-
-            for (const trap of parsed) {
-                this.validateTrapDefinition(trap);
-            }
-
-            this.traps = parsed;
-            this.trapsByName.clear();
-
-            for (const trap of this.traps) {
-                this.trapsByName.set(trap.name, trap);
-            }
-        } catch (error) {
-            console.error('Failed to load traps.yml:', error);
-            alert(`トラップデータの読み込みに失敗しました。\n\n` +
-                `public/data/traps.yml ファイルが正しく配置されており、\n` +
-                `内容が正しい形式であることを確認してください。\n\n` +
-                `エラー詳細: ${error instanceof Error ? error.message : String(error)}`);
-            throw error;
-        }
+        await this.store.load('/data/traps.yml', 'トラップ', trap => this.validateTrapDefinition(trap));
     }
 
     private validateTrapDefinition(trap: any): void {
@@ -130,19 +83,20 @@ export class TrapsLoader {
     }
 
     getTraps(): TrapDefinition[] {
-        return [...this.traps];
+        return this.store.getAll();
     }
 
     getTrap(name: string): TrapDefinition | undefined {
-        return this.trapsByName.get(name);
+        return this.store.getByName(name);
     }
 
     getTrapNames(): string[] {
-        return this.traps.map(t => t.name);
+        return this.store.getNames();
     }
 
     getRandomTrap(): TrapDefinition | undefined {
-        if (this.traps.length === 0) return undefined;
-        return this.traps[Math.floor(Math.random() * this.traps.length)];
+        const traps = this.store.getAll();
+        if (traps.length === 0) return undefined;
+        return traps[Math.floor(Math.random() * traps.length)];
     }
 }
