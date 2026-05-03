@@ -7,6 +7,7 @@ import { Enemy } from './Enemy';
 import { EnemyLoader } from './EnemyLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { TrapsLoader } from './TrapsLoader';
+import { BaseLoader } from './BaseLoader';
 
 interface ActiveContinuousEffect {
     effects: Map<string, number>;
@@ -81,12 +82,17 @@ export class Player {
         await this.trapsLoader.loadTraps();
     }
 
+    static async initializeBaseSystem(): Promise<void> {
+        await BaseLoader.getInstance().load();
+    }
+
     static async initializeAllSystems(): Promise<void> {
         await this.initializeStatsSystem();
         await this.initializeItemsSystem();
         await this.initializeEnemySystem();
         await this.initializeEffectsSystem();
         await this.initializeTrapsSystem();
+        await this.initializeBaseSystem();
     }
 
     private initializeStats(): void {
@@ -684,6 +690,19 @@ export class Player {
             return null;
         }
 
+        return new Enemy(definition, x, y);
+    }
+
+    static createEnemyByName(name: string, x: integer, y: integer): Enemy | null {
+        if (!this.enemyLoader) {
+            console.error('EnemyLoader not initialized');
+            return null;
+        }
+        const definition = this.enemyLoader.getEnemy(name);
+        if (!definition) {
+            console.error(`Enemy "${name}" not found`);
+            return null;
+        }
         return new Enemy(definition, x, y);
     }
 

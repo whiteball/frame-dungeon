@@ -1,0 +1,56 @@
+name: Sample Game
+gaolFloor: 10
+floors:
+  - 1:
+      size: 15
+      enemyCount: 4
+      enemies:
+        - slime
+        - bat
+        - goblin
+      trapCount: 0
+      traps:
+  - 4:
+      size:
+        w: 15
+        h: 20
+      enemyCount: 6
+      enemies:
+        - skeleton
+        - wolf
+        - spider
+      trapCount: 4
+      traps:
+        - spike
+  - 7:
+      size:
+        w: 20
+        h: 25
+      enemyCount: 8
+      enemies:
+        - orc
+        - spider
+        - name: ogre
+          count: 1
+      trapCount:
+        min: 6
+        max: 8
+      traps:
+        - spike
+        - swamp
+  - 10:
+      size: 30
+      enemyCount: 12
+      enemies:
+        - orc
+        - ogre
+        - spider
+        - name: dragon
+          count: 1
+      trapCount:
+        min: 8
+        max: 10
+      traps:
+        - spike
+        - swamp
+        - unequip

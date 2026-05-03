@@ -58,6 +58,11 @@ export class DungeonMap {
     this._enableFog = enableFog;
   }
 
+  resize(width: integer, height: integer): void {
+    this._width = width + 2;
+    this._height = height + 2;
+  }
+
   /**
    * ダンジョンマップを初期化する
    * 全てのマップデータをクリアし、プレイヤーの初期位置を設定する
