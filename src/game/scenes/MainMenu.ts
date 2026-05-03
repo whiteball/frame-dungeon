@@ -1,6 +1,7 @@
 import { GameObjects, Scene } from 'phaser';
 
 import { EventBus } from '../EventBus';
+import { BaseLoader } from '../../lib/BaseLoader';
 
 export class MainMenu extends Scene
 {
@@ -12,13 +13,16 @@ export class MainMenu extends Scene
         super('MainMenu');
     }
 
-    create ()
+    async create ()
     {
+        await BaseLoader.getInstance().load();
+        const gameName = BaseLoader.getInstance().getName();
+
         this.cameras.main.setViewport(10, 10, 1004, 520);
 
         this.background = this.add.image(502, 260, 'background');
 
-        this.title = this.add.text(502, 200, 'Main Menu', {
+        this.title = this.add.text(502, 200, gameName, {
             fontFamily: 'Arial Black', fontSize: 54, color: '#ffffff',
             stroke: '#000000', strokeThickness: 8,
             align: 'center'
