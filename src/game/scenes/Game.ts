@@ -716,15 +716,22 @@ export class Game extends Scene {
         const rightCell: [integer, integer] = [centerCell[0] + rdx, centerCell[1] + rdy];
         const leftCell: [integer, integer] = [centerCell[0] - rdx, centerCell[1] - rdy];
 
-        const hasRightEnemy = !!this.dungeon.getEnemy(rightCell[0], rightCell[1]);
-        const hasLeftEnemy = !!this.dungeon.getEnemy(leftCell[0], leftCell[1]);
+        const hasRightEnemy = !!this.dungeon.getEnemy(rightCell[0], rightCell[1]) && this.dungeon.canAttack(x, y, rightCell[0], rightCell[1]);
+        const hasLeftEnemy = !!this.dungeon.getEnemy(leftCell[0], leftCell[1]) && this.dungeon.canAttack(x, y, leftCell[0], leftCell[1]);
 
         if (!hasRightEnemy && !hasLeftEnemy) {
             this.executeAction(() => this.dungeon.attackPlayer());
             return;
         }
 
-        this.enterAttackDirectionMode(centerCell, rightCell, leftCell);
+        const hasCenterEnemy = !!this.dungeon.getEnemy(centerCell[0], centerCell[1]) && this.dungeon.canAttack(x, y, centerCell[0], centerCell[1]);
+
+        const invalidPos:[number, number] = [-1, -1];
+        this.enterAttackDirectionMode(
+            hasCenterEnemy ? centerCell : invalidPos,
+            hasRightEnemy ? rightCell : invalidPos,
+            hasLeftEnemy ? leftCell : invalidPos,
+        );
     }
 
     private enterAttackDirectionMode(
@@ -732,26 +739,20 @@ export class Game extends Scene {
         rightCell: [integer, integer],
         leftCell: [integer, integer],
     ): void {
-        const { x, y } = this.dungeon.getPlayerPos();
-        const isAttackable = (cell: [integer, integer]): boolean => {
-            return !!this.dungeon.getEnemy(cell[0], cell[1])
-                && this.dungeon.canAttack(x, y, cell[0], cell[1]);
-        };
-
         const actions: SceneAction[] = [
             {
                 label: '左',
-                disabled: !isAttackable(leftCell),
+                disabled: leftCell[0] < 0,
                 onClick: () => this.executeAttackDirection(leftCell[0], leftCell[1]),
             },
             {
                 label: '中央',
-                disabled: !isAttackable(centerCell),
+                disabled: centerCell[0] < 0,
                 onClick: () => this.executeAttackDirection(centerCell[0], centerCell[1]),
             },
             {
                 label: '右',
-                disabled: !isAttackable(rightCell),
+                disabled: rightCell[0] < 0,
                 onClick: () => this.executeAttackDirection(rightCell[0], rightCell[1]),
             },
             {
