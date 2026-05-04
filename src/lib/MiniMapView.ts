@@ -1,6 +1,6 @@
 import { DungeonMap } from './MapGenerator';
 import { MapDirection } from './map/MapDirection';
-import { MapMark } from './MapObject';
+import { MapMark, MapObject } from './MapObject';
 
 export class MiniMapView {
   private graph: Phaser.GameObjects.Graphics;
@@ -35,7 +35,7 @@ export class MiniMapView {
    * 探索済みエリア、壁、扉、オブジェクト、プレイヤーの位置を表示する
    * @param dun レンダリングするダンジョンマップ
    */
-  render(dun: DungeonMap) {
+  render(dun: DungeonMap, showAllEnemies = false) {
     const graph = this.graph;
     graph.clear();
 
@@ -46,6 +46,8 @@ export class MiniMapView {
     const maxLength = Math.max(dun.getWidth(), dun.getHeight());
     const blockWidth = (WIDTH / maxLength), blockHeight = (HEIGHT / maxLength);
     graph.fillRectShape(rect);
+
+    const enemySet = new Set<MapObject>(dun.getEnemies());
 
     // マス描画
     for (const block of dun.mapIterator()) {
@@ -100,6 +102,9 @@ export class MiniMapView {
 
       for (const object of dun.getObject(block.x, block.y)) {
         if (!object.visible) {
+          continue;
+        }
+        if (!showAllEnemies && enemySet.has(object) && block.inView === 0) {
           continue;
         }
 
@@ -170,6 +175,11 @@ export class MiniMapView {
               .strokeRect(baseX + blockWidth / 5, baseY + blockWidth / 5, blockWidth * 3 / 5, blockWidth * 3 / 5);
             break;
         }
+      }
+
+      if (!showAllEnemies && block.fog === 0 && block.inView === 0) {
+        graph.fillStyle(0xFFFFFF, 0.2);
+        graph.fillRect(baseX, baseY, blockWidth, blockHeight);
       }
     }
 

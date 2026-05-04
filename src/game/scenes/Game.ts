@@ -52,18 +52,20 @@ export class Game extends Scene {
     }
     private viewRange = 3;
     private enableFog = true;
+    private showAllEnemies = false;
 
     constructor() {
         super('Game');
     }
 
-    init(data: { viewRange?: number; enableFog?: boolean }) {
+    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean }) {
         this.viewRange = data.viewRange ?? 3;
         this.enableFog = data.enableFog ?? true;
+        this.showAllEnemies = data.showAllEnemies ?? false;
     }
 
     render() {
-        this.miniMapView.render(this.dungeon);
+        this.miniMapView.render(this.dungeon, this.showAllEnemies);
         this.mainView.render(this.dungeon);
         this.params = this.getDisplayParams();
         this.infoView.render(this.floor, this.params);

@@ -31,6 +31,7 @@ export class DungeonMap {
   private _map: integer[];
   private _mapFog: integer[];
   private _mapWalked: integer[];
+  private _mapCurrentView: integer[];
   private _width: integer;
   private _height: integer;
   private _enableFog: boolean = true;
@@ -71,6 +72,7 @@ export class DungeonMap {
     this._map = [];
     this._mapFog = [];
     this._mapWalked = [];
+    this._mapCurrentView = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
     this._objectStore.clear();
@@ -79,6 +81,7 @@ export class DungeonMap {
       this._map[i] = -1;
       this._mapFog[i] = fog;
       this._mapWalked[i] = 0;
+      this._mapCurrentView[i] = 0;
     }
     this._player = {
       x: 0,
@@ -131,6 +134,11 @@ export class DungeonMap {
     if (pos !== undefined) {
       this._mapFog[pos] = value;
     }
+  }
+
+  public getCurrentViewAt(x: integer, y: integer): integer {
+    const pos = this._calcPos(x, y);
+    return pos === undefined ? 0 : this._mapCurrentView[pos];
   }
 
   /**
@@ -254,6 +262,7 @@ export class DungeonMap {
    *   壁ビット = 1 << direction、扉ビット = 16 << direction
    */
   public clearFogWithinPlayer(): void {
+    this._mapCurrentView.fill(0);
     const direction = this._player.direction;
     const [dx, dy] = getDirectionOffset(direction);
     const leftDir  = (direction + 1) % 4 as MapDirection;
@@ -287,6 +296,8 @@ export class DungeonMap {
     const reveal = (d: number, j: number): void => {
       const [tx, ty] = coord(d, j);
       this.setFogAt(tx, ty, 0);
+      const pos = this._calcPos(tx, ty);
+      if (pos !== undefined) this._mapCurrentView[pos] = 1;
     };
 
     // 深さ 0: プレイヤー位置は常に可視
@@ -634,6 +645,7 @@ export class DungeonMap {
           fog: this.getFogAt(x, y),
           enter: value !== -1,
           walked: this.getWalkedAt(x, y),
+          inView: this.getCurrentViewAt(x, y),
         }
       }
     }

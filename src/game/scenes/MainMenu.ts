@@ -9,6 +9,7 @@ export class MainMenu extends Scene
     title: GameObjects.Text;
     private viewRange = 3;
     private enableFog = true;
+    private showAllEnemies = false;
 
     constructor ()
     {
@@ -36,12 +37,13 @@ export class MainMenu extends Scene
 
         EventBus.emit('scene-actions', [
             { label: 'ゲーム開始', onClick: () => this.changeScene() },
-            { label: '設定', onClick: () => EventBus.emit('open-settings', { viewRange: this.viewRange, enableFog: this.enableFog }) },
+            { label: '設定', onClick: () => EventBus.emit('open-settings', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies }) },
         ]);
 
-        EventBus.on('settings-confirmed', (data: { viewRange: number; enableFog: boolean }) => {
+        EventBus.on('settings-confirmed', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean }) => {
             this.viewRange = data.viewRange;
             this.enableFog = data.enableFog;
+            this.showAllEnemies = data.showAllEnemies;
         });
 
         this.events.once('shutdown', () => {
@@ -53,6 +55,6 @@ export class MainMenu extends Scene
     changeScene ()
     {
         EventBus.emit('game-scene-start');
-        this.scene.start('Game', { viewRange: this.viewRange, enableFog: this.enableFog });
+        this.scene.start('Game', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies });
     }
 }

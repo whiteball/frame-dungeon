@@ -27,11 +27,13 @@ const actionLabel = ref<string>('使用');
 const settingsVisible = ref(false);
 const settingsViewRange = ref(3);
 const settingsEnableFog = ref(true);
+const settingsShowAllEnemies = ref(false);
 
 function confirmSettings() {
     EventBus.emit('settings-confirmed', {
         viewRange: settingsViewRange.value,
         enableFog: settingsEnableFog.value,
+        showAllEnemies: settingsShowAllEnemies.value,
     });
     settingsVisible.value = false;
 }
@@ -143,9 +145,10 @@ onMounted(() => {
         selectedIndex.value = 0;
     });
 
-    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean }) => {
+    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean }) => {
         settingsViewRange.value = data.viewRange;
         settingsEnableFog.value = data.enableFog;
+        settingsShowAllEnemies.value = data.showAllEnemies;
         settingsVisible.value = true;
     });
 
@@ -302,6 +305,16 @@ defineExpose({ scene, game });
                             <input
                                 type="checkbox"
                                 v-model="settingsEnableFog"
+                                style="width: 18px; height: 18px; cursor: pointer;"
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 16px 8px 0; white-space: nowrap;">常に敵を表示</td>
+                        <td style="padding: 8px 0;">
+                            <input
+                                type="checkbox"
+                                v-model="settingsShowAllEnemies"
                                 style="width: 18px; height: 18px; cursor: pointer;"
                             />
                         </td>

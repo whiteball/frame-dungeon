@@ -7,10 +7,10 @@
 メインゲームロジックは複数のモジュールに分割されています：
 
 - **MapObject**（`src/lib/MapObject.ts`）: マップ上に配置される全オブジェクトの基底クラス。表示マーク定数（`MapMark`）やイベントハンドラの型定義も含む
-- **MapGenerator**（`src/lib/MapGenerator.ts`）: `DungeonMap` クラスを公開。マップ状態（壁・フォグ・歩行済み・プレイヤー位置）の保持と、視界 (FOV)・移動・回転・ランダム位置抽選など中核ロジックを担当。生成・オブジェクト管理・戦闘・デバッグ出力は `src/lib/map/` 配下のヘルパーモジュールに委譲
+- **MapGenerator**（`src/lib/MapGenerator.ts`）: `DungeonMap` クラスを公開。マップ状態（壁・フォグ・歩行済み・現在視界・プレイヤー位置）の保持と、視界 (FOV)・移動・回転・ランダム位置抽選など中核ロジックを担当。`clearFogWithinPlayer()` は `_mapFog` の更新に加え `_mapCurrentView` にも現フレームの視界マスを記録し、`mapIterator()` の `inView` フィールドで参照可能。生成・オブジェクト管理・戦闘・デバッグ出力は `src/lib/map/` 配下のヘルパーモジュールに委譲
 - **マップ系ヘルパー**（`src/lib/map/`）: `DungeonMap` から責務分離されたモジュール群。詳細は後述「マップ系モジュール構成」を参照
 - **MainView**（`src/lib/MainView.ts`）: 透視投影を使用したメインの3Dスタイルダンジョンビューをレンダリング
-- **MiniMapView**（`src/lib/MiniMapView.ts`）: 探索済みエリアを含む俯瞰ミニマップを表示
+- **MiniMapView**（`src/lib/MiniMapView.ts`）: 探索済みエリアを含む俯瞰ミニマップを表示。`render(dun, showAllEnemies)` の第2引数が `false`（デフォルト）の場合、敵は現在の視界内のみ描画し、探索済みだが視界外のマスには半透明の白マスクを重ねる。`true` の場合は従来通り全敵を描画しマスクも適用しない
 - **InfoView**（`src/lib/InfoView.ts`）: プレイヤーステータスとフロア情報のUIオーバーレイを管理
 - **Player**（`src/lib/Player.ts`）: プレイヤーのステータス、インベントリ、装備を管理
 - **Enemy**（`src/lib/Enemy.ts`）: `MapObject`を継承した敵クラス。敵のステータスと戦闘ロジックを管理
