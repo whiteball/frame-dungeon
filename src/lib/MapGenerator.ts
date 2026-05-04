@@ -243,8 +243,12 @@ export class DungeonMap {
   }
 
   /**
-   * プレイヤーの視界範囲内のフォグをクリアする
-   * プレイヤーの向きと視界範囲に基づいて、見える範囲のフォグを除去する
+   * プレイヤーの視界範囲内のフォグをクリアする（扇状視界）
+   *
+   * 深さ d では横オフセット ±d まで可視（扇形）。
+   * ① 前進伝播: 深さ d の可視タイルを深さ d+1 へ伝播
+   * ② 扇状横展開: 深さ d+1 を左→右・右→左の 2 パスで壁に沿って拡張（最大 ±(d+1)）
+   * 扉は現在と同じく前方・横いずれも先1マスのみ開示して伝播を止める。
    *
    * マップ値のビット構成（東=bit0、南=bit1、西=bit2、北=bit3 が壁、bit4〜7 が対応する扉）:
    *   壁ビット = 1 << direction、扉ビット = 16 << direction
@@ -252,56 +256,95 @@ export class DungeonMap {
   public clearFogWithinPlayer(): void {
     const direction = this._player.direction;
     const [dx, dy] = getDirectionOffset(direction);
-
-    // 進行方向の壁・扉ビット
-    const forwardWallBit = 1 << direction;
-    const forwardDoorBit = 16 << direction;
-
-    // 左右の側面方向（進行方向から ±90 度）
     const leftDir  = (direction + 1) % 4 as MapDirection;
     const rightDir = (direction + 3) % 4 as MapDirection;
     const [lx, ly] = getDirectionOffset(leftDir);
-    const [rx, ry] = getDirectionOffset(rightDir);
-    const leftWallBit  = 1 << leftDir,  leftDoorBit  = 16 << leftDir;
-    const rightWallBit = 1 << rightDir, rightDoorBit = 16 << rightDir;
 
-    let x = this._player.x, y = this._player.y;
-    for (let i = 0; i < this._viewRange; i++) {
-      this.setFogAt(x, y, 0);
-      const value = this.getAt(x, y);
+    const forwardWallBit = 1 << direction;
+    const forwardDoorBit = 16 << direction;
+    const leftWallBit    = 1 << leftDir;
+    const rightWallBit   = 1 << rightDir;
+    const leftDoorBit    = 16 << leftDir;
+    const rightDoorBit   = 16 << rightDir;
 
-      // 左側の視界：壁がなければ横隣 + その先の斜め1マスも開示
-      // 扉があれば横隣（扉マス）だけ開示
-      if (!(value & leftWallBit)) {
-        this.setFogAt(x + lx, y + ly, 0);
-        if (!(this.getAt(x + lx, y + ly) & forwardWallBit)) {
-          this.setFogAt(x + lx + dx, y + ly + dy, 0);
+    const vr  = this._viewRange;
+    const mid = vr; // vis 配列の横オフセット 0 に対応するインデックス
+
+    // vis[d][j+mid]: 深さ d・横オフセット j のタイルが可視かどうか
+    // j > 0 = leftDir 方向、j < 0 = rightDir 方向
+    const vis: boolean[][] = Array.from({ length: vr + 1 }, () =>
+      new Array(2 * vr + 1).fill(false)
+    );
+
+    const coord = (d: number, j: number): [number, number] => [
+      this._player.x + d * dx + j * lx,
+      this._player.y + d * dy + j * ly,
+    ];
+    const tileVal = (d: number, j: number): number => {
+      const [tx, ty] = coord(d, j);
+      return this.getAt(tx, ty);
+    };
+    const reveal = (d: number, j: number): void => {
+      const [tx, ty] = coord(d, j);
+      this.setFogAt(tx, ty, 0);
+    };
+
+    // 深さ 0: プレイヤー位置は常に可視
+    vis[0][mid] = true;
+    reveal(0, 0);
+
+    // プレイヤーの両隣: 壁がなければ（扉も含む）そのマスを開示
+    const pVal = tileVal(0, 0);
+    if (pVal >= 0) {
+      if (!(pVal & leftWallBit) || (pVal & leftDoorBit))   reveal(0,  1);
+      if (!(pVal & rightWallBit) || (pVal & rightDoorBit)) reveal(0, -1);
+    }
+
+    for (let d = 0; d < vr; d++) {
+      // ── ① 前進伝播: 深さ d の可視タイル → 深さ d+1 ──
+      for (let j = -d; j <= d; j++) {
+        if (!vis[d][j + mid]) continue;
+        const val = tileVal(d, j);
+        if (val < 0) continue;
+        if (!(val & forwardWallBit)) {
+          if (!vis[d + 1][j + mid]) {
+            vis[d + 1][j + mid] = true;
+            reveal(d + 1, j);
+          }
+        } else if (val & forwardDoorBit) {
+          reveal(d + 1, j); // 扉の先1マスのみ開示、伝播しない
         }
-      } else if (value & leftDoorBit) {
-        this.setFogAt(x + lx, y + ly, 0);
       }
 
-      // 右側の視界（左と対称）
-      if (!(value & rightWallBit)) {
-        this.setFogAt(x + rx, y + ry, 0);
-        if (!(this.getAt(x + rx, y + ry) & forwardWallBit)) {
-          this.setFogAt(x + rx + dx, y + ry + dy, 0);
+      // ── ② 扇状横展開: 深さ d+1 で最大 ±(d+1) まで広げる ──
+      // パス1: j 小→大（leftDir 側へ拡張）
+      for (let j = -(d + 1); j < d + 1; j++) {
+        if (!vis[d + 1][j + mid]) continue;
+        const val = tileVal(d + 1, j);
+        if (val < 0) continue;
+        if (!(val & leftWallBit)) {
+          if (!vis[d + 1][j + 1 + mid]) {
+            vis[d + 1][j + 1 + mid] = true;
+            reveal(d + 1, j + 1);
+          }
+        } else if (val & leftDoorBit) {
+          reveal(d + 1, j + 1); // 扉タイルのみ開示
         }
-      } else if (value & rightDoorBit) {
-        this.setFogAt(x + rx, y + ry, 0);
       }
-
-      x += dx; y += dy; // 1マス前進
-
-      // 前方に壁がある場合：扉なら向こう側の1マスだけ開示して終了
-      if (value & forwardWallBit) {
-        if (value & forwardDoorBit) {
-          this.setFogAt(x, y, 0);
+      // パス2: j 大→小（rightDir 側へ拡張）
+      for (let j = d + 1; j > -(d + 1); j--) {
+        if (!vis[d + 1][j + mid]) continue;
+        const val = tileVal(d + 1, j);
+        if (val < 0) continue;
+        if (!(val & rightWallBit)) {
+          if (!vis[d + 1][j - 1 + mid]) {
+            vis[d + 1][j - 1 + mid] = true;
+            reveal(d + 1, j - 1);
+          }
+        } else if (val & rightDoorBit) {
+          reveal(d + 1, j - 1); // 扉タイルのみ開示
         }
-        return;
       }
-
-      this.setFogAt(x, y, 0); // 前進先を先読みして開示（最終ステップでは次イテレーションがないため必要）
     }
   }
 
