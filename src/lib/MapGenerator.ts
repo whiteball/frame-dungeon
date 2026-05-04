@@ -317,9 +317,13 @@ export class DungeonMap {
       }
 
       // ── ② 扇状横展開: 深さ d+1 で最大 ±(d+1) まで広げる ──
+      // 横展開できるのは「前の深さ d でも可視だったタイル」からのみ。
+      // T字路など直角方向の通路を「前の深さで壁だった列」から連鎖展開すると
+      // 視線の通っていない角の先まで開示されてしまうため、この条件で防ぐ。
       // パス1: j 小→大（leftDir 側へ拡張）
       for (let j = -(d + 1); j < d + 1; j++) {
         if (!vis[d + 1][j + mid]) continue;
+        if (!vis[d][j + mid]) continue; // 前の深さで不可視なら角越え展開を禁止
         const val = tileVal(d + 1, j);
         if (val < 0) continue;
         if (!(val & leftWallBit)) {
@@ -334,6 +338,7 @@ export class DungeonMap {
       // パス2: j 大→小（rightDir 側へ拡張）
       for (let j = d + 1; j > -(d + 1); j--) {
         if (!vis[d + 1][j + mid]) continue;
+        if (!vis[d][j + mid]) continue; // 前の深さで不可視なら角越え展開を禁止
         const val = tileVal(d + 1, j);
         if (val < 0) continue;
         if (!(val & rightWallBit)) {
