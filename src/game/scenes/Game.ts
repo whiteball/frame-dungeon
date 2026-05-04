@@ -124,6 +124,7 @@ export class Game extends Scene {
         EventBus.removeAllListeners('open-drop-list-for-pickup');
         EventBus.removeAllListeners('drop-item');
 
+        this.floor = 1;
         const dun = new DungeonMap(15, 15);
 
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
