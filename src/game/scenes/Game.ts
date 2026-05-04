@@ -147,6 +147,7 @@ export class Game extends Scene {
             // 敵をクリア
             dungeon.clearEnemies();
 
+            const excludePositionList: integer[][] = [];
             const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true });
             if (step.length >= 2) {
                 // 階段の追加
@@ -159,6 +160,7 @@ export class Game extends Scene {
                     return true;
                 }, stairEvents);
                 dungeon.addObject(step[0], step[1], MapMark.CIRCLE, stairEvents, 0x00FF00)
+                excludePositionList.push(step);
             }
 
             // トラップ配置（base.yml の設定に従う）
@@ -169,6 +171,7 @@ export class Game extends Scene {
                 const trapName = floorConfig.trapPool[Phaser.Math.Between(0, floorConfig.trapPool.length - 1)];
                 const trapDef = TrapsLoader.getInstance().getTrap(trapName)!;
                 this.addTrapMapObject(trapPos[0], trapPos[1], trapDef);
+                excludePositionList.push(trapPos);
             }
 
             // アイテムの配置
@@ -176,24 +179,20 @@ export class Game extends Scene {
             if (itemDefs.length > 0) {
                 const roomCount = dungeon.getRoomCount();
                 const itemCount = Math.max(0, Phaser.Math.Between(roomCount - 3, roomCount + 3));
-                const itemExcludeList: integer[][] = [];
-                if (step.length >= 2) {
-                    itemExcludeList.push(step);
-                }
-                itemExcludeList.push(...traps);
                 const itemPositions = dungeon.getRandomPosList(itemCount, false, {
                     withoutCorridor: true,
                     withoutPlayer: true,
-                    excludePositionList: itemExcludeList,
+                    excludePositionList,
                 });
                 for (const pos of itemPositions) {
                     const itemDef = itemDefs[Phaser.Math.Between(0, itemDefs.length - 1)];
                     this.addItemMapObject(pos[0], pos[1], itemDef);
+                    excludePositionList.push(pos);
                 }
             }
 
             // 敵の配置
-            this.spawnEnemies(dungeon, floorConfig);
+            this.spawnEnemies(dungeon, floorConfig, excludePositionList);
 
             EventBus.emit('update-view')
         })
@@ -668,9 +667,7 @@ export class Game extends Scene {
         console.log('=== Test Complete ===');
     }
 
-    private spawnEnemies(dungeon: DungeonMap, config: ResolvedFloorConfig): void {
-        const excludePositions: integer[][] = [];
-
+    private spawnEnemies(dungeon: DungeonMap, config: ResolvedFloorConfig, excludePositions: integer[][] = []): void {
         // 固定敵を先に配置
         for (const { name, count } of config.fixedEnemies) {
             const positions = dungeon.getRandomPosList(count, false, {
