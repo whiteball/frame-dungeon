@@ -744,6 +744,16 @@ export class DungeonMap {
   public dispatchObjectEvent(): void {
     this._objectStore.dispatchEvent(this, this._player.x, this._player.y, this._playerInstance);
     this.tickEnemies();
+
+    // 一定ターンごとに僅かに回復させる
+    // @todo この処理をここに置くべきか要検討。また回復量や回復ペース、対象のステータスを設定可能にする。
+    if (this._turnCount % 10 === 0 && this._playerInstance) {
+      const target = 'life';
+      const max = this._playerInstance.getMaxStat(target);
+      const delta = Math.floor(max * 0.01);
+      this._playerInstance.addStat(target, delta < 1 ? 1 : delta);
+    }
+
     this._turnCount++;
   }
 
