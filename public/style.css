@@ -28,7 +28,6 @@ body {
     color: rgba(255, 255, 255, 0.87);
     border: 1px solid rgba(255, 255, 255, 0.87);
     cursor: pointer;
-    transition: all 0.3s;
 
     &:hover {
         border: 1px solid #0ec3c9;
