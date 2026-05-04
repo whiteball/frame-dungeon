@@ -24,6 +24,22 @@ const listRef = ref<HTMLUListElement | null>(null);
 const listMode = ref<ListMode>('item');
 const actionLabel = ref<string>('使用');
 
+const settingsVisible = ref(false);
+const settingsViewRange = ref(3);
+const settingsEnableFog = ref(true);
+
+function confirmSettings() {
+    EventBus.emit('settings-confirmed', {
+        viewRange: settingsViewRange.value,
+        enableFog: settingsEnableFog.value,
+    });
+    settingsVisible.value = false;
+}
+
+function cancelSettings() {
+    settingsVisible.value = false;
+}
+
 const emit = defineEmits(['current-active-scene']);
 
 function onListKeyDown(e: KeyboardEvent) {
@@ -127,6 +143,12 @@ onMounted(() => {
         selectedIndex.value = 0;
     });
 
+    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean }) => {
+        settingsViewRange.value = data.viewRange;
+        settingsEnableFog.value = data.enableFog;
+        settingsVisible.value = true;
+    });
+
 });
 
 onUnmounted(() => {
@@ -137,6 +159,7 @@ onUnmounted(() => {
     EventBus.removeListener('reset-message-log');
     EventBus.removeListener('open-item-list');
     EventBus.removeListener('close-item-list');
+    EventBus.removeListener('open-settings');
 
     if (game.value)
     {
@@ -243,6 +266,51 @@ defineExpose({ scene, game });
                     :disabled="itemList.length === 0"
                 >説明</button>
                 <button class="button" @click="requestClose">閉</button>
+            </div>
+        </div>
+        <div
+            v-show="settingsVisible"
+            style="position: absolute; left: 0; top: 0;
+                   width: 1024px; height: 768px;
+                   background: rgba(0,0,0,0.6);
+                   display: flex; justify-content: center; align-items: center;
+                   z-index: 100;"
+        >
+            <div style="background: #1a1a2e; color: #fff; border: 2px solid #555;
+                        border-radius: 8px; padding: 32px 40px; min-width: 320px;
+                        font-family: 'BIZ UDゴシック', Consolas, monospace;
+                        box-shadow: 0 0 32px rgba(0,0,0,0.8);">
+                <h2 style="margin: 0 0 24px 0; text-align: center; font-size: 22px;">設定</h2>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 28px;">
+                    <tr>
+                        <td style="padding: 8px 16px 8px 0; white-space: nowrap;">プレイヤーの視界</td>
+                        <td style="padding: 8px 0;">
+                            <input
+                                type="number"
+                                v-model.number="settingsViewRange"
+                                min="1"
+                                step="1"
+                                style="width: 80px; background: #333; color: #fff;
+                                       border: 1px solid #666; border-radius: 4px;
+                                       padding: 4px 8px; font-size: 15px;"
+                            />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 16px 8px 0; white-space: nowrap;">フォグの有無</td>
+                        <td style="padding: 8px 0;">
+                            <input
+                                type="checkbox"
+                                v-model="settingsEnableFog"
+                                style="width: 18px; height: 18px; cursor: pointer;"
+                            />
+                        </td>
+                    </tr>
+                </table>
+                <div style="display: flex; justify-content: center; gap: 16px;">
+                    <button class="button" @click="confirmSettings">OK</button>
+                    <button class="button" @click="cancelSettings">キャンセル</button>
+                </div>
             </div>
         </div>
     </div>

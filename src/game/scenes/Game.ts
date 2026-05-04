@@ -50,9 +50,16 @@ export class Game extends Scene {
     private get isModalMode(): boolean {
         return this.currentSceneActions !== this.defaultSceneActions;
     }
+    private viewRange = 3;
+    private enableFog = true;
 
     constructor() {
         super('Game');
+    }
+
+    init(data: { viewRange?: number; enableFog?: boolean }) {
+        this.viewRange = data.viewRange ?? 3;
+        this.enableFog = data.enableFog ?? true;
     }
 
     render() {
@@ -125,7 +132,7 @@ export class Game extends Scene {
         EventBus.removeAllListeners('drop-item');
 
         this.floor = 1;
-        const dun = new DungeonMap(15, 15);
+        const dun = new DungeonMap(15, 15, this.viewRange, this.enableFog);
 
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
             // フロア設定を取得してマップをリサイズ

@@ -7,6 +7,8 @@ export class MainMenu extends Scene
 {
     background: GameObjects.Image;
     title: GameObjects.Text;
+    private viewRange = 3;
+    private enableFog = true;
 
     constructor ()
     {
@@ -34,17 +36,23 @@ export class MainMenu extends Scene
 
         EventBus.emit('scene-actions', [
             { label: 'ゲーム開始', onClick: () => this.changeScene() },
-            { label: '設定', onClick: () => console.log('設定画面は未実装です') },
+            { label: '設定', onClick: () => EventBus.emit('open-settings', { viewRange: this.viewRange, enableFog: this.enableFog }) },
         ]);
+
+        EventBus.on('settings-confirmed', (data: { viewRange: number; enableFog: boolean }) => {
+            this.viewRange = data.viewRange;
+            this.enableFog = data.enableFog;
+        });
 
         this.events.once('shutdown', () => {
             EventBus.emit('scene-actions', []);
+            EventBus.removeListener('settings-confirmed');
         });
     }
 
     changeScene ()
     {
         EventBus.emit('game-scene-start');
-        this.scene.start('Game');
+        this.scene.start('Game', { viewRange: this.viewRange, enableFog: this.enableFog });
     }
 }
