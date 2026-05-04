@@ -4,7 +4,7 @@ import type { Enemy } from './Enemy';
 import type { MapObject, ObjectEvent } from './MapObject';
 import type { Player } from './Player';
 import { getRandomInt } from './util/random';
-import type { Rect } from './map/Rect';
+import { Rect } from './map/Rect';
 import { MapDirection, getRandomDirection, rotateDirection, getDirectionOffset } from './map/MapDirection';
 import { MapBuilder, type RoomWithCorridors } from './map/MapBuilder';
 import { MapObjectStore } from './map/MapObjectStore';
@@ -96,6 +96,8 @@ export class DungeonMap {
    * @returns 1次元配列のインデックス、範囲外の場合undefined
    */
   private _calcPos(x: integer, y: integer) {
+    if (x < 0 || y < 0) return undefined;
+    if (x > this._width || y > this._height) return undefined;
     const pos = (y + 0) * this._width + x;
     return (pos >= this._map.length || pos < 0) ? undefined : pos;
   }
@@ -216,6 +218,14 @@ export class DungeonMap {
    */
   public getRoomCount(): integer {
     return this._rooms.length;
+  }
+
+  /**
+   * プレイヤーの視界の長さを取得する
+   * @returns 視界のマス数
+   */
+  public getViewRange(): integer {
+    return this._viewRange;
   }
 
   /**
@@ -620,11 +630,44 @@ export class DungeonMap {
 
   /**
    * マップの各セルを順次取得するイテレータ
+   * 
+   * aroundPlayerに1以上の数値を渡すと、プレイヤーの周囲のその数値分の距離だけを対象にする。
+   * excludeOutOfMapにtrueを設定すると、プレイヤーがマップ端付近にいてaroundPlayerに1以上の時に、マップ外を対象に含めないようにする。
+   * 例えばプレイヤーが[2, 2]にいてaroundPlayerが3の場合、取得範囲はRect(1, 1, 7, 7)になる。
+   * 
    * @yields マップセルの情報（座標、壁状態、フォグ、進入可能性、歩行済み状態）
    */
-  public * mapIterator() {
-    for (let x = 1; x < this._width - 1; x++) {
-      for (let y = 1; y < this._height - 1; y++) {
+  public * mapIterator(aroundPlayer: number = 0, excludeOutOfMap = false) {
+    const area = aroundPlayer === 0
+        ? new Rect(1, 1, this._width - 1, this._height - 1)
+        : new Rect(this._player.x - aroundPlayer, this._player.y - aroundPlayer,
+              this._player.x + aroundPlayer + 1, this._player.y + aroundPlayer + 1);
+    if (area.x2 - area.x1 > this._width) {
+      area.x1 = 1;
+      area.x2 = this._width - 1;
+    } else if (excludeOutOfMap) {
+      if (area.x1 < 1) {
+        area.x2 += 1 - area.x1;
+        area.x1 = 1;
+      } else if (area.x2 > this._width - 1) {
+        area.x1 += this._width - 1 - area.x2;
+        area.x2 = this._width - 1;
+      }
+    }
+    if (area.y2 - area.y1 > this._height) {
+      area.y1 = 1;
+      area.y2 = this._height - 1;
+    } else if (excludeOutOfMap) {
+      if (area.y1 < 1) {
+        area.y2 += 1 - area.y1;
+        area.y1 = 1;
+      } else if (area.y2 > this._height - 1) {
+        area.y1 += this._height - 1 - area.y2;
+        area.y2 = this._height - 1;
+      }
+    }
+    for (let x = area.x1; x < area.x2; x++) {
+      for (let y = area.y1; y < area.y2; y++) {
         const value = this.getAt(x, y);
         const wallState = {
           wall: [false, false, false, false],

@@ -9,6 +9,11 @@ export class MiniMapView {
   private height: integer;
 
   /**
+   * ミニマップの表示領域を全体かプレイヤー周囲にするかを切り替える
+   */
+  private fullMapMode: boolean = false;
+
+  /**
    * ミニマップビューを初期化する
    * @param factory Phaserのゲームオブジェクトファクトリー
    * @param x 描画開始X座標
@@ -41,17 +46,23 @@ export class MiniMapView {
 
     graph.lineStyle(2, 0xDDDDDD);
     graph.fillStyle(0xDDDDDD);
+    const around = this.fullMapMode ? 0 : dun.getViewRange() + 1;
     const WIDTH = this.width, HEIGHT = this.height;
     const rect = new Phaser.Geom.Rectangle(0, 0, WIDTH, HEIGHT);
-    const maxLength = Math.max(dun.getWidth(), dun.getHeight());
+    const maxLength = around === 0 ? Math.max(dun.getWidth(), dun.getHeight()) : around * 2 + 1;
     const blockWidth = (WIDTH / maxLength), blockHeight = (HEIGHT / maxLength);
     graph.fillRectShape(rect);
 
     const enemySet = new Set<MapObject>(dun.getEnemies());
 
+    // 左上に描画するマスのマップ上の座標
+    const origin: [number | undefined, number | undefined] = [undefined, undefined];
+
     // マス描画
-    for (const block of dun.mapIterator()) {
-      const baseX = (block.x - 1) * blockWidth, baseY = (block.y - 1) * blockHeight;
+    for (const block of dun.mapIterator(around, false)) {
+      if (origin[0] === undefined) origin[0] = block.x;
+      if (origin[1] === undefined) origin[1] = block.y;
+      const baseX = (block.x - origin[0]) * blockWidth, baseY = (block.y - origin[1]) * blockHeight;
       graph.lineStyle(2, 0xDDDDDD);
 
       if (!block.enter || block.fog === 1) {
@@ -190,7 +201,7 @@ export class MiniMapView {
     graph.lineStyle(1, 0xFFFFFF);
     graph.fillStyle(0xFFFFFF);
     const playerPos = dun.getPlayerPos();
-    const baseX = (playerPos.x - 1) * blockWidth + blockWidth / 5, baseY = (playerPos.y - 1) * blockHeight + blockHeight / 5;
+    const baseX = (playerPos.x - (origin[0] ?? 1)) * blockWidth + blockWidth / 5, baseY = (playerPos.y - (origin[1] ?? 1)) * blockHeight + blockHeight / 5;
     const playerWidth = blockWidth - blockWidth / 5 * 2, playerHeight = blockHeight - blockHeight / 5 * 2;
     let tri: Phaser.Geom.Triangle;
     switch (playerPos.direction) {
@@ -211,5 +222,9 @@ export class MiniMapView {
 
     graph.strokeTriangleShape(tri)
     graph.fillTriangleShape(tri)
+  }
+
+  public toggleMapMode() {
+    return this.fullMapMode = !this.fullMapMode;
   }
 }

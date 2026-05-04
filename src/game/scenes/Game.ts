@@ -30,6 +30,7 @@ export class Game extends Scene {
         keyD: Phaser.Input.Keyboard.Key | undefined,
         keyE: Phaser.Input.Keyboard.Key | undefined,
         keyQ: Phaser.Input.Keyboard.Key | undefined,
+        keyM: Phaser.Input.Keyboard.Key | undefined,
         keySpace: Phaser.Input.Keyboard.Key | undefined,
     };
     dungeon: DungeonMap;
@@ -217,6 +218,7 @@ export class Game extends Scene {
             keyD: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D),
             keyE: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E),
             keyQ: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
+            keyM: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.M),
             keySpace: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         };
 
@@ -252,6 +254,11 @@ export class Game extends Scene {
         //         this.render()
         //     }
         // })
+        this.keys.keyM?.on('down', () => {
+            if (this.isModalMode) return;
+            this.miniMapView.toggleMapMode();
+            this.miniMapView.render(this.dungeon, this.showAllEnemies);
+        })
 
         this.dungeon = dun;
         this.dungeon.setPlayerInstance(this.player);
