@@ -59,6 +59,9 @@ export class EquipmentView {
 
   render(equipped: EquippedSnapshot) {
     const graph = this.graph;
+    graph.clear();
+    graph.fillStyle(0, 1);
+    graph.lineStyle(1, 0xFFFFFF, 1);
     graph.fillRect(0, 0, this.width, this.height);
 
     this.headerText.setText('装備');

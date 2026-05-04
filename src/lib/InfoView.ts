@@ -48,6 +48,9 @@ export class InfoView {
    */
   render(floor: number, info: Map<string, number | string>) {
     const graph = this.graph;
+    graph.clear();
+    graph.fillStyle(0, 1);
+    graph.lineStyle(1, 0xFFFFFF, 1);
     graph.fillRect(0, 0, this.width, this.height);
 
     this.floorText.setText(floor + 'F');

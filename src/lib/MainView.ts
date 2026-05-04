@@ -135,6 +135,7 @@ export class MainView {
    */
   render(dun: DungeonMap) {
     const graph = this.graph;
+    graph.clear();
 
     graph.lineStyle(4, 0xFFFFFF);
     graph.fillStyle(0x0);

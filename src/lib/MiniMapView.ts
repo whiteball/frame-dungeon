@@ -37,6 +37,7 @@ export class MiniMapView {
    */
   render(dun: DungeonMap) {
     const graph = this.graph;
+    graph.clear();
 
     graph.lineStyle(2, 0xCCCCCC);
     graph.fillStyle(0x0);
