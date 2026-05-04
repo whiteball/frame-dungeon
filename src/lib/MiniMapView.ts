@@ -39,26 +39,31 @@ export class MiniMapView {
     const graph = this.graph;
     graph.clear();
 
-    graph.lineStyle(2, 0xCCCCCC);
-    graph.fillStyle(0x0);
+    graph.lineStyle(2, 0xDDDDDD);
+    graph.fillStyle(0xDDDDDD);
     const WIDTH = this.width, HEIGHT = this.height;
     const rect = new Phaser.Geom.Rectangle(0, 0, WIDTH, HEIGHT);
-    const blockWidth = (WIDTH / dun.getWidth()), blockHeight = (HEIGHT / dun.getHeight());
+    const maxLength = Math.max(dun.getWidth(), dun.getHeight());
+    const blockWidth = (WIDTH / maxLength), blockHeight = (HEIGHT / maxLength);
     graph.fillRectShape(rect);
 
     // マス描画
     for (const block of dun.mapIterator()) {
       const baseX = (block.x - 1) * blockWidth, baseY = (block.y - 1) * blockHeight;
-      graph.lineStyle(2, 0xCCCCCC);
+      graph.lineStyle(2, 0xDDDDDD);
 
       if (!block.enter || block.fog === 1) {
-        graph.fillStyle(0xCCCCCC);
-        graph.fillRect(baseX, baseY, blockWidth, blockHeight).strokeRect(baseX, baseY, blockWidth, blockHeight)
+        graph.fillStyle(0x787878);
+        // 枠を描画しないので他のマスより若干大きく見えるが、実用上問題ないので一旦気にしないことにする
+        graph.fillRect(baseX, baseY, blockWidth, blockHeight);
         continue;
       }
 
       if (block.walked === 1) {
         graph.fillStyle(0x3333FF);
+        graph.fillRect(baseX, baseY, blockWidth, blockHeight);
+      } else {
+        graph.fillStyle(0x0);
         graph.fillRect(baseX, baseY, blockWidth, blockHeight);
       }
 
@@ -102,12 +107,12 @@ export class MiniMapView {
         graph.lineStyle(1, 0xFFFFFF);
         switch (object.mark) {
           case MapMark.CIRCLE:
-            graph.fillCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3);
-            graph.strokeCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3);
+            graph.fillCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3 - 1);
+            graph.strokeCircle(baseX + blockWidth / 2, baseY + blockWidth / 2, blockWidth / 3 - 1);
             break;
           case MapMark.STAR:
             {
-              const r = blockWidth * 4 / 5 / 2;
+              const r = blockWidth * 4 / 5 / 3;
               graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
                 .beginPath()
                 .moveTo(r * Math.cos(Math.PI * 0 / 5 - Math.PI / 10), r * Math.sin(Math.PI * 0 / 5 - Math.PI / 10));
@@ -125,14 +130,14 @@ export class MiniMapView {
           case MapMark.DIAMOND:
             graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
               .rotateCanvas(Math.PI / 4)
-              .fillRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2, blockWidth / 2)
-              .strokeRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2, blockWidth / 2)
+              .fillRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2 - 1, blockWidth / 2 - 1)
+              .strokeRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2 - 1, blockWidth / 2 - 1)
               .rotateCanvas(-Math.PI / 4)
               .translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2);
             break;
           case MapMark.CROSS:
             {
-              const r = blockWidth * 4 / 5 / 2;
+              const r = blockWidth * 4 / 5 / 3;
               graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
                 .beginPath()
                 .moveTo(r * Math.cos(Math.PI * 0 / 2 - Math.PI / 10), r * Math.sin(Math.PI * 0 / 2 - Math.PI / 10));
@@ -147,7 +152,7 @@ export class MiniMapView {
             break;
           case MapMark.X_CROSS:
             {
-              const r = blockWidth * 4 / 5 / 2;
+              const r = blockWidth * 4 / 5 / 3;
               graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2).rotateCanvas(Math.PI / 4)
                 .beginPath()
                 .moveTo(r * Math.cos(Math.PI * 0 / 2 - Math.PI / 10), r * Math.sin(Math.PI * 0 / 2 - Math.PI / 10));
