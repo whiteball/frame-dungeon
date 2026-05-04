@@ -191,6 +191,7 @@ defineExpose({ scene, game });
                 :key="i"
                 class="button"
                 :disabled="a.disabled"
+                @mousedown.prevent
                 @click="a.onClick"
             >{{ a.label }}</button>
         </div>

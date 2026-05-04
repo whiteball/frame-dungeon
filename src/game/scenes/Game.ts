@@ -226,10 +226,10 @@ export class Game extends Scene {
             if (this.handlePlayerActionDirective()) return;
             this.executeAction(() => this.dungeon.goPlayer() > 0);
         })
-        this.keys.keySpace?.on('down', () => {
+        this.keys.keySpace?.on('down', (event: KeyboardEvent) => {
             if (this.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
-            this.tryAttackOrShowDirections();
+            this.tryAttackOrShowDirections(event.shiftKey);
         })
         this.keys.keyA?.on('down', () => {
             if (this.isModalMode) return;
@@ -708,7 +708,7 @@ export class Game extends Scene {
      * Space 押下時の処理。前方斜めに敵がいれば3択ボタンを提示し、
      * いなければ従来通り正面を即時攻撃する。
      */
-    private tryAttackOrShowDirections(): void {
+    private tryAttackOrShowDirections(autoAttack: boolean = false): void {
         const { x, y, direction } = this.dungeon.getPlayerPos();
         const [fdx, fdy] = getDirectionOffset(direction);
         const [rdx, rdy] = getDirectionOffset(rotateDirection(direction, 1));
@@ -725,6 +725,21 @@ export class Game extends Scene {
         }
 
         const hasCenterEnemy = !!this.dungeon.getEnemy(centerCell[0], centerCell[1]) && this.dungeon.canAttack(x, y, centerCell[0], centerCell[1]);
+
+        if (autoAttack) {
+            if (hasCenterEnemy) {
+                this.executeAction(() => this.dungeon.attackEnemyAt(centerCell[0], centerCell[1]));
+                return;
+            }
+            if (hasRightEnemy) {
+                this.executeAction(() => this.dungeon.attackEnemyAt(rightCell[0], rightCell[1]));
+                return;
+            }
+            if (hasLeftEnemy) {
+                this.executeAction(() => this.dungeon.attackEnemyAt(leftCell[0], leftCell[1]));
+                return;
+            }
+        }
 
         const invalidPos:[number, number] = [-1, -1];
         this.enterAttackDirectionMode(
