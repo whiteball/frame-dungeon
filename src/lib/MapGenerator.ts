@@ -53,8 +53,7 @@ export class DungeonMap {
   private _turnCount: number = 0;
 
   constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
-    this._width = width + 2;
-    this._height = height + 2;
+    this.resize(width, height);
     this._viewRange = viewRange;
     this._enableFog = enableFog;
   }
@@ -192,6 +191,23 @@ export class DungeonMap {
    */
   public getHeight(): integer {
     return this._height - 2;
+  }
+
+
+  /**
+   * 境界を含めたマップの幅を取得する
+   * @returns マップの幅
+   */
+  public getInternalWidth(): integer {
+    return this._width;
+  }
+
+  /**
+   * 境界を含めたマップの高さを取得する
+   * @returns マップの高さ
+   */
+  public getInternalHeight(): integer {
+    return this._height;
   }
 
   /**

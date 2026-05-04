@@ -128,7 +128,7 @@ export function findPath(
   const { scope = 'full', blockedPositions } = options;
 
   // posKey: 内部幅（パディング込み）を使い一意なインデックスを生成
-  const internalWidth = dungeon.getWidth() + 2;
+  const internalWidth = dungeon.getInternalWidth();
   const posKey = (x: integer, y: integer) => y * internalWidth + x;
 
   // blockedPositions を O(1) 検索できる Set に変換
