@@ -45,22 +45,43 @@ function cancelSettings() {
 const emit = defineEmits(['current-active-scene']);
 
 function onListKeyDown(e: KeyboardEvent) {
-    if (e.key === 'ArrowDown') {
-        if (itemList.value.length > 0) {
-            selectedIndex.value = Math.min(itemList.value.length - 1, selectedIndex.value + 1);
-        }
-        e.preventDefault();
-    } else if (e.key === 'ArrowUp') {
-        if (itemList.value.length > 0) {
-            selectedIndex.value = Math.max(0, selectedIndex.value - 1);
-        }
-        e.preventDefault();
-    } else if (e.key === 'Enter') {
-        confirmSelect();
-        e.preventDefault();
-    } else if (e.key === 'Escape') {
-        requestClose();
-        e.preventDefault();
+    switch (e.key) {
+        case 'ArrowDown':
+        case 's':
+            if (itemList.value.length > 0) {
+                selectedIndex.value = Math.min(itemList.value.length - 1, selectedIndex.value + 1);
+            }
+            e.preventDefault();
+            break;
+        case 'ArrowUp':
+        case 'w':
+            if (itemList.value.length > 0) {
+                selectedIndex.value = Math.max(0, selectedIndex.value - 1);
+            }
+            e.preventDefault();
+            break;
+        case 'Enter':
+        case ' ':
+            confirmSelect();
+            e.preventDefault();
+            break;
+        case 'Escape':
+            requestClose();
+            e.preventDefault();
+            break;
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+        case '0':
+            document.getElementById('action-button-' + e.key)?.dispatchEvent(new Event('click'));
+            e.preventDefault();
+            break;
     }
 }
 
@@ -189,6 +210,7 @@ defineExpose({ scene, game });
             <button
                 v-for="(a, i) in actions"
                 :key="i"
+                :id="'action-button-' + ((i + 1) % 10)"
                 class="button"
                 :disabled="a.disabled"
                 @mousedown.prevent
