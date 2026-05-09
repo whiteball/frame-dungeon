@@ -44,6 +44,8 @@ export class BaseLoader {
     private parser = new Parser();
     private _defaultDamageStat: string | null = null;
     private deadFormula: Expression | null = null;
+    private _defaultEnemyDamageStat: string | null = null;
+    private enemyDeadFormula: Expression | null = null;
     private requiredExpFormula: Expression | null = null;
     private compiledLevelUpBonuses: CompiledLevelUpBonus[] = [];
     private autoSpawnerFormula: Expression | null = null;
@@ -109,6 +111,18 @@ export class BaseLoader {
                     this.deadFormula = this.parser.parse(parsed.dead.formula);
                 } catch (e) {
                     throw new Error(`dead.formula のパースに失敗しました: ${parsed.dead.formula}`);
+                }
+            }
+
+            if (typeof parsed.defaultEnemyDamageStat === 'string') {
+                this._defaultEnemyDamageStat = parsed.defaultEnemyDamageStat;
+            }
+
+            if (parsed.enemyDead && typeof parsed.enemyDead.formula === 'string') {
+                try {
+                    this.enemyDeadFormula = this.parser.parse(parsed.enemyDead.formula);
+                } catch (e) {
+                    throw new Error(`enemyDead.formula のパースに失敗しました: ${parsed.enemyDead.formula}`);
                 }
             }
 
@@ -178,6 +192,18 @@ export class BaseLoader {
             return Boolean(this.deadFormula.evaluate(vars));
         }
         return (vars[this._defaultDamageStat!] ?? 0) <= 0;
+    }
+
+    getDefaultEnemyDamageStat(): string {
+        return this._defaultEnemyDamageStat ?? this._defaultDamageStat!;
+    }
+
+    isEnemyDead(enemyVars: Record<string, number>): boolean {
+        const formula = this.enemyDeadFormula ?? this.deadFormula;
+        if (formula) {
+            return Boolean(formula.evaluate(enemyVars));
+        }
+        return (enemyVars[this.getDefaultEnemyDamageStat()] ?? 0) <= 0;
     }
 
     getRequiredExp(vars: Record<string, number>): number {

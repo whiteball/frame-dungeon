@@ -8,6 +8,13 @@ dead:
     - life
   formula: life <= 0
 
+defaultEnemyDamageStat: life
+
+enemyDead:
+  use:
+    - life
+  formula: life <= 0
+
 requiredExp:
   use:
     - level

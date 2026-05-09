@@ -215,6 +215,14 @@ export class Enemy extends MapObject {
         return this.maxStats.get(key) || 0;
     }
 
+    getEnemyFormulaVars(): Record<string, number> {
+        const vars: Record<string, number> = {};
+        for (const [key, value] of this.stats) {
+            vars[key] = value;
+        }
+        return vars;
+    }
+
     setStat(key: string, value: number): void {
         const maxValue = this.maxStats.get(key);
         if (maxValue !== undefined) {
@@ -222,8 +230,7 @@ export class Enemy extends MapObject {
         } else {
             this.stats.set(key, value);
         }
-        // lifeが0になったら死亡
-        if (key === 'life' && this.getStat('life') === 0) {
+        if (!this.isDead && BaseLoader.getInstance().isEnemyDead(this.getEnemyFormulaVars())) {
             this.isDead = true;
         }
     }
@@ -247,20 +254,20 @@ export class Enemy extends MapObject {
 
     damage(amount: number): number {
         const actualDamage = Math.max(1, amount);
-        this.addStat('life', -actualDamage);
+        this.addStat(BaseLoader.getInstance().getDefaultEnemyDamageStat(), -actualDamage);
         return actualDamage;
     }
 
     heal(amount: number): void {
-        this.addStat('life', amount);
+        this.addStat(BaseLoader.getInstance().getDefaultEnemyDamageStat(), amount);
     }
 
     isAlive(): boolean {
-        return !this.isDead && this.getStat('life') > 0;
+        return !this.isDead;
     }
 
     kill(): void {
-        this.setStat('life', 0);
+        this.setStat(BaseLoader.getInstance().getDefaultEnemyDamageStat(), 0);
         this.isDead = true;
     }
 
