@@ -11,6 +11,26 @@ export class MainMenu extends Scene
     private enableFog = true;
     private showAllEnemies = false;
 
+    private loadSettings () {
+        try {
+            const saved = localStorage.getItem('gameSettings');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (typeof parsed.viewRange === 'number') this.viewRange = parsed.viewRange;
+                if (typeof parsed.enableFog === 'boolean') this.enableFog = parsed.enableFog;
+                if (typeof parsed.showAllEnemies === 'boolean') this.showAllEnemies = parsed.showAllEnemies;
+            }
+        } catch { /* 読み込み失敗時はデフォルト値を使用 */ }
+    }
+
+    private saveSettings () {
+        localStorage.setItem('gameSettings', JSON.stringify({
+            viewRange: this.viewRange,
+            enableFog: this.enableFog,
+            showAllEnemies: this.showAllEnemies,
+        }));
+    }
+
     constructor ()
     {
         super('MainMenu');
@@ -18,6 +38,7 @@ export class MainMenu extends Scene
 
     async create ()
     {
+        this.loadSettings();
         await BaseLoader.getInstance().load();
         const gameName = BaseLoader.getInstance().getName();
 
@@ -44,6 +65,7 @@ export class MainMenu extends Scene
             this.viewRange = data.viewRange;
             this.enableFog = data.enableFog;
             this.showAllEnemies = data.showAllEnemies;
+            this.saveSettings();
         });
 
         this.events.once('shutdown', () => {
