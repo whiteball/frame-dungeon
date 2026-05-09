@@ -794,6 +794,7 @@ export class Game extends Scene {
         const turnCount = this.dungeon.getTurnCount();
         EventBus.emit('message-log', `${directionLabel}を調べた。`, turnCount);
         this.dungeon.searchAt(targetX, targetY);
+        this.render();
         this.exitAttackDirectionMode();
     }
 
