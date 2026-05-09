@@ -1,8 +1,7 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 import { DungeonMap } from '../../lib/MapGenerator';
-import { MapObject, newMapEvent } from '../../lib/MapObject';
-import type { ObjectEvent } from '../../lib/MapObject';
+import { MapObject } from '../../lib/MapObject';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
@@ -17,7 +16,8 @@ import { EffectsLoader } from '../../lib/EffectsLoader';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
-import { StairsObject, TrapObject, ItemObject } from '../../lib/map/MapObjects';
+import { ItemObject } from '../../lib/map/MapObjects';
+import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
 import { BaseLoader } from '../../lib/BaseLoader';
 import type { ResolvedFloorConfig } from '../../lib/BaseLoader';
 
@@ -153,18 +153,9 @@ export class Game extends Scene {
             const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true });
             if (step.length >= 2) {
                 // 階段の追加
-                const stairEvents = newMapEvent('around-0', (dungeon: DungeonMap) => {
-                    this.enterStairMode(dungeon);
-                    return true;
-                });
-                newMapEvent('around-0-self', (dungeon: DungeonMap) => {
-                    this.enterStairMode(dungeon);
-                    return true;
-                }, stairEvents);
-                const stairsObj = new StairsObject();
+                const stairsObj = buildStairsObject((d) => this.enterStairMode(d));
                 stairsObj.x = step[0];
                 stairsObj.y = step[1];
-                stairsObj.events = stairEvents;
                 dungeon.placeObject(stairsObj);
                 excludePositionList.push(step);
             }
@@ -176,7 +167,14 @@ export class Game extends Scene {
                 if (floorConfig.trapPool.length === 0) break;
                 const trapName = floorConfig.trapPool[Phaser.Math.Between(0, floorConfig.trapPool.length - 1)];
                 const trapDef = TrapsLoader.getInstance().getTrap(trapName)!;
-                this.addTrapMapObject(trapPos[0], trapPos[1], trapDef);
+                const trapObj = buildTrapObject(
+                    trapDef,
+                    (def) => this.applyTrapEffects(def),
+                    (def, obj) => this.enterTrapConfirmMode(def, obj),
+                );
+                trapObj.x = trapPos[0];
+                trapObj.y = trapPos[1];
+                this.dungeon.placeObject(trapObj);
                 excludePositionList.push(trapPos);
             }
 
@@ -192,7 +190,10 @@ export class Game extends Scene {
                 });
                 for (const pos of itemPositions) {
                     const itemDef = itemDefs[Phaser.Math.Between(0, itemDefs.length - 1)];
-                    this.addItemMapObject(pos[0], pos[1], itemDef);
+                    const itemObj = new ItemObject(itemDef);
+                    itemObj.x = pos[0];
+                    itemObj.y = pos[1];
+                    this.dungeon.placeObject(itemObj);
                     excludePositionList.push(pos);
                 }
             }
@@ -347,7 +348,10 @@ export class Game extends Scene {
                 }
                 this.dungeon.removeMapObject(pending.mapObject);
             }
-            this.addItemMapObject(pos.x, pos.y, droppedDef);
+            const droppedObj = new ItemObject(droppedDef);
+            droppedObj.x = pos.x;
+            droppedObj.y = pos.y;
+            this.dungeon.placeObject(droppedObj);
             EventBus.emit('message-log', `${droppedDef.label}を置いた`, this.dungeon.getTurnCount());
             this.closeList();
             // 置く/入れ換えはターン非消費（dispatchObjectEvent を呼ばない）。
@@ -420,30 +424,6 @@ export class Game extends Scene {
     }
 
     /**
-     * トラップを MapObject として配置する。未発見状態（visible=false）で踏むと
-     * effect が発動し visible=true になる。既発見トラップを再度踏んでも何も起きない。
-     */
-    private addTrapMapObject(x: integer, y: integer, trapDef: TrapDefinition): void {
-        const onTrigger: ObjectEvent = (_, object) => {
-            if (object.visible) return true;
-            object.visible = true;
-            this.applyTrapEffects(trapDef);
-            return true;
-        };
-        const onSelfTrigger: ObjectEvent = (_, object) => {
-            this.enterTrapConfirmMode(trapDef, object);
-            return true;
-        };
-        const events = newMapEvent('around-0', onTrigger);
-        newMapEvent('around-0-self', onSelfTrigger, events);
-        const trapObj = new TrapObject(trapDef);
-        trapObj.x = x;
-        trapObj.y = y;
-        trapObj.events = events;
-        this.dungeon.placeObject(trapObj);
-    }
-
-    /**
      * トラップの effect 配列を順次適用する。damage で死亡した場合は早期 return
      */
     private applyTrapEffects(trapDef: TrapDefinition): void {
@@ -496,35 +476,6 @@ export class Game extends Scene {
                 }
             }
         }
-    }
-
-    private addItemMapObject(x: integer, y: integer, itemDef: ItemDefinition): void {
-        const label = itemDef.label;
-        const onPickup: ObjectEvent = () => {
-            const newItem = Player.createItem(itemDef.name);
-            if (newItem && this.player.getInventory().addItem(newItem)) {
-                EventBus.emit('message-log', `${label}を入手した`, this.dungeon.getTurnCount());
-                return false;
-            }
-            EventBus.emit('message-log', `${label}の上に乗った`, this.dungeon.getTurnCount());
-            return true;
-        };
-        const onSelf: ObjectEvent = (_dungeon, object) => {
-            const newItem = Player.createItem(itemDef.name);
-            if (newItem && this.player.getInventory().addItem(newItem)) {
-                EventBus.emit('message-log', `${label}を入手した`, this.dungeon.getTurnCount());
-                return false;
-            }
-            EventBus.emit('open-drop-list-for-pickup', { mapObject: object, itemDef });
-            return true;
-        };
-        const events = newMapEvent('around-0', onPickup);
-        newMapEvent('around-0-self', onSelf, events);
-        const itemObj = new ItemObject(itemDef);
-        itemObj.x = x;
-        itemObj.y = y;
-        itemObj.events = events;
-        this.dungeon.placeObject(itemObj);
     }
 
     private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean; type: string; effectJson: string }> {
