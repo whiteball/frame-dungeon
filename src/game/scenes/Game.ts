@@ -437,26 +437,27 @@ export class Game extends Scene {
                 const before = this.player.getStat(target);
                 this.player.addStat(target, value);
                 const delta = this.player.getStat(target) - before;
+                const statsLoader = StatsLoader.getInstance();
 
-                if (target === 'life' && value < 0) {
-                    // life ダメージは従来形式 + notifyDamageTaken + game-over 判定
+                if (statsLoader.isFluctuationAllowed(target) && value < 0) {
+                    // 変動する値ならダメージ表記
                     const damage = -delta;
                     EventBus.emit('attack-flash', 0xFF2222);
                     EventBus.emit('message-log',
-                        `${damage}のダメージ！(残りHP: ${this.player.getStat('life')}/${this.player.getMaxStat('life')})`,
+                        `${damage}のダメージ！(残り${statsLoader.getAbbreviation(target)}: ${this.player.getStat(target)}/${this.player.getMaxStat(target)})`,
                         turn);
                     const cleared = this.player.notifyDamageTaken();
                     for (const c of cleared) {
                         EventBus.emit('message-log', `${c.label}が解けた`, turn);
                     }
-                    if (this.player.getStat('life') <= 0) {
-                        EventBus.emit('game-over');
-                        return;
-                    }
                 } else if (delta !== 0) {
                     // それ以外は汎用的な変動ログ
-                    const statName = StatsLoader.getInstance().getAbbreviation(target) || target;
+                    const statName = statsLoader.getAbbreviation(target) || target;
                     EventBus.emit('message-log', makeStatFluctuatedMessage(statName, delta), turn);
+                }
+                if (this.player.getStat('life') <= 0) {
+                    EventBus.emit('game-over');
+                    return;
                 }
             } else if (effect.type === 'addEffect' && typeof effect.value === 'string') {
                 const effName = effect.value;

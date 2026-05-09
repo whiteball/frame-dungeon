@@ -144,18 +144,20 @@ export class Enemy extends MapObject {
         const player = dungeon.getPlayerInstance();
         if (!player) return;
 
+        const statsLoader = StatsLoader.getInstance();
         const playerDefense = player.getEffectiveStat('defense');
         const damage = this.calculateDamageToPlayer(playerDefense);
-        player.addStat('life', -damage);
+        const targetStat = 'life';
+        player.addStat(targetStat, -damage);
         EventBus.emit('attack-flash', 0xFF2222);
-        EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残りHP: ${player.getStat('life')}/${player.getMaxStat('life')})`, dungeon.getTurnCount());
+        EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残り${statsLoader.getAbbreviation(targetStat)}: ${player.getStat(targetStat)}/${player.getMaxStat(targetStat)})`, dungeon.getTurnCount());
         const cleared = player.notifyDamageTaken();
         for (const c of cleared) {
             EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
         }
 
         const abilities = this.definition.ability;
-        if (abilities && player.getStat('life') > 0) {
+        if (abilities && player.getStat(targetStat) > 0) {
             for (const ab of abilities) {
                 if (ab.effectAttack) {
                     const { name, rate } = ab.effectAttack;
@@ -168,7 +170,7 @@ export class Enemy extends MapObject {
             }
         }
 
-        if (player.getStat('life') <= 0) {
+        if (player.getStat(targetStat) <= 0) {
             EventBus.emit('game-over');
         }
     }
