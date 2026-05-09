@@ -455,7 +455,12 @@ export class Game extends Scene {
                     const statName = statsLoader.getAbbreviation(target) || target;
                     EventBus.emit('message-log', makeStatFluctuatedMessage(statName, delta), turn);
                 }
-                if (this.player.getStat('life') <= 0) {
+                const deadVars = {
+                    ...this.player.getFormulaVars(),
+                    currentFloor: this.floor,
+                    maxFloor: BaseLoader.getInstance().getGoalFloor(),
+                };
+                if (BaseLoader.getInstance().isDead(deadVars)) {
                     EventBus.emit('game-over');
                     return;
                 }

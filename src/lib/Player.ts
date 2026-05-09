@@ -608,8 +608,18 @@ export class Player {
         return bonuses;
     }
 
+    getFormulaVars(): Record<string, number> {
+        const vars: Record<string, number> = {};
+        for (const [key, value] of this.stats) {
+            vars[key] = value;
+        }
+        vars.level = this.level;
+        vars.exp = this.exp;
+        return vars;
+    }
+
     expToNextLevel(): number {
-        return this.level * 50;
+        return BaseLoader.getInstance().getRequiredExp(this.getFormulaVars());
     }
 
     addExp(amount: number): number {
@@ -625,11 +635,20 @@ export class Player {
 
     levelUp(): void {
         this.level++;
-        const newMaxLife = this.getMaxStat('life') + 10;
-        this.maxStats.set('life', newMaxLife);
-        this.stats.set('life', newMaxLife);
-        this.addStat('power', 2);
-        this.addStat('defense', 1);
+        const vars = this.getFormulaVars();
+        for (const { target, formula, reset } of BaseLoader.getInstance().getLevelUpBonuses()) {
+            const amount = formula.evaluate(vars);
+            const isFluctuating = Player.statsLoader?.isFluctuationAllowed(target) ?? false;
+            if (isFluctuating) {
+                const newMax = this.getMaxStat(target) + amount;
+                this.maxStats.set(target, newMax);
+                if (reset) {
+                    this.stats.set(target, newMax);
+                }
+            } else {
+                this.addStat(target, amount);
+            }
+        }
     }
 
     // 表示用の能力値を取得（略称付き、装備ボーナス・持続効果ボーナス込み）

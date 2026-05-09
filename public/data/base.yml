@@ -1,5 +1,33 @@
 name: Sample Game
 gaolFloor: 10
+
+defaultDamageStat: life
+
+dead:
+  use:
+    - life
+  formula: life <= 0
+
+requiredExp:
+  use:
+    - level
+  formula: level * 50
+
+levelUpBonus:
+  - target: life
+    formula: 10
+    reset: yes
+  - target: power
+    formula: 2
+  - target: defense
+    formula: 1
+
+autoSpawner:
+  use:
+    - currentFloor
+    - life
+  formula: "currentFloor <= 2 ? life <= 40 : (currentFloor <= 5 ? life <= 60 : currentFloor <= 9 ? life <= 100 : true)"
+
 floors:
   - 1:
       size: 15

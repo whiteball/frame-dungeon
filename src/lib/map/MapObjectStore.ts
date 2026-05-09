@@ -8,6 +8,7 @@ import type { DungeonMap } from '../MapGenerator';
 import { EventBus } from '../../game/EventBus';
 import { makeStatFluctuatedMessage } from '../util/text';
 import { StatsLoader } from '../StatsLoader';
+import { BaseLoader } from '../BaseLoader';
 
 /**
  * マップ上のオブジェクト（階段・トラップ・敵など）を一元管理するストア。
@@ -128,7 +129,7 @@ export class MapObjectStore {
       for (const c of statusResult.cleared) {
         EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
       }
-      if (player.getStat('life') <= 0) {
+      if (BaseLoader.getInstance().isDead(player.getFormulaVars())) {
         EventBus.emit('game-over');
       }
     }

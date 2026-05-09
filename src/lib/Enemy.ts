@@ -2,6 +2,7 @@ import type { EnemyDefinition } from './EnemyLoader';
 import { MapObject, MapMark } from './MapObject';
 import { StatsLoader } from './StatsLoader';
 import { EffectsLoader } from './EffectsLoader';
+import { BaseLoader } from './BaseLoader';
 import { EventBus } from '../game/EventBus';
 import type { DungeonMap } from './MapGenerator';
 import { getDirectionOffset, MapDirection } from './map/MapDirection';
@@ -145,9 +146,10 @@ export class Enemy extends MapObject {
         if (!player) return;
 
         const statsLoader = StatsLoader.getInstance();
+        const baseLoader = BaseLoader.getInstance();
         const playerDefense = player.getEffectiveStat('defense');
         const damage = this.calculateDamageToPlayer(playerDefense);
-        const targetStat = 'life';
+        const targetStat = baseLoader.getDefaultDamageStat();
         player.addStat(targetStat, -damage);
         EventBus.emit('attack-flash', 0xFF2222);
         EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残り${statsLoader.getAbbreviation(targetStat)}: ${player.getStat(targetStat)}/${player.getMaxStat(targetStat)})`, dungeon.getTurnCount());
@@ -157,7 +159,7 @@ export class Enemy extends MapObject {
         }
 
         const abilities = this.definition.ability;
-        if (abilities && player.getStat(targetStat) > 0) {
+        if (abilities && !baseLoader.isDead(player.getFormulaVars())) {
             for (const ab of abilities) {
                 if (ab.effectAttack) {
                     const { name, rate } = ab.effectAttack;
@@ -170,7 +172,7 @@ export class Enemy extends MapObject {
             }
         }
 
-        if (player.getStat(targetStat) <= 0) {
+        if (baseLoader.isDead(player.getFormulaVars())) {
             EventBus.emit('game-over');
         }
     }

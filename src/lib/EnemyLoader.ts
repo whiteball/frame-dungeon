@@ -1,5 +1,6 @@
 import { StatsLoader } from './StatsLoader';
 import { YamlDefinitionStore } from './YamlDefinitionStore';
+import { BaseLoader } from './BaseLoader';
 
 /**
  * 攻撃時に確率で状態異常を付与する追加効果
@@ -56,9 +57,13 @@ export interface EnemyDefinition {
     [statName: string]: string | number | EnemyAbility[] | undefined;
 }
 
+const NON_RANK_FIELDS = new Set(['name', 'label', 'description', 'walk', 'color', 'ability']);
+
 export class EnemyLoader {
     private static instance: EnemyLoader;
     private store = new YamlDefinitionStore<EnemyDefinition>();
+    private minRank = 0;
+    private maxRank = 0;
 
     private constructor() {}
 
@@ -71,6 +76,20 @@ export class EnemyLoader {
 
     async loadEnemies(): Promise<void> {
         await this.store.load('/data/enemies.yml', '敵', enemy => this.validateEnemyDefinition(enemy));
+
+        const allEnemies = this.store.getAll();
+        for (const enemy of allEnemies) {
+            let rank = 0;
+            for (const [k, v] of Object.entries(enemy)) {
+                if (!NON_RANK_FIELDS.has(k) && typeof v === 'number') {
+                    rank += v;
+                }
+            }
+            (enemy as Record<string, unknown>)['rank'] = rank;
+        }
+        const ranks = allEnemies.map(e => (e['rank'] as number) ?? 0);
+        this.minRank = ranks.length > 0 ? Math.min(...ranks) : 0;
+        this.maxRank = ranks.length > 0 ? Math.max(...ranks) : 0;
     }
 
     private validateEnemyDefinition(enemy: any): void {
@@ -150,26 +169,20 @@ export class EnemyLoader {
      * @returns そのフロアで出現する敵の定義リスト
      */
     getEnemiesByFloor(floor: number): EnemyDefinition[] {
-        // フロアに応じて敵の強さをフィルタリング
-        // floor 1-2: life 40以下
-        // floor 3-5: life 60以下
-        // floor 6-9: life 100以下
-        // floor 10+: 全ての敵
-
-        let maxLife: number;
-        if (floor <= 2) {
-            maxLife = 40;
-        } else if (floor <= 5) {
-            maxLife = 60;
-        } else if (floor <= 9) {
-            maxLife = 100;
-        } else {
-            return this.store.getAll();
-        }
+        const baseLoader = BaseLoader.getInstance();
+        const maxFloor = baseLoader.getGoalFloor();
 
         return this.store.getAll().filter(enemy => {
-            const life = enemy['life'];
-            return typeof life === 'number' && life <= maxLife;
+            const enemyVars: Record<string, number> = {};
+            for (const [k, v] of Object.entries(enemy)) {
+                if (typeof v === 'number') enemyVars[k] = v;
+            }
+            return baseLoader.isEnemySpawnableOnFloor(
+                enemyVars,
+                floor,
+                maxFloor,
+                { rank: (enemy['rank'] as number) ?? 0, minRank: this.minRank, maxRank: this.maxRank }
+            );
         });
     }
 

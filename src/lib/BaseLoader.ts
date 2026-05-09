@@ -1,6 +1,19 @@
 import yaml from 'js-yaml';
+import { Parser, type Expression } from 'expr-eval-fork';
 import { EnemyLoader } from './EnemyLoader';
 import { TrapsLoader } from './TrapsLoader';
+
+interface RawLevelUpBonusSpec {
+    target: string;
+    formula: string | number;
+    reset?: boolean | string;
+}
+
+export interface CompiledLevelUpBonus {
+    target: string;
+    formula: Expression;
+    reset: boolean;
+}
 
 interface FloorConfigRaw {
     size: number | { w: number; h: number };
@@ -28,6 +41,12 @@ export class BaseLoader {
     private goalFloor = 10;
     private rawFloorConfigs: Map<number, FloorConfigRaw> = new Map();
     private resolvedCache: Map<number, ResolvedFloorConfig> = new Map();
+    private parser = new Parser();
+    private _defaultDamageStat: string | null = null;
+    private deadFormula: Expression | null = null;
+    private requiredExpFormula: Expression | null = null;
+    private compiledLevelUpBonuses: CompiledLevelUpBonus[] = [];
+    private autoSpawnerFormula: Expression | null = null;
 
     private constructor() {}
 
@@ -80,8 +99,60 @@ export class BaseLoader {
             if (this.rawFloorConfigs.size === 0) {
                 throw new Error(`${filePath} に floors の設定が見つかりません`);
             }
+
+            if (typeof parsed.defaultDamageStat === 'string') {
+                this._defaultDamageStat = parsed.defaultDamageStat;
+            }
+
+            if (parsed.dead && typeof parsed.dead.formula === 'string') {
+                try {
+                    this.deadFormula = this.parser.parse(parsed.dead.formula);
+                } catch (e) {
+                    throw new Error(`dead.formula のパースに失敗しました: ${parsed.dead.formula}`);
+                }
+            }
+
+            if (parsed.requiredExp && typeof parsed.requiredExp.formula === 'string') {
+                try {
+                    this.requiredExpFormula = this.parser.parse(parsed.requiredExp.formula);
+                } catch (e) {
+                    throw new Error(`requiredExp.formula のパースに失敗しました: ${parsed.requiredExp.formula}`);
+                }
+            }
+
+            if (Array.isArray(parsed.levelUpBonus)) {
+                for (const entry of parsed.levelUpBonus as RawLevelUpBonusSpec[]) {
+                    if (!entry || typeof entry.target !== 'string') continue;
+                    if (entry.formula === undefined || entry.formula === null) continue;
+                    const formulaStr = String(entry.formula);
+                    try {
+                        this.compiledLevelUpBonuses.push({
+                            target: entry.target,
+                            formula: this.parser.parse(formulaStr),
+                            reset: entry.reset === true || entry.reset === 'yes',
+                        });
+                    } catch (e) {
+                        console.warn(`levelUpBonus[${entry.target}].formula のパースに失敗しました: ${formulaStr}`);
+                    }
+                }
+            }
+
+            if (parsed.autoSpawner && typeof parsed.autoSpawner.formula === 'string') {
+                try {
+                    this.autoSpawnerFormula = this.parser.parse(parsed.autoSpawner.formula);
+                } catch (e) {
+                    throw new Error(`autoSpawner.formula のパースに失敗しました: ${parsed.autoSpawner.formula}`);
+                }
+            }
         } catch (error) {
             this._throwWithAlert(filePath, error);
+        }
+
+        if (!this._defaultDamageStat) {
+            this._throwWithAlert(filePath, new Error('base.yml に defaultDamageStat が定義されていません'));
+        }
+        if (!this.requiredExpFormula) {
+            this._throwWithAlert(filePath, new Error('base.yml に requiredExp が定義されていません'));
         }
 
         this.loaded = true;
@@ -96,6 +167,40 @@ export class BaseLoader {
             `エラー詳細: ${error instanceof Error ? error.message : String(error)}`
         );
         throw error;
+    }
+
+    getDefaultDamageStat(): string {
+        return this._defaultDamageStat!;
+    }
+
+    isDead(vars: Record<string, number>): boolean {
+        if (this.deadFormula) {
+            return Boolean(this.deadFormula.evaluate(vars));
+        }
+        return (vars[this._defaultDamageStat!] ?? 0) <= 0;
+    }
+
+    getRequiredExp(vars: Record<string, number>): number {
+        return Number(this.requiredExpFormula!.evaluate(vars));
+    }
+
+    getLevelUpBonuses(): CompiledLevelUpBonus[] {
+        return this.compiledLevelUpBonuses;
+    }
+
+    isEnemySpawnableOnFloor(
+        enemyVars: Record<string, number>,
+        floor: number,
+        maxFloor: number,
+        rankInfo: { rank: number; minRank: number; maxRank: number }
+    ): boolean {
+        const vars = { ...enemyVars, currentFloor: floor, maxFloor, ...rankInfo };
+        if (this.autoSpawnerFormula) {
+            return Boolean(this.autoSpawnerFormula.evaluate(vars));
+        }
+        const { rank, minRank, maxRank } = rankInfo;
+        if (maxRank === minRank) return true;
+        return rank / (maxRank - minRank) * maxFloor <= floor;
     }
 
     getName(): string {
