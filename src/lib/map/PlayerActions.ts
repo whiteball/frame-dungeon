@@ -5,7 +5,7 @@ import { MapDirection, getDirectionOffset } from './MapDirection';
 import { EffectsLoader } from '../EffectsLoader';
 import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
-import { MapMark } from '../MapObject';
+import { StairsObject, TrapObject, ItemObject } from './MapObjects';
 
 /**
  * プレイヤーのターン消費アクション群
@@ -197,25 +197,22 @@ export function searchAt(dungeon: DungeonMap, targetX: integer, targetY: integer
     }
     for (const object of objects) {
       if (object instanceof Enemy) {
-        EventBus.emit('message-log', `${object.getName()}がいる。`, turnCount);
-      } else if (object.mark === MapMark.X_CROSS) {
-        /** @todo 何が設置されているかが分かるように、トラップについてもMapObjectを継承したオブジェクトにするか、定義をMapObjectに持てるようにする */
+        EventBus.emit('message-log', `${object.getLabel()}がいる。`, turnCount);
+      } else if (object instanceof TrapObject) {
         if (object.visible) {
-          EventBus.emit('message-log', `トラップがある。`, turnCount);
+          EventBus.emit('message-log', `${object.trapDef.label}がある。`, turnCount);
         } else {
           object.visible = true;
-          EventBus.emit('message-log', `トラップを発見した！`, turnCount);
+          EventBus.emit('message-log', `${object.trapDef.label}を発見した！`, turnCount);
         }
-      } else if (object.mark === MapMark.CROSS) {
-        /** @todo 何が設置されているかが分かるように、アイテムについてもMapObjectを継承したオブジェクトにするか、定義をMapObjectに持てるようにする */
+      } else if (object instanceof ItemObject) {
         if (object.visible) {
-          EventBus.emit('message-log', `アイテムがある。`, turnCount);
+          EventBus.emit('message-log', `${object.itemDef.label}がある。`, turnCount);
         } else {
           object.visible = true;
-          EventBus.emit('message-log', `アイテムを発見した！`, turnCount);
+          EventBus.emit('message-log', `${object.itemDef.label}を発見した！`, turnCount);
         }
-      } else if (object.mark === MapMark.CIRCLE) {
-        /** @todo 何が設置されているかが分かるように、階段についてもMapObjectを継承したオブジェクトにするか、定義をMapObjectに持てるようにする */
+      } else if (object instanceof StairsObject) {
         EventBus.emit('message-log', `階段がある。`, turnCount);
       }
     }

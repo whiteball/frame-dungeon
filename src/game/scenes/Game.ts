@@ -1,7 +1,7 @@
 import { EventBus } from '../EventBus';
 import { Scene } from 'phaser';
 import { DungeonMap } from '../../lib/MapGenerator';
-import { MapObject, MapMark, newMapEvent } from '../../lib/MapObject';
+import { MapObject, newMapEvent } from '../../lib/MapObject';
 import type { ObjectEvent } from '../../lib/MapObject';
 import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
@@ -17,6 +17,7 @@ import { EffectsLoader } from '../../lib/EffectsLoader';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
+import { StairsObject, TrapObject, ItemObject } from '../../lib/map/MapObjects';
 import { BaseLoader } from '../../lib/BaseLoader';
 import type { ResolvedFloorConfig } from '../../lib/BaseLoader';
 
@@ -160,7 +161,11 @@ export class Game extends Scene {
                     this.enterStairMode(dungeon);
                     return true;
                 }, stairEvents);
-                dungeon.addObject(step[0], step[1], MapMark.CIRCLE, stairEvents, 0x00FF00)
+                const stairsObj = new StairsObject();
+                stairsObj.x = step[0];
+                stairsObj.y = step[1];
+                stairsObj.events = stairEvents;
+                dungeon.placeObject(stairsObj);
                 excludePositionList.push(step);
             }
 
@@ -431,7 +436,11 @@ export class Game extends Scene {
         };
         const events = newMapEvent('around-0', onTrigger);
         newMapEvent('around-0-self', onSelfTrigger, events);
-        this.dungeon.addObject(x, y, MapMark.X_CROSS, events, 0xFF0000, 1, false, false);
+        const trapObj = new TrapObject(trapDef);
+        trapObj.x = x;
+        trapObj.y = y;
+        trapObj.events = events;
+        this.dungeon.placeObject(trapObj);
     }
 
     /**
@@ -511,7 +520,11 @@ export class Game extends Scene {
         };
         const events = newMapEvent('around-0', onPickup);
         newMapEvent('around-0-self', onSelf, events);
-        this.dungeon.addObject(x, y, MapMark.CROSS, events, 0x00FFFF);
+        const itemObj = new ItemObject(itemDef);
+        itemObj.x = x;
+        itemObj.y = y;
+        itemObj.events = events;
+        this.dungeon.placeObject(itemObj);
     }
 
     private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean; type: string; effectJson: string }> {

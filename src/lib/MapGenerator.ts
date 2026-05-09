@@ -742,6 +742,14 @@ export class DungeonMap {
   }
 
   /**
+   * 構築済みの MapObject インスタンスをマップに登録する
+   * @returns 追加されたオブジェクトのID
+   */
+  public placeObject(object: MapObject): integer {
+    return this._objectStore.add(object);
+  }
+
+  /**
    * プレイヤーとオブジェクトの距離に応じてイベントをディスパッチする
    * around-0: プレイヤーと同じマス
    * around-1: プレイヤーの周囲8マス（チェビシェフ距離1）
