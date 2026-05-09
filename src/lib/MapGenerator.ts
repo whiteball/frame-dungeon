@@ -566,6 +566,14 @@ export class DungeonMap {
   }
 
   /**
+   * 指定座標のマスにあるものをログに表示する。
+   * 未発見のオブジェクト（トラップ）があれば表示する。
+   */
+  public searchAt(targetX: integer, targetY: integer): boolean {
+    return PlayerActions.searchAt(this, targetX, targetY);
+  }
+
+  /**
    * プレイヤーが消耗品を使用する
    */
   public useConsumableItem(instanceId: string): boolean {

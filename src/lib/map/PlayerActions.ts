@@ -4,11 +4,13 @@ import type { DungeonMap } from '../MapGenerator';
 import { MapDirection, getDirectionOffset } from './MapDirection';
 import { EffectsLoader } from '../EffectsLoader';
 import { EventBus } from '../../game/EventBus';
+import { Enemy } from '../Enemy';
+import { MapMark } from '../MapObject';
 
 /**
  * プレイヤーのターン消費アクション群
  *
- * いずれも DungeonMap を引数に取り、戦闘・アイテム使用・装備変更を実行する。
+ * いずれも DungeonMap を引数に取り、戦闘・アイテム使用・装備変更・調査を実行する。
  * EventBus を介したメッセージログ通知もここに集約する。DungeonMap 側は
  * 同名の薄い委譲メソッドを公開する。
  */
@@ -179,4 +181,46 @@ export function changeEquipment(dungeon: DungeonMap, instanceId: string): Change
 
   dungeon.dispatchObjectEvent();
   return { success: true, consumedTurn: true, action: 'equipped' };
+}
+
+export function searchAt(dungeon: DungeonMap, targetX: integer, targetY: integer): boolean {
+  const { x, y } = dungeon.getPlayerPos();
+  const turnCount = dungeon.getTurnCount();
+
+  if (!dungeon.canAttack(x, y, targetX, targetY)) {
+    // その方向は壁
+    EventBus.emit('message-log', `そこには壁がある。`, turnCount);
+  } else {
+    const objects = dungeon.getObject(targetX, targetY);
+    if (objects.length < 1) {
+      EventBus.emit('message-log', `そこには何もない。`, turnCount);
+    }
+    for (const object of objects) {
+      if (object instanceof Enemy) {
+        EventBus.emit('message-log', `${object.getName()}がいる。`, turnCount);
+      } else if (object.mark === MapMark.X_CROSS) {
+        /** @todo 何が設置されているかが分かるように、トラップについてもMapObjectを継承したオブジェクトにするか、定義をMapObjectに持てるようにする */
+        if (object.visible) {
+          EventBus.emit('message-log', `トラップがある。`, turnCount);
+        } else {
+          object.visible = true;
+          EventBus.emit('message-log', `トラップを発見した！`, turnCount);
+        }
+      } else if (object.mark === MapMark.CROSS) {
+        /** @todo 何が設置されているかが分かるように、アイテムについてもMapObjectを継承したオブジェクトにするか、定義をMapObjectに持てるようにする */
+        if (object.visible) {
+          EventBus.emit('message-log', `アイテムがある。`, turnCount);
+        } else {
+          object.visible = true;
+          EventBus.emit('message-log', `アイテムを発見した！`, turnCount);
+        }
+      } else if (object.mark === MapMark.CIRCLE) {
+        /** @todo 何が設置されているかが分かるように、階段についてもMapObjectを継承したオブジェクトにするか、定義をMapObjectに持てるようにする */
+        EventBus.emit('message-log', `階段がある。`, turnCount);
+      }
+    }
+  }
+
+  dungeon.dispatchObjectEvent();
+  return true;
 }

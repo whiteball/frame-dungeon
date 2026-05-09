@@ -31,6 +31,7 @@ export class Game extends Scene {
         keyE: Phaser.Input.Keyboard.Key | undefined,
         keyQ: Phaser.Input.Keyboard.Key | undefined,
         keyM: Phaser.Input.Keyboard.Key | undefined,
+        keyC: Phaser.Input.Keyboard.Key | undefined,
         keySpace: Phaser.Input.Keyboard.Key | undefined,
     };
     dungeon: DungeonMap;
@@ -218,6 +219,7 @@ export class Game extends Scene {
             keyE: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E),
             keyQ: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
             keyM: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.M),
+            keyC: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C),
             keySpace: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         };
 
@@ -257,6 +259,12 @@ export class Game extends Scene {
             if (this.isModalMode) return;
             this.miniMapView.toggleMapMode();
             this.miniMapView.render(this.dungeon, this.showAllEnemies);
+        })
+
+        this.keys.keyC?.on('down', () => {
+            if (this.isModalMode) return;
+            if (this.handlePlayerActionDirective()) return;
+            this.trySearch();
         })
 
         this.dungeon = dun;
@@ -786,6 +794,43 @@ export class Game extends Scene {
 
     private exitAttackDirectionMode(): void {
         this.setSceneActions(this.defaultSceneActions);
+    }
+
+    private trySearch(): void {
+        const { x, y, direction } = this.dungeon.getPlayerPos();
+        const [fdx, fdy] = getDirectionOffset(direction);
+        const [rdx, rdy] = getDirectionOffset(rotateDirection(direction, 1));
+        const centerCell: [integer, integer] = [x + fdx, y + fdy];
+        const rightCell: [integer, integer] = [centerCell[0] + rdx, centerCell[1] + rdy];
+        const leftCell: [integer, integer] = [centerCell[0] - rdx, centerCell[1] - rdy];
+
+        const actions: SceneAction[] = [
+            {
+                label: '左',
+                onClick: () => this.executeSearch('左', leftCell[0], leftCell[1]),
+            },
+            {
+                label: '中央',
+                onClick: () => this.executeSearch('中央', centerCell[0], centerCell[1]),
+            },
+            {
+                label: '右',
+                onClick: () => this.executeSearch('右', rightCell[0], rightCell[1]),
+            },
+            {
+                label: 'キャンセル',
+                onClick: () => this.exitAttackDirectionMode(),
+            },
+        ];
+
+        this.setSceneActions(actions);
+    }
+
+    private executeSearch(directionLabel: string, targetX: integer, targetY: integer): void {
+        const turnCount = this.dungeon.getTurnCount();
+        EventBus.emit('message-log', `${directionLabel}を調べた。`, turnCount);
+        this.dungeon.searchAt(targetX, targetY);
+        this.exitAttackDirectionMode();
     }
 
     private enterStairMode(dungeon: DungeonMap): void {
