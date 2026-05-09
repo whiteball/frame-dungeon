@@ -11,6 +11,7 @@ import { MapObjectStore } from './map/MapObjectStore';
 import * as PlayerActions from './map/PlayerActions';
 import { dumpDungeon } from './map/MapDebug';
 import { findPath, findContainingZone, isInZone, hasLineOfSight, type FindPathOptions } from './map/Pathfinding';
+import { BaseLoader } from './BaseLoader';
 
 export type RandomPosConfig = {
   withoutCorridor?: boolean,
@@ -764,7 +765,7 @@ export class DungeonMap {
     // 一定ターンごとに僅かに回復させる
     // @todo この処理をここに置くべきか要検討。また回復量や回復ペース、対象のステータスを設定可能にする。
     if (this._turnCount % 10 === 0 && this._playerInstance) {
-      const target = 'life';
+      const target = BaseLoader.getInstance().getDefaultDamageStat();
       const max = this._playerInstance.getMaxStat(target);
       const delta = Math.floor(max * 0.01);
       this._playerInstance.addStat(target, delta < 1 ? 1 : delta);

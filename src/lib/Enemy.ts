@@ -314,8 +314,9 @@ export class Enemy extends MapObject {
     }
 
     toString(): string {
-        const lifeDesc = StatsLoader.getInstance().getDescription('life');
-        return `${this.getLabel()} (${this.getName()}) ${lifeDesc}:${this.getStat('life')}/${this.getMaxStat('life')}`;
+        const target = BaseLoader.getInstance().getDefaultEnemyDamageStat()
+        const desc = StatsLoader.getInstance().getDescription(target);
+        return `${this.getLabel()} (${this.getName()}) ${desc}:${this.getStat(target)}/${this.getMaxStat(target)}`;
     }
 
     /**
