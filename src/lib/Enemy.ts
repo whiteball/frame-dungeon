@@ -329,4 +329,33 @@ export class Enemy extends MapObject {
         result += `経験値: ${this.getExp()}`;
         return result;
     }
+
+    serialize(): {
+        instanceId: string; name: string; x: number; y: number;
+        stats: Record<string, number>; maxStats: Record<string, number>;
+        isDead: boolean; target: { x: number; y: number } | null;
+    } {
+        return {
+            instanceId: this.instanceId,
+            name: this.definition.name,
+            x: this.x,
+            y: this.y,
+            stats: Object.fromEntries(this.stats),
+            maxStats: Object.fromEntries(this.maxStats),
+            isDead: this.isDead,
+            target: this.target ? { ...this.target } : null,
+        };
+    }
+
+    restoreAfterLoad(
+        stats: Record<string, number>,
+        maxStats: Record<string, number>,
+        isDead: boolean,
+        target: { x: number; y: number } | null,
+    ): void {
+        this.stats = new Map(Object.entries(stats));
+        this.maxStats = new Map(Object.entries(maxStats));
+        this.isDead = isDead;
+        this.target = target;
+    }
 }

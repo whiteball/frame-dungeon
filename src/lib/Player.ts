@@ -8,6 +8,7 @@ import { EnemyLoader } from './EnemyLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { TrapsLoader } from './TrapsLoader';
 import { BaseLoader } from './BaseLoader';
+import type { PlayerSaveData } from './SaveManager';
 
 interface ActiveContinuousEffect {
     effects: Map<string, number>;
@@ -688,6 +689,68 @@ export class Player {
         }
 
         return displayStats;
+    }
+
+    serialize(): PlayerSaveData {
+        return {
+            level: this.level,
+            exp: this.exp,
+            stats: Object.fromEntries(this.stats),
+            maxStats: Object.fromEntries(this.maxStats),
+            inventory: this.inventory.serialize(),
+            equippedWeaponId: this.equippedWeapon?.getInstanceId() ?? null,
+            equippedMainArmorId: this.equippedMainArmor?.getInstanceId() ?? null,
+            equippedSubArmor1Id: this.equippedSubArmor1?.getInstanceId() ?? null,
+            equippedSubArmor2Id: this.equippedSubArmor2?.getInstanceId() ?? null,
+            activeContinuousEffects: this.activeContinuousEffects.map(e => ({
+                effects: Object.fromEntries(e.effects),
+                remainingTurns: e.remainingTurns,
+                sourceLabel: e.sourceLabel,
+            })),
+            activeStatusEffects: this.activeStatusEffects.map(e => ({
+                name: e.name,
+                count: e.count,
+            })),
+        };
+    }
+
+    deserialize(data: PlayerSaveData): void {
+        this.level = data.level;
+        this.exp = data.exp;
+        this.stats = new Map(Object.entries(data.stats));
+        this.maxStats = new Map(Object.entries(data.maxStats));
+
+        // インベントリ復元
+        this.inventory.clear();
+        for (const itemData of data.inventory) {
+            const def = Player.itemsLoader?.getItem(itemData.name);
+            if (def) {
+                this.inventory.addItem(new Item(def, itemData.instanceId, itemData.quantity));
+            }
+        }
+
+        // 装備復元（インベントリ内の同一instanceIdのItemを参照）
+        this.equippedWeapon = data.equippedWeaponId
+            ? this.inventory.getItemById(data.equippedWeaponId) ?? null : null;
+        this.equippedMainArmor = data.equippedMainArmorId
+            ? this.inventory.getItemById(data.equippedMainArmorId) ?? null : null;
+        this.equippedSubArmor1 = data.equippedSubArmor1Id
+            ? this.inventory.getItemById(data.equippedSubArmor1Id) ?? null : null;
+        this.equippedSubArmor2 = data.equippedSubArmor2Id
+            ? this.inventory.getItemById(data.equippedSubArmor2Id) ?? null : null;
+
+        // 持続効果復元
+        this.activeContinuousEffects = data.activeContinuousEffects.map(e => ({
+            effects: new Map(Object.entries(e.effects)),
+            remainingTurns: e.remainingTurns,
+            sourceLabel: e.sourceLabel,
+        }));
+
+        // 状態異常復元
+        this.activeStatusEffects = data.activeStatusEffects.map(e => ({
+            name: e.name,
+            count: e.count,
+        }));
     }
 
     // アイテム作成ヘルパー

@@ -2,6 +2,7 @@ import { GameObjects, Scene } from 'phaser';
 
 import { EventBus } from '../EventBus';
 import { BaseLoader } from '../../lib/BaseLoader';
+import type { SaveData } from '../../lib/SaveManager';
 
 export class MainMenu extends Scene
 {
@@ -58,6 +59,7 @@ export class MainMenu extends Scene
 
         EventBus.emit('scene-actions', [
             { label: 'ゲーム開始', onClick: () => this.changeScene() },
+            { label: 'ロード', onClick: () => EventBus.emit('open-load-dialog') },
             { label: '設定', onClick: () => EventBus.emit('open-settings', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies }) },
         ]);
 
@@ -68,9 +70,14 @@ export class MainMenu extends Scene
             this.saveSettings();
         });
 
+        EventBus.on('load-game', (saveData: SaveData) => {
+            this.startLoadedGame(saveData);
+        });
+
         this.events.once('shutdown', () => {
             EventBus.emit('scene-actions', []);
             EventBus.removeListener('settings-confirmed');
+            EventBus.removeListener('load-game');
         });
     }
 
@@ -78,5 +85,16 @@ export class MainMenu extends Scene
     {
         EventBus.emit('game-scene-start');
         this.scene.start('Game', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies });
+    }
+
+    private startLoadedGame(saveData: SaveData): void {
+        EventBus.emit('close-load-dialog');
+        EventBus.emit('game-scene-start');
+        this.scene.start('Game', {
+            viewRange: this.viewRange,
+            enableFog: this.enableFog,
+            showAllEnemies: this.showAllEnemies,
+            saveData,
+        });
     }
 }

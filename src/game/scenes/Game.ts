@@ -20,6 +20,9 @@ import { ItemObject } from '../../lib/map/MapObjects';
 import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
 import { BaseLoader } from '../../lib/BaseLoader';
 import type { ResolvedFloorConfig } from '../../lib/BaseLoader';
+import { SaveManager } from '../../lib/SaveManager';
+import type { SaveData } from '../../lib/SaveManager';
+import type { DungeonRestoreCallbacks } from '../../lib/MapGenerator';
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 
@@ -56,15 +59,17 @@ export class Game extends Scene {
     private viewRange = 3;
     private enableFog = true;
     private showAllEnemies = false;
+    private pendingSaveData: SaveData | null = null;
 
     constructor() {
         super('Game');
     }
 
-    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean }) {
+    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean; saveData?: SaveData }) {
         this.viewRange = data.viewRange ?? 3;
         this.enableFog = data.enableFog ?? true;
         this.showAllEnemies = data.showAllEnemies ?? false;
+        this.pendingSaveData = data.saveData ?? null;
     }
 
     render() {
@@ -135,6 +140,8 @@ export class Game extends Scene {
         EventBus.removeAllListeners('close-item-list-request');
         EventBus.removeAllListeners('open-drop-list-for-pickup');
         EventBus.removeAllListeners('drop-item');
+        EventBus.removeAllListeners('save-to-slot');
+        EventBus.removeAllListeners('close-save-dialog');
 
         this.floor = 1;
         const dun = new DungeonMap(15, 15, this.viewRange, this.enableFog);
@@ -209,8 +216,10 @@ export class Game extends Scene {
         this.player = new Player();
         this.params = this.getDisplayParams();
 
-        // テスト用: アイテムをプレイヤーに追加
-        this.testItemSystem();
+        // テスト用: 新規ゲーム時のみアイテムをプレイヤーに追加
+        if (!this.pendingSaveData) {
+            this.testItemSystem();
+        }
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         this.miniMapView = new MiniMapView(this.add, this.game.canvas.width - 10 - 200, 10, 200, 200);
@@ -359,7 +368,39 @@ export class Game extends Scene {
             this.render();
         });
 
-        EventBus.emit('go-to-next-floor', this.dungeon);
+        EventBus.on('save-to-slot', async ({ slot, memo }: { slot: number; memo: string }) => {
+            try {
+                const saveData = await this.buildSaveData(memo);
+                SaveManager.saveToSlot(slot, saveData);
+                EventBus.emit('close-save-dialog');
+                EventBus.emit('message-log', `スロット${slot}にセーブしました`, this.dungeon.getTurnCount());
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                EventBus.emit('message-log', `セーブに失敗しました: ${msg}`, this.dungeon.getTurnCount());
+                EventBus.emit('close-save-dialog');
+            }
+            this.setSceneActions(this.defaultSceneActions);
+        });
+
+        EventBus.on('close-save-dialog', () => {
+            if (this.input.keyboard) {
+                this.input.keyboard.resetKeys();
+                this.input.keyboard.enabled = true;
+            }
+            this.setSceneActions(this.defaultSceneActions);
+        });
+
+        if (this.pendingSaveData) {
+            const sd = this.pendingSaveData;
+            this.floor = sd.floor;
+            this.player.deserialize(sd.player);
+            this.dungeon.deserialize(sd.dungeon, this.buildDungeonRestoreCallbacks());
+            this.dungeon.setPlayerInstance(this.player);
+            EventBus.emit('update-view');
+            this.pendingSaveData = null;
+        } else {
+            EventBus.emit('go-to-next-floor', this.dungeon);
+        }
         EventBus.emit('current-scene-ready', this);
 
         // デバッグ用: コンソールから window.applyStatusEffect('poison') 等で状態異常を付与可能
@@ -398,6 +439,7 @@ export class Game extends Scene {
             { label: '装備変更', onClick: () => this.toggleList('equip') },
             { label: 'ステータス', onClick: () => this.openStatus() },
             { label: '足下', onClick: () => this.onUnderfoot() },
+            { label: 'セーブ', onClick: () => this.openSaveDialog() },
         ];
         this.setSceneActions(this.defaultSceneActions);
 
@@ -930,6 +972,38 @@ export class Game extends Scene {
             }
             this.render();
         }
+    }
+
+    private openSaveDialog(): void {
+        this.setSceneActions([]);
+        if (this.input.keyboard) this.input.keyboard.enabled = false;
+        EventBus.emit('open-save-dialog', {
+            floor: this.floor,
+            gameName: BaseLoader.getInstance().getName(),
+        });
+    }
+
+    private async buildSaveData(memo: string): Promise<SaveData> {
+        const yamlDigest = await SaveManager.calculateDigest();
+        return {
+            meta: {
+                savedAt: new Date().toISOString(),
+                memo,
+                gameName: BaseLoader.getInstance().getName(),
+                yamlDigest,
+            },
+            floor: this.floor,
+            player: this.player.serialize(),
+            dungeon: this.dungeon.serialize(),
+        };
+    }
+
+    private buildDungeonRestoreCallbacks(): DungeonRestoreCallbacks {
+        return {
+            onEnterStair: (dungeon: DungeonMap) => this.enterStairMode(dungeon),
+            applyTrapEffects: (def: TrapDefinition) => this.applyTrapEffects(def),
+            enterTrapConfirmMode: (def: TrapDefinition, obj: MapObject) => this.enterTrapConfirmMode(def, obj),
+        };
     }
 
     changeScene() {

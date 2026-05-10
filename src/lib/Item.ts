@@ -119,4 +119,12 @@ export class Item {
     toString(): string {
         return `${this.getLabel()} (${this.getName()})${this.quantity > 1 ? ` x${this.quantity}` : ''}`;
     }
+
+    serialize(): { instanceId: string; name: string; quantity: number } {
+        return {
+            instanceId: this.instanceId,
+            name: this.definition.name,
+            quantity: this.quantity,
+        };
+    }
 }

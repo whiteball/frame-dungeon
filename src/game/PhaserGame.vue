@@ -3,6 +3,8 @@ import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { EventBus } from './EventBus';
 import StartGame from './main';
 import Phaser from 'phaser';
+import { SaveManager } from '../lib/SaveManager';
+import type { SaveData, SlotMeta } from '../lib/SaveManager';
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 type ListMode = 'item' | 'equip' | 'drop';
@@ -32,8 +34,47 @@ const settingsShowAllEnemies = ref(false);
 const statusVisible = ref(false);
 const statusText = ref('');
 
+const saveDialogVisible = ref(false);
+const saveSlotMetas = ref<SlotMeta[]>([]);
+const selectedSaveSlot = ref(1);
+const saveMemo = ref('');
+
+const loadDialogVisible = ref(false);
+const loadSlotMetas = ref<SlotMeta[]>([]);
+const digestMismatchVisible = ref(false);
+const digestMismatchSaveData = ref<SaveData | null>(null);
+
 function closeStatus() {
     statusVisible.value = false;
+}
+
+function executeSave() {
+    EventBus.emit('save-to-slot', { slot: selectedSaveSlot.value, memo: saveMemo.value });
+}
+
+function cancelSave() {
+    saveDialogVisible.value = false;
+    EventBus.emit('close-save-dialog');
+}
+
+async function requestLoad(slot: number) {
+    const saveData = SaveManager.loadFromSlot(slot);
+    if (!saveData) return;
+    const currentDigest = await SaveManager.calculateDigest();
+    if (currentDigest !== saveData.meta.yamlDigest) {
+        digestMismatchSaveData.value = saveData;
+        digestMismatchVisible.value = true;
+    } else {
+        EventBus.emit('load-game', saveData);
+    }
+}
+
+function confirmDigestMismatch() {
+    if (digestMismatchSaveData.value) {
+        EventBus.emit('load-game', digestMismatchSaveData.value);
+        digestMismatchSaveData.value = null;
+    }
+    digestMismatchVisible.value = false;
 }
 
 function confirmSettings() {
@@ -116,6 +157,10 @@ function requestClose() {
     EventBus.emit('close-item-list-request');
 }
 
+function handleCloseSaveDialog() {
+    saveDialogVisible.value = false;
+}
+
 onMounted(() => {
 
     game.value = StartGame('game-container');
@@ -124,6 +169,10 @@ onMounted(() => {
         emit('current-active-scene', scene_instance);
         scene.value = scene_instance;
         actions.value = [];
+        // Game.ts の create() が removeAllListeners('close-save-dialog') で Vue 側リスナを
+        // 消してしまうため、current-scene-ready（removeAllListeners より後に発火）で再登録する
+        EventBus.removeListener('close-save-dialog', handleCloseSaveDialog);
+        EventBus.on('close-save-dialog', handleCloseSaveDialog);
     });
 
     EventBus.on('game-scene-start', () => {
@@ -185,6 +234,24 @@ onMounted(() => {
         statusVisible.value = true;
     });
 
+    EventBus.on('open-save-dialog', () => {
+        saveSlotMetas.value = SaveManager.getAllSlotMeta();
+        selectedSaveSlot.value = 1;
+        saveMemo.value = '';
+        saveDialogVisible.value = true;
+    });
+
+    EventBus.on('open-load-dialog', () => {
+        loadSlotMetas.value = SaveManager.getAllSlotMeta();
+        loadDialogVisible.value = true;
+        digestMismatchVisible.value = false;
+    });
+
+    EventBus.on('close-load-dialog', () => {
+        loadDialogVisible.value = false;
+        digestMismatchVisible.value = false;
+    });
+
 });
 
 onUnmounted(() => {
@@ -197,6 +264,10 @@ onUnmounted(() => {
     EventBus.removeListener('close-item-list');
     EventBus.removeListener('open-settings');
     EventBus.removeListener('open-status');
+    EventBus.removeListener('open-save-dialog');
+    EventBus.removeListener('close-save-dialog', handleCloseSaveDialog);
+    EventBus.removeListener('open-load-dialog');
+    EventBus.removeListener('close-load-dialog');
 
     if (game.value)
     {
@@ -387,6 +458,124 @@ defineExpose({ scene, game });
                 ></textarea>
                 <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
                     <button class="button" @click="closeStatus">閉じる</button>
+                </div>
+            </div>
+        </div>
+        <!-- セーブダイアログ -->
+        <div
+            v-show="saveDialogVisible"
+            style="position: absolute; left: 0; top: 0;
+                   width: 1024px; height: 768px;
+                   background: rgba(0,0,0,0.65);
+                   display: flex; justify-content: center; align-items: center;
+                   z-index: 110;"
+        >
+            <div style="background: #1a1a2e; color: #e0e0e0; border: 2px solid #555;
+                        border-radius: 8px; padding: 24px 32px; min-width: 560px;
+                        font-family: 'BIZ UDゴシック', Consolas, monospace;
+                        box-shadow: 0 0 32px rgba(0,0,0,0.8);">
+                <h2 style="margin: 0 0 14px 0; text-align: center; font-size: 20px;">セーブ</h2>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px;">
+                    <label
+                        v-for="i in 10"
+                        :key="i"
+                        :style="{
+                            display: 'flex', alignItems: 'flex-start', gap: '8px',
+                            padding: '7px', border: '1px solid #444', borderRadius: '4px',
+                            cursor: 'pointer',
+                            background: selectedSaveSlot === i ? '#2a2a5e' : 'transparent',
+                        }"
+                    >
+                        <input type="radio" v-model="selectedSaveSlot" :value="i" style="margin-top: 3px; flex-shrink: 0;" />
+                        <span style="flex: 1; font-size: 11px; line-height: 1.5;">
+                            <span style="opacity: 0.7;">スロット{{ String(i).padStart(2,'0') }} </span>
+                            <template v-if="saveSlotMetas[i-1] && !saveSlotMetas[i-1].isEmpty">
+                                {{ saveSlotMetas[i-1].gameName }} {{ saveSlotMetas[i-1].floor }}F<br>
+                                {{ saveSlotMetas[i-1].savedAt?.slice(0,16).replace('T',' ') }}<br>
+                                <span style="opacity: 0.7;">{{ saveSlotMetas[i-1].memo }}</span>
+                            </template>
+                            <template v-else>
+                                <span style="opacity: 0.4;">─ 空きスロット ─</span>
+                            </template>
+                        </span>
+                    </label>
+                </div>
+                <div style="margin-bottom: 14px; font-size: 13px;">
+                    メモ:
+                    <input
+                        type="text"
+                        v-model="saveMemo"
+                        maxlength="50"
+                        @keydown.stop
+                        style="background: #2a2a3e; color: #e0e0e0;
+                               border: 1px solid #666; border-radius: 4px;
+                               padding: 4px 8px; width: 280px; margin-left: 8px;
+                               font-family: 'BIZ UDゴシック', Consolas, monospace;"
+                    />
+                </div>
+                <div style="display: flex; justify-content: center; gap: 16px;">
+                    <button class="button" @click="executeSave">保存</button>
+                    <button class="button" @click="cancelSave">キャンセル</button>
+                </div>
+            </div>
+        </div>
+        <!-- ロードダイアログ -->
+        <div
+            v-show="loadDialogVisible"
+            style="position: absolute; left: 0; top: 0;
+                   width: 1024px; height: 768px;
+                   background: rgba(0,0,0,0.65);
+                   display: flex; justify-content: center; align-items: center;
+                   z-index: 110;"
+        >
+            <div style="background: #1a1a2e; color: #e0e0e0; border: 2px solid #555;
+                        border-radius: 8px; padding: 24px 32px; min-width: 560px;
+                        font-family: 'BIZ UDゴシック', Consolas, monospace;
+                        box-shadow: 0 0 32px rgba(0,0,0,0.8);">
+                <h2 style="margin: 0 0 14px 0; text-align: center; font-size: 20px;">ロード</h2>
+                <!-- ダイジェスト不一致確認パネル -->
+                <div
+                    v-if="digestMismatchVisible"
+                    style="background: #2a1010; border: 1px solid #f55;
+                           border-radius: 6px; padding: 16px; margin-bottom: 12px;"
+                >
+                    <p style="margin: 0 0 12px 0; line-height: 1.6;">
+                        セーブデータのゲームバージョンが現在と異なります。<br>
+                        このまま続けると不具合が発生する可能性があります。
+                    </p>
+                    <div style="display: flex; justify-content: center; gap: 16px;">
+                        <button class="button" @click="confirmDigestMismatch">このまま続ける</button>
+                        <button class="button" @click="digestMismatchVisible = false">戻る</button>
+                    </div>
+                </div>
+                <!-- スロット一覧 -->
+                <div v-else style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px;">
+                    <div
+                        v-for="i in 10"
+                        :key="i"
+                        style="display: flex; align-items: flex-start; gap: 8px;
+                               padding: 7px; border: 1px solid #444; border-radius: 4px;"
+                    >
+                        <button
+                            class="button"
+                            :disabled="!loadSlotMetas[i-1] || !!loadSlotMetas[i-1].isEmpty"
+                            @click="requestLoad(i)"
+                            style="flex-shrink: 0;"
+                        >ロード</button>
+                        <span style="flex: 1; font-size: 11px; line-height: 1.5;">
+                            <template v-if="loadSlotMetas[i-1] && !loadSlotMetas[i-1].isEmpty">
+                                {{ loadSlotMetas[i-1].gameName }} {{ loadSlotMetas[i-1].floor }}F<br>
+                                {{ loadSlotMetas[i-1].savedAt?.slice(0,16).replace('T',' ') }}<br>
+                                <span style="opacity: 0.7;">{{ loadSlotMetas[i-1].memo ? '「' + loadSlotMetas[i-1].memo + '」' : '' }}</span>
+                            </template>
+                            <template v-else>
+                                <span style="opacity: 0.4;">─ データなし ─</span>
+                            </template>
+                        </span>
+                    </div>
+                </div>
+                <div v-if="!digestMismatchVisible" style="display: flex; justify-content: center;">
+                    <button class="button" @click="loadDialogVisible = false">閉じる</button>
                 </div>
             </div>
         </div>

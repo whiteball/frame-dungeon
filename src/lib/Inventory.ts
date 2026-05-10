@@ -194,6 +194,10 @@ export class Inventory {
         this.items = [];
     }
 
+    serialize(): Array<{ instanceId: string; name: string; quantity: number }> {
+        return this.items.map(item => item.serialize());
+    }
+
     /**
      * インベントリの状態をコンソールに出力（デバッグ用）
      */

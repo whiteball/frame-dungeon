@@ -1,7 +1,7 @@
 'use strict';
 
-import type { Enemy } from './Enemy';
-import type { MapObject, ObjectEvent } from './MapObject';
+import { Enemy } from './Enemy';
+import { MapObject, newMapEvent, type ObjectEvent } from './MapObject';
 import type { Player } from './Player';
 import { getRandomInt } from './util/random';
 import { Rect } from './map/Rect';
@@ -12,6 +12,18 @@ import * as PlayerActions from './map/PlayerActions';
 import { dumpDungeon } from './map/MapDebug';
 import { findPath, findContainingZone, isInZone, hasLineOfSight, type FindPathOptions } from './map/Pathfinding';
 import { BaseLoader } from './BaseLoader';
+import { StairsObject, TrapObject, ItemObject } from './map/MapObjects';
+import { ItemsLoader } from './ItemsLoader';
+import { TrapsLoader } from './TrapsLoader';
+import { EnemyLoader } from './EnemyLoader';
+import type { DungeonSaveData } from './SaveManager';
+import type { TrapDefinition } from './TrapsLoader';
+
+export type DungeonRestoreCallbacks = {
+    onEnterStair: (dungeon: DungeonMap) => void;
+    applyTrapEffects: (def: TrapDefinition) => void;
+    enterTrapConfirmMode: (def: TrapDefinition, obj: MapObject) => void;
+};
 
 export type RandomPosConfig = {
   withoutCorridor?: boolean,
@@ -965,5 +977,116 @@ export class DungeonMap {
     options?: FindPathOptions,
   ): MapDirection[] | undefined {
     return findPath(this, this._roomsWithCorridors, startX, startY, endX, endY, options);
+  }
+
+  public serialize(): DungeonSaveData {
+    const objects: DungeonSaveData['objects'] = [];
+    const enemies: DungeonSaveData['enemies'] = [];
+
+    for (const obj of this._objectStore.getAll().values()) {
+      if (obj instanceof Enemy) {
+        enemies.push(obj.serialize());
+      } else if (obj instanceof StairsObject) {
+        objects.push({ type: 'stairs', x: obj.x, y: obj.y });
+      } else if (obj instanceof TrapObject) {
+        objects.push({ type: 'trap', x: obj.x, y: obj.y, trapName: obj.trapDef.name, visible: obj.visible });
+      } else if (obj instanceof ItemObject) {
+        objects.push({ type: 'item', x: obj.x, y: obj.y, itemName: obj.itemDef.name });
+      }
+    }
+
+    return {
+      width: this._width,
+      height: this._height,
+      map: [...this._map],
+      mapFog: [...this._mapFog],
+      mapWalked: [...this._mapWalked],
+      playerX: this._player.x,
+      playerY: this._player.y,
+      playerDirection: this._player.direction,
+      turnCount: this._turnCount,
+      rooms: this._rooms.map(r => ({ x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 })),
+      roomsWithCorridors: this._roomsWithCorridors.map(rwc => ({
+        room: { x1: rwc.room.x1, y1: rwc.room.y1, x2: rwc.room.x2, y2: rwc.room.y2 },
+        corridors: rwc.corridors.map(c => ({ x1: c.x1, y1: c.y1, x2: c.x2, y2: c.y2 })),
+      })),
+      objects,
+      enemies,
+    };
+  }
+
+  public deserialize(data: DungeonSaveData, callbacks: DungeonRestoreCallbacks): void {
+    this._width = data.width;
+    this._height = data.height;
+    this._map = [...data.map];
+    this._mapFog = [...data.mapFog];
+    this._mapWalked = [...data.mapWalked];
+    this._mapCurrentView = new Array(this._width * this._height).fill(0);
+    this._turnCount = data.turnCount;
+    this._player = {
+      x: data.playerX,
+      y: data.playerY,
+      direction: data.playerDirection as MapDirection,
+    };
+    this._rooms = data.rooms.map(r => new Rect(r.x1, r.y1, r.x2, r.y2));
+    this._roomsWithCorridors = data.roomsWithCorridors.map(rwc => ({
+      room: new Rect(rwc.room.x1, rwc.room.y1, rwc.room.x2, rwc.room.y2),
+      corridors: rwc.corridors.map(c => new Rect(c.x1, c.y1, c.x2, c.y2)),
+    }));
+
+    this._objectStore.clear();
+
+    const itemsLoader = ItemsLoader.getInstance();
+    const trapsLoader = TrapsLoader.getInstance();
+    const enemyLoader = EnemyLoader.getInstance();
+
+    for (const objData of data.objects) {
+      if (objData.type === 'stairs') {
+        const obj = new StairsObject();
+        const handler: ObjectEvent = (dungeon) => { callbacks.onEnterStair(dungeon); return true; };
+        newMapEvent('around-0', handler, obj.events);
+        newMapEvent('around-0-self', handler, obj.events);
+        obj.x = objData.x;
+        obj.y = objData.y;
+        this._objectStore.add(obj);
+      } else if (objData.type === 'trap') {
+        const trapDef = trapsLoader.getTrap(objData.trapName);
+        if (!trapDef) continue;
+        const obj = new TrapObject(trapDef);
+        const onTrigger: ObjectEvent = (_, object) => {
+          if (object.visible) return true;
+          object.visible = true;
+          callbacks.applyTrapEffects(trapDef);
+          return true;
+        };
+        const onSelfTrigger: ObjectEvent = (_, object) => {
+          callbacks.enterTrapConfirmMode(trapDef, object);
+          return true;
+        };
+        newMapEvent('around-0', onTrigger, obj.events);
+        newMapEvent('around-0-self', onSelfTrigger, obj.events);
+        obj.x = objData.x;
+        obj.y = objData.y;
+        obj.visible = objData.visible;
+        this._objectStore.add(obj);
+      } else if (objData.type === 'item') {
+        const itemDef = itemsLoader.getItem(objData.itemName);
+        if (!itemDef) continue;
+        const obj = new ItemObject(itemDef);
+        obj.x = objData.x;
+        obj.y = objData.y;
+        this._objectStore.add(obj);
+      }
+    }
+
+    for (const enemyData of data.enemies) {
+      const def = enemyLoader.getEnemy(enemyData.name);
+      if (!def) continue;
+      const enemy = new Enemy(def, enemyData.x, enemyData.y, enemyData.instanceId);
+      enemy.restoreAfterLoad(enemyData.stats, enemyData.maxStats, enemyData.isDead, enemyData.target);
+      this._objectStore.add(enemy);
+    }
+
+    this.clearFogWithinPlayer();
   }
 }
