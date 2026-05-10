@@ -396,7 +396,7 @@ export class Game extends Scene {
         this.defaultSceneActions = [
             { label: 'アイテム使用', onClick: () => this.toggleList('item') },
             { label: '装備変更', onClick: () => this.toggleList('equip') },
-            { label: 'ステータス', onClick: () => EventBus.emit('message-log', 'ステータス確認機能は未実装です', this.dungeon.getTurnCount()) },
+            { label: 'ステータス', onClick: () => this.openStatus() },
             { label: '足下', onClick: () => this.onUnderfoot() },
         ];
         this.setSceneActions(this.defaultSceneActions);
@@ -498,6 +498,42 @@ export class Game extends Scene {
             type: it.getType(),
             effectJson: JSON.stringify(it.getDefinition().effect),
         }));
+    }
+
+    private openStatus(): void {
+        const lines: string[] = [];
+
+        lines.push(`現在の階層：${this.floor}`);
+        lines.push(`レベル：${this.player.level}`);
+        lines.push(`次のレベルまでの経験値：${this.player.expToNextLevel() - this.player.exp}`);
+        lines.push('');
+
+        const displayParams = this.getDisplayParams();
+        for (const [key, value] of displayParams) {
+            lines.push(`${key}：${value}`);
+        }
+        if (!displayParams.has('状態')) {
+            lines.push('状態：なし');
+        }
+        lines.push('');
+
+        lines.push(`武器：${this.player.getEquippedWeapon()?.getLabel() ?? 'なし'}`);
+        lines.push(`メイン防具：${this.player.getEquippedMainArmor()?.getLabel() ?? 'なし'}`);
+        lines.push(`サブ防具１：${this.player.getEquippedSubArmor1()?.getLabel() ?? 'なし'}`);
+        lines.push(`サブ防具２：${this.player.getEquippedSubArmor2()?.getLabel() ?? 'なし'}`);
+        lines.push('');
+
+        lines.push('アイテム：');
+        const items = this.player.getInventory().getItems();
+        if (items.length > 0) {
+            for (const item of items) {
+                lines.push(item.getLabel());
+            }
+        } else {
+            lines.push('なし');
+        }
+
+        EventBus.emit('open-status', lines.join('\n'));
     }
 
     private toggleList(mode: 'item' | 'equip'): void {

@@ -29,6 +29,13 @@ const settingsViewRange = ref(3);
 const settingsEnableFog = ref(true);
 const settingsShowAllEnemies = ref(false);
 
+const statusVisible = ref(false);
+const statusText = ref('');
+
+function closeStatus() {
+    statusVisible.value = false;
+}
+
 function confirmSettings() {
     EventBus.emit('settings-confirmed', {
         viewRange: settingsViewRange.value,
@@ -173,6 +180,11 @@ onMounted(() => {
         settingsVisible.value = true;
     });
 
+    EventBus.on('open-status', (text: string) => {
+        statusText.value = text;
+        statusVisible.value = true;
+    });
+
 });
 
 onUnmounted(() => {
@@ -184,6 +196,7 @@ onUnmounted(() => {
     EventBus.removeListener('open-item-list');
     EventBus.removeListener('close-item-list');
     EventBus.removeListener('open-settings');
+    EventBus.removeListener('open-status');
 
     if (game.value)
     {
@@ -346,6 +359,34 @@ defineExpose({ scene, game });
                 <div style="display: flex; justify-content: center; gap: 16px;">
                     <button class="button" @click="confirmSettings">OK</button>
                     <button class="button" @click="cancelSettings">キャンセル</button>
+                </div>
+            </div>
+        </div>
+        <div
+            v-show="statusVisible"
+            style="position: absolute; left: 0; top: 0;
+                   width: 1024px; height: 768px;
+                   background: rgba(0,0,0,0.6);
+                   display: flex; justify-content: center; align-items: center;
+                   z-index: 100;"
+        >
+            <div style="background: #1a1a2e; color: #fff; border: 2px solid #555;
+                        border-radius: 8px; padding: 32px 40px; min-width: 380px;
+                        font-family: 'BIZ UDゴシック', Consolas, monospace;
+                        box-shadow: 0 0 32px rgba(0,0,0,0.8);">
+                <h2 style="margin: 0 0 16px 0; text-align: center; font-size: 22px;">ステータス</h2>
+                <textarea
+                    :value="statusText"
+                    readonly
+                    style="width: 100%; height: 400px; resize: none;
+                           background: #111; color: #fff;
+                           border: 1px solid #666; border-radius: 4px;
+                           padding: 8px; box-sizing: border-box;
+                           font-family: 'BIZ UDゴシック', Consolas, monospace;
+                           font-size: 14px; line-height: 1.6;"
+                ></textarea>
+                <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+                    <button class="button" @click="closeStatus">閉じる</button>
                 </div>
             </div>
         </div>
