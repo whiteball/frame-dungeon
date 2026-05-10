@@ -21,6 +21,7 @@ import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
 import { BaseLoader } from '../../lib/BaseLoader';
 import type { ResolvedFloorConfig } from '../../lib/BaseLoader';
 import { SaveManager } from '../../lib/SaveManager';
+import { YamlCrossValidator } from '../../lib/YamlCrossValidator';
 import type { SaveData } from '../../lib/SaveManager';
 import type { DungeonRestoreCallbacks } from '../../lib/MapGenerator';
 
@@ -213,6 +214,15 @@ export class Game extends Scene {
 
         // Player初期化前にシステムを初期化
         await Player.initializeAllSystems();
+
+        const { errors, infos } = YamlCrossValidator.validate();
+        for (const info of infos) console.info(`[YAML INFO] ${info}`);
+        if (errors.length > 0) {
+            EventBus.emit('yaml-cross-validation-errors', errors);
+            this.scene.start('MainMenu');
+            return;
+        }
+
         this.player = new Player();
         this.params = this.getDisplayParams();
 

@@ -8,20 +8,25 @@ export class YamlDefinitionStore<T extends { name: string }> {
         filePath: string,
         dataLabel: string,
         validate: (item: any) => void,
-        options?: { required?: boolean }
+        options?: { required?: boolean; customText?: string }
     ): Promise<void> {
         const required = options?.required ?? false;
 
-        const response = await fetch(filePath);
-        if (!response.ok) {
-            if (required) {
-                this._throwWithAlert(filePath, dataLabel, new Error(`HTTP ${response.status}: ${response.statusText}`));
+        let yamlText: string;
+        if (options?.customText !== undefined) {
+            yamlText = options.customText;
+        } else {
+            const response = await fetch(filePath);
+            if (!response.ok) {
+                if (required) {
+                    this._throwWithAlert(filePath, dataLabel, new Error(`HTTP ${response.status}: ${response.statusText}`));
+                }
+                console.log(`${filePath} が見つかりません (HTTP ${response.status})。${dataLabel}なしで続行します。`);
+                return;
             }
-            console.log(`${filePath} が見つかりません (HTTP ${response.status})。${dataLabel}なしで続行します。`);
-            return;
+            yamlText = await response.text();
         }
 
-        const yamlText = await response.text();
         if (!yamlText.trim()) {
             if (required) {
                 this._throwWithAlert(filePath, dataLabel, new Error(`${filePath} is empty`));

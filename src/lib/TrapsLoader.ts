@@ -1,4 +1,5 @@
 import { YamlDefinitionStore } from './YamlDefinitionStore';
+import { CustomDataStore } from './CustomDataStore';
 
 export type TrapEffectType = 'stat' | 'addEffect' | 'unequip';
 
@@ -40,7 +41,8 @@ export class TrapsLoader {
     }
 
     async loadTraps(): Promise<void> {
-        await this.store.load('/data/traps.yml', 'トラップ', trap => this.validateTrapDefinition(trap));
+        const customText = CustomDataStore.get('traps');
+        await this.store.load('/data/traps.yml', 'トラップ', trap => this.validateTrapDefinition(trap), { customText });
     }
 
     private validateTrapDefinition(trap: any): void {

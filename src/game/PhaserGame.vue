@@ -3,8 +3,10 @@ import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { EventBus } from './EventBus';
 import StartGame from './main';
 import Phaser from 'phaser';
+import JSZip from 'jszip';
 import { SaveManager } from '../lib/SaveManager';
 import type { SaveData, SlotMeta } from '../lib/SaveManager';
+import { CustomDataStore, YAML_KEYS } from '../lib/CustomDataStore';
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 type ListMode = 'item' | 'equip' | 'drop';
@@ -43,6 +45,15 @@ const loadDialogVisible = ref(false);
 const loadSlotMetas = ref<SlotMeta[]>([]);
 const digestMismatchVisible = ref(false);
 const digestMismatchSaveData = ref<SaveData | null>(null);
+
+// データ選択・カスタムデータ関連
+const gameStarted = ref(false);
+const zipError = ref('');
+const zipLoading = ref(false);
+
+// YamlCrossValidatorエラー表示
+const yamlValidationErrors = ref<string[]>([]);
+const yamlErrorVisible = ref(false);
 
 function closeStatus() {
     statusVisible.value = false;
@@ -161,9 +172,55 @@ function handleCloseSaveDialog() {
     saveDialogVisible.value = false;
 }
 
+async function launchGame(): Promise<void> {
+    gameStarted.value = true;
+    await nextTick();
+    game.value = StartGame('game-container');
+}
+
+async function startWithDefault(): Promise<void> {
+    // CustomDataStoreには何もセットしない（デフォルトfetchを使用）
+    await launchGame();
+}
+
+async function handleZipFile(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    zipLoading.value = true;
+    zipError.value = '';
+
+    try {
+        const zip = await JSZip.loadAsync(file);
+        const missing: string[] = [];
+
+        for (const key of YAML_KEYS) {
+            const entry = zip.file(`${key}.yml`) ?? zip.file(`data/${key}.yml`);
+            if (!entry) {
+                missing.push(`${key}.yml`);
+            } else {
+                CustomDataStore.set(key, await entry.async('string'));
+            }
+        }
+
+        if (missing.length > 0) {
+            CustomDataStore.clear();
+            zipError.value = `ZIPファイルに以下のファイルが見つかりません:\n${missing.join(', ')}`;
+            return;
+        }
+
+        await launchGame();
+    } catch (e) {
+        CustomDataStore.clear();
+        zipError.value = `ZIPファイルの読み込みに失敗しました: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+        zipLoading.value = false;
+    }
+}
+
 onMounted(() => {
 
-    game.value = StartGame('game-container');
+    // StartGame() はデータ選択後に呼ぶため、ここでは EventBus リスナのみ登録する
 
     EventBus.on('current-scene-ready', (scene_instance: Phaser.Scene) => {
         emit('current-active-scene', scene_instance);
@@ -252,6 +309,11 @@ onMounted(() => {
         digestMismatchVisible.value = false;
     });
 
+    EventBus.on('yaml-cross-validation-errors', (errors: string[]) => {
+        yamlValidationErrors.value = errors;
+        yamlErrorVisible.value = true;
+    });
+
 });
 
 onUnmounted(() => {
@@ -268,6 +330,7 @@ onUnmounted(() => {
     EventBus.removeListener('close-save-dialog', handleCloseSaveDialog);
     EventBus.removeListener('open-load-dialog');
     EventBus.removeListener('close-load-dialog');
+    EventBus.removeListener('yaml-cross-validation-errors');
 
     if (game.value)
     {
@@ -282,7 +345,57 @@ defineExpose({ scene, game });
 </script>
 
 <template>
-    <div style="position: relative; display: inline-block;">
+    <!-- データ選択UI（ゲーム未起動時） -->
+    <div
+        v-if="!gameStarted"
+        style="width: 1024px; height: 768px;
+               display: flex; justify-content: center; align-items: center;
+               background: #0a0a14;"
+    >
+        <div style="background: #1a1a2e; color: #e0e0e0; border: 2px solid #555;
+                    border-radius: 8px; padding: 40px 48px; min-width: 400px;
+                    font-family: 'BIZ UDゴシック', Consolas, monospace;
+                    box-shadow: 0 0 32px rgba(0,0,0,0.8); text-align: center;">
+            <h2 style="margin: 0 0 32px 0; font-size: 22px; letter-spacing: 2px;">ゲームデータを選択</h2>
+            <div style="margin-bottom: 24px;">
+                <button
+                    class="button"
+                    style="font-size: 16px; padding: 10px 32px; width: 80%;"
+                    @click="startWithDefault"
+                >デフォルトデータでプレイ</button>
+            </div>
+            <div style="border-top: 1px solid #444; padding-top: 24px;">
+                <p style="margin: 0 0 12px 0; font-size: 14px; opacity: 0.8;">
+                    または ZIPファイルからカスタムデータを読み込む:
+                </p>
+                <label style="display: inline-block; cursor: pointer;">
+                    <input
+                        type="file"
+                        accept=".zip"
+                        :disabled="zipLoading"
+                        @change="handleZipFile"
+                        style="display: none;"
+                    />
+                    <span
+                        class="button"
+                        style="display: inline-block; font-size: 14px; padding: 8px 24px;
+                               opacity: 1;"
+                        :style="{ opacity: zipLoading ? '0.5' : '1', cursor: zipLoading ? 'not-allowed' : 'pointer' }"
+                    >{{ zipLoading ? '読み込み中...' : 'ZIPを選択' }}</span>
+                </label>
+                <div
+                    v-if="zipError"
+                    style="margin-top: 16px; padding: 12px; background: #2a1010;
+                           border: 1px solid #f55; border-radius: 4px;
+                           color: #f88; font-size: 13px; white-space: pre-wrap;
+                           text-align: left;"
+                >{{ zipError }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ゲーム本体（起動後） -->
+    <div v-else style="position: relative; display: inline-block;">
         <div id="game-container"></div>
         <div
             style="position: absolute; left: 0; top: 540px;
@@ -576,6 +689,34 @@ defineExpose({ scene, game });
                 </div>
                 <div v-if="!digestMismatchVisible" style="display: flex; justify-content: center;">
                     <button class="button" @click="loadDialogVisible = false">閉じる</button>
+                </div>
+            </div>
+        </div>
+        <!-- YamlCrossValidatorエラーモーダル -->
+        <div
+            v-show="yamlErrorVisible"
+            style="position: absolute; left: 0; top: 0;
+                   width: 1024px; height: 768px;
+                   background: rgba(0,0,0,0.75);
+                   display: flex; justify-content: center; align-items: center;
+                   z-index: 120;"
+        >
+            <div style="background: #1a0a0a; color: #e0e0e0; border: 2px solid #f55;
+                        border-radius: 8px; padding: 28px 36px; min-width: 500px; max-width: 760px;
+                        font-family: 'BIZ UDゴシック', Consolas, monospace;
+                        box-shadow: 0 0 32px rgba(0,0,0,0.9);">
+                <h2 style="margin: 0 0 16px 0; text-align: center; font-size: 20px; color: #f88;">
+                    YAMLデータにエラーがあります
+                </h2>
+                <ul style="margin: 0 0 16px 0; padding: 0 0 0 20px; max-height: 400px;
+                           overflow-y: auto; font-size: 13px; line-height: 1.8; color: #f88;">
+                    <li v-for="(e, i) in yamlValidationErrors" :key="i">{{ e }}</li>
+                </ul>
+                <p style="margin: 0 0 16px 0; font-size: 13px; opacity: 0.7; text-align: center;">
+                    YAMLを修正してから再度お試しください。メインメニューに戻ります。
+                </p>
+                <div style="display: flex; justify-content: center;">
+                    <button class="button" @click="yamlErrorVisible = false">閉じる</button>
                 </div>
             </div>
         </div>

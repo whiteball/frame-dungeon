@@ -1,6 +1,7 @@
 import { StatsLoader } from './StatsLoader';
 import { YamlDefinitionStore } from './YamlDefinitionStore';
 import { BaseLoader } from './BaseLoader';
+import { CustomDataStore } from './CustomDataStore';
 
 /**
  * 攻撃時に確率で状態異常を付与する追加効果
@@ -75,7 +76,8 @@ export class EnemyLoader {
     }
 
     async loadEnemies(): Promise<void> {
-        await this.store.load('/data/enemies.yml', '敵', enemy => this.validateEnemyDefinition(enemy));
+        const customText = CustomDataStore.get('enemies');
+        await this.store.load('/data/enemies.yml', '敵', enemy => this.validateEnemyDefinition(enemy), { customText });
 
         const allEnemies = this.store.getAll();
         for (const enemy of allEnemies) {

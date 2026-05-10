@@ -1,5 +1,5 @@
 name: Sample Game
-gaolFloor: 10
+goalFloor: 10
 
 defaultDamageStat: life
 
@@ -106,4 +106,4 @@ floors:
       traps:
         - spike
         - swamp
-        - unequip
+        - strip

@@ -1,5 +1,7 @@
 'use strict';
 
+import { CustomDataStore, YAML_KEYS } from './CustomDataStore';
+
 // ─── セーブデータ型定義 ────────────────────────────────────────────────────────
 
 export interface ItemSaveData {
@@ -89,27 +91,19 @@ export interface SlotMeta {
     floor?: number;
 }
 
-// ─── YAML ファイルパス ─────────────────────────────────────────────────────────
-
-const YAML_PATHS = [
-    '/data/base.yml',
-    '/data/stats.yml',
-    '/data/items.yml',
-    '/data/enemies.yml',
-    '/data/effects.yml',
-    '/data/traps.yml',
-];
-
 // ─── SaveManager ──────────────────────────────────────────────────────────────
 
 export class SaveManager {
     /**
-     * 全 YAML ファイルのテキストを結合して SHA-256 ダイジェスト（16進文字列）を返す
+     * 全 YAML ファイルのテキストを結合して SHA-256 ダイジェスト（16進文字列）を返す。
+     * カスタムデータが設定されている場合はそのテキストを使い、なければ固定パスから fetch する。
      */
     static async calculateDigest(): Promise<string> {
         const texts = await Promise.all(
-            YAML_PATHS.map(async (path) => {
-                const res = await fetch(path);
+            YAML_KEYS.map(async (key) => {
+                const custom = CustomDataStore.get(key);
+                if (custom !== undefined) return custom;
+                const res = await fetch(`/data/${key}.yml`);
                 return res.text();
             })
         );

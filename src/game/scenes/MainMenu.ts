@@ -2,6 +2,7 @@ import { GameObjects, Scene } from 'phaser';
 
 import { EventBus } from '../EventBus';
 import { BaseLoader } from '../../lib/BaseLoader';
+import { CustomDataStore } from '../../lib/CustomDataStore';
 import type { SaveData } from '../../lib/SaveManager';
 
 export class MainMenu extends Scene
@@ -40,7 +41,7 @@ export class MainMenu extends Scene
     async create ()
     {
         this.loadSettings();
-        await BaseLoader.getInstance().load();
+        await BaseLoader.getInstance().load(CustomDataStore.get('base'));
         const gameName = BaseLoader.getInstance().getName();
 
         this.cameras.main.setViewport(10, 10, 1004, 520);

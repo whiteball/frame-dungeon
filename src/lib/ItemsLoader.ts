@@ -1,4 +1,5 @@
 import { YamlDefinitionStore } from './YamlDefinitionStore';
+import { CustomDataStore } from './CustomDataStore';
 
 export type ItemType = 'weapon' | 'main_armor' | 'sub_armor' | 'consumable';
 
@@ -70,7 +71,8 @@ export class ItemsLoader {
     }
 
     async loadItems(): Promise<void> {
-        await this.store.load('/data/items.yml', 'アイテム', item => this.validateItemDefinition(item));
+        const customText = CustomDataStore.get('items');
+        await this.store.load('/data/items.yml', 'アイテム', item => this.validateItemDefinition(item), { customText });
     }
 
     private validateItemDefinition(item: any): void {

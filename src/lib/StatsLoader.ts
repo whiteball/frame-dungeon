@@ -1,4 +1,5 @@
 import { YamlDefinitionStore } from './YamlDefinitionStore';
+import { CustomDataStore } from './CustomDataStore';
 
 export interface StatDefinition {
     /**
@@ -37,7 +38,8 @@ export class StatsLoader {
     }
 
     async loadStats(): Promise<void> {
-        await this.store.load('/data/stats.yml', 'ゲーム', () => {}, { required: true });
+        const customText = CustomDataStore.get('stats');
+        await this.store.load('/data/stats.yml', 'ゲーム', () => {}, { required: true, customText });
     }
 
     getStats(): StatDefinition[] {

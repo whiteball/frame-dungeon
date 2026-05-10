@@ -15,7 +15,7 @@ export interface CompiledLevelUpBonus {
     reset: boolean;
 }
 
-interface FloorConfigRaw {
+export interface FloorConfigRaw {
     size: number | { w: number; h: number };
     enemyCount: number;
     enemies: (string | { name: string; count: number })[] | null;
@@ -52,6 +52,10 @@ export class BaseLoader {
     private compiledLevelUpBonuses: CompiledLevelUpBonus[] = [];
     private autoSpawnerFormula: Expression | null = null;
 
+    // INFOレベル判定用フラグ
+    private _nameExplicit = false;
+    private _goalFloorExplicit = false;
+
     private constructor() {}
 
     static getInstance(): BaseLoader {
@@ -61,18 +65,26 @@ export class BaseLoader {
         return this.instance;
     }
 
-    async load(): Promise<void> {
+    async load(customText?: string): Promise<void> {
         if (this.loaded) return;
 
         const filePath = '/data/base.yml';
-        const response = await fetch(filePath);
-        if (!response.ok) {
-            this._throwWithAlert(filePath, new Error(`HTTP ${response.status}: ${response.statusText}`));
-        }
+        let yamlText: string;
 
-        const yamlText = await response.text();
-        if (!yamlText.trim()) {
-            this._throwWithAlert(filePath, new Error(`${filePath} is empty`));
+        if (customText !== undefined) {
+            yamlText = customText;
+            if (!yamlText.trim()) {
+                this._throwWithAlert(filePath, new Error('base.yml のカスタムデータが空です'));
+            }
+        } else {
+            const response = await fetch(filePath);
+            if (!response.ok) {
+                this._throwWithAlert(filePath, new Error(`HTTP ${response.status}: ${response.statusText}`));
+            }
+            yamlText = await response.text();
+            if (!yamlText.trim()) {
+                this._throwWithAlert(filePath, new Error(`${filePath} is empty`));
+            }
         }
 
         try {
@@ -83,9 +95,11 @@ export class BaseLoader {
 
             if (typeof parsed.name === 'string') {
                 this.name = parsed.name;
+                this._nameExplicit = true;
             }
-            if (typeof parsed.gaolFloor === 'number') {
-                this.goalFloor = parsed.gaolFloor;
+            if (typeof parsed.goalFloor === 'number') {
+                this.goalFloor = parsed.goalFloor;
+                this._goalFloorExplicit = true;
             }
 
             if (Array.isArray(parsed.floors)) {
@@ -206,6 +220,23 @@ export class BaseLoader {
         );
         throw error;
     }
+
+    // ─── INFOレベル判定アクセサ ───────────────────────────────────────────────
+
+    hasName(): boolean { return this._nameExplicit; }
+    hasGoalFloor(): boolean { return this._goalFloorExplicit; }
+    hasDeadFormula(): boolean { return this.deadFormula !== null; }
+    hasDefaultEnemyDamageStat(): boolean { return this._defaultEnemyDamageStat !== null; }
+    hasEnemyDeadFormula(): boolean { return this.enemyDeadFormula !== null; }
+    hasAutoSpawnerFormula(): boolean { return this.autoSpawnerFormula !== null; }
+
+    // ─── クロスバリデーション用 ────────────────────────────────────────────────
+
+    getRawFloorConfigs(): ReadonlyMap<number, FloorConfigRaw> {
+        return this.rawFloorConfigs;
+    }
+
+    // ─── ゲームロジック用アクセサ ─────────────────────────────────────────────
 
     getDefaultDamageStat(): string {
         return this._defaultDamageStat!;

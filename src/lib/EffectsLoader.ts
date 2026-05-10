@@ -1,5 +1,6 @@
 import { Parser, type Expression } from 'expr-eval-fork';
 import { YamlDefinitionStore } from './YamlDefinitionStore';
+import { CustomDataStore } from './CustomDataStore';
 
 /**
  * 効果（状態異常/強化）の単一ターゲット指定
@@ -75,7 +76,8 @@ export class EffectsLoader {
 
     async loadEffects(): Promise<void> {
         this.compiledByName.clear();
-        await this.store.load('/data/effects.yml', '状態異常', () => {});
+        const customText = CustomDataStore.get('effects');
+        await this.store.load('/data/effects.yml', '状態異常', () => {}, { customText });
         for (const effect of this.store.getAll()) {
             this.compiledByName.set(effect.name, this.compile(effect));
         }
