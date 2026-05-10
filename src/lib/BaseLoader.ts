@@ -46,6 +46,8 @@ export class BaseLoader {
     private deadFormula: Expression | null = null;
     private _defaultEnemyDamageStat: string | null = null;
     private enemyDeadFormula: Expression | null = null;
+    private damageToPlayerFormula: Expression | null = null;
+    private damageFromPlayerFormula: Expression | null = null;
     private requiredExpFormula: Expression | null = null;
     private compiledLevelUpBonuses: CompiledLevelUpBonus[] = [];
     private autoSpawnerFormula: Expression | null = null;
@@ -126,6 +128,22 @@ export class BaseLoader {
                 }
             }
 
+            if (parsed.damageToPlayer && typeof parsed.damageToPlayer.formula === 'string') {
+                try {
+                    this.damageToPlayerFormula = this.parser.parse(parsed.damageToPlayer.formula);
+                } catch (e) {
+                    throw new Error(`damageToPlayer.formula のパースに失敗しました: ${parsed.damageToPlayer.formula}`);
+                }
+            }
+
+            if (parsed.damageFromPlayer && typeof parsed.damageFromPlayer.formula === 'string') {
+                try {
+                    this.damageFromPlayerFormula = this.parser.parse(parsed.damageFromPlayer.formula);
+                } catch (e) {
+                    throw new Error(`damageFromPlayer.formula のパースに失敗しました: ${parsed.damageFromPlayer.formula}`);
+                }
+            }
+
             if (parsed.requiredExp && typeof parsed.requiredExp.formula === 'string') {
                 try {
                     this.requiredExpFormula = this.parser.parse(parsed.requiredExp.formula);
@@ -168,6 +186,12 @@ export class BaseLoader {
         if (!this.requiredExpFormula) {
             this._throwWithAlert(filePath, new Error('base.yml に requiredExp が定義されていません'));
         }
+        if (!this.damageToPlayerFormula) {
+            this._throwWithAlert(filePath, new Error('base.yml に damageToPlayer が定義されていません'));
+        }
+        if (!this.damageFromPlayerFormula) {
+            this._throwWithAlert(filePath, new Error('base.yml に damageFromPlayer が定義されていません'));
+        }
 
         this.loaded = true;
     }
@@ -204,6 +228,20 @@ export class BaseLoader {
             return Boolean(formula.evaluate(enemyVars));
         }
         return (enemyVars[this.getDefaultEnemyDamageStat()] ?? 0) <= 0;
+    }
+
+    calculateDamageToPlayer(enemyVars: Record<string, number>, playerVars: Record<string, number>): number {
+        const vars: Record<string, number> = {};
+        for (const [k, v] of Object.entries(enemyVars)) vars[`enemy_${k}`] = v;
+        for (const [k, v] of Object.entries(playerVars)) vars[`player_${k}`] = v;
+        return Math.max(1, Math.floor(Number(this.damageToPlayerFormula!.evaluate(vars))));
+    }
+
+    calculateDamageFromPlayer(playerVars: Record<string, number>, enemyVars: Record<string, number>): number {
+        const vars: Record<string, number> = {};
+        for (const [k, v] of Object.entries(playerVars)) vars[`player_${k}`] = v;
+        for (const [k, v] of Object.entries(enemyVars)) vars[`enemy_${k}`] = v;
+        return Math.max(1, Math.floor(Number(this.damageFromPlayerFormula!.evaluate(vars))));
     }
 
     getRequiredExp(vars: Record<string, number>): number {

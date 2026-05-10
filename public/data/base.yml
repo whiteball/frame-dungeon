@@ -15,6 +15,24 @@ enemyDead:
     - life
   formula: life <= 0
 
+damageToPlayer:
+  player:
+    use:
+      - defense
+  enemy:
+    use:
+      - power
+  formula: enemy_power - player_defense / 2
+
+damageFromPlayer:
+  player:
+    use:
+      - power
+  enemy:
+    use:
+      - defense
+  formula: player_power - enemy_defense / 2
+
 requiredExp:
   use:
     - level

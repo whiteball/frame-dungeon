@@ -64,8 +64,7 @@ export function attackEnemyAt(dungeon: DungeonMap, targetX: integer, targetY: in
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
 
-  const playerPower = player.getEffectiveStat('power');
-  const damage = enemy.takeDamageFromPlayer(playerPower);
+  const damage = enemy.takeDamageFromPlayer(player.getEffectiveFormulaVars());
   EventBus.emit('attack-flash', 0xFFFFFF);
   EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`, dungeon.getTurnCount());
 

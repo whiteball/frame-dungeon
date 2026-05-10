@@ -618,6 +618,16 @@ export class Player {
         return vars;
     }
 
+    getEffectiveFormulaVars(): Record<string, number> {
+        const vars: Record<string, number> = {};
+        for (const [key] of this.stats) {
+            vars[key] = this.getEffectiveStat(key);
+        }
+        vars.level = this.level;
+        vars.exp = this.exp;
+        return vars;
+    }
+
     expToNextLevel(): number {
         return BaseLoader.getInstance().getRequiredExp(this.getFormulaVars());
     }

@@ -147,8 +147,8 @@ export class Enemy extends MapObject {
 
         const statsLoader = StatsLoader.getInstance();
         const baseLoader = BaseLoader.getInstance();
-        const playerDefense = player.getEffectiveStat('defense');
-        const damage = this.calculateDamageToPlayer(playerDefense);
+        const playerVars = player.getEffectiveFormulaVars();
+        const damage = this.calculateDamageToPlayer(playerVars);
         const targetStat = baseLoader.getDefaultDamageStat();
         player.addStat(targetStat, -damage);
         EventBus.emit('attack-flash', 0xFF2222);
@@ -277,20 +277,17 @@ export class Enemy extends MapObject {
      * @param playerDefense プレイヤーの防御力
      * @returns 計算されたダメージ
      */
-    calculateDamageToPlayer(playerDefense: number): number {
-        const baseDamage = this.getStat('power');
-        const damage = Math.max(1, baseDamage - Math.floor(playerDefense / 2));
-        return damage;
+    calculateDamageToPlayer(playerVars: Record<string, number>): number {
+        return BaseLoader.getInstance().calculateDamageToPlayer(this.getEnemyFormulaVars(), playerVars);
     }
 
     /**
      * プレイヤーからこの敵へのダメージを計算して適用
-     * @param playerPower プレイヤーの攻撃力
+     * @param playerVars プレイヤーの実効ステータス一式
      * @returns 実際に与えたダメージ
      */
-    takeDamageFromPlayer(playerPower: number): number {
-        const baseDamage = playerPower;
-        const damage = Math.max(1, baseDamage - Math.floor(this.getStat('defense') / 2));
+    takeDamageFromPlayer(playerVars: Record<string, number>): number {
+        const damage = BaseLoader.getInstance().calculateDamageFromPlayer(playerVars, this.getEnemyFormulaVars());
         return this.damage(damage);
     }
 
