@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "$src = git diff --name-only HEAD -- src/; $docs = git diff --name-only HEAD -- CLAUDE.md docs/; if ($src -and -not $docs) { [Console]::Error.WriteLine('src/ に変更がありますが CLAUDE.md / docs/ が未更新です。仕様変更があれば docs/architecture.md と CLAUDE.md に反映してください（不要であればその旨を明示してターン終了してください）。'); exit 2 } else { exit 0 }",
+            "timeout": 15,
+            "statusMessage": "docs ドリフトチェック"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -21,8 +21,8 @@
 
 ### 主要コンポーネント
 
-- **Vueレイヤー**: メインアプリケーションラッパー（`App.vue`）とPhaserブリッジコンポーネント（`PhaserGame.vue`）
-- **Phaserゲーム**: シーン管理機能を持つコアゲームエンジン（Boot、Preloader、MainMenu、Game、GameOver）
+- **Vueレイヤー**: メインアプリケーションラッパー（`App.vue`）、Phaserブリッジコンポーネント（`PhaserGame.vue`）、モーダル類（`src/components/dialogs/`）
+- **Phaserゲーム**: シーン管理機能を持つコアゲームエンジン（Boot、Preloader、MainMenu、Game、GameOver、GameClear）
 - **EventBus**: VueとPhaser間の通信ブリッジ（`src/game/EventBus.ts`）
 - **ゲームロジック**: `src/lib/`内の専門化されたモジュールに分離
 
@@ -31,22 +31,32 @@
 ゲームロジックは `src/lib/` 配下のモジュール群と `src/game/scenes/Game.ts` で構成されます。各モジュールの責務と関係性の詳細は [docs/architecture.md](docs/architecture.md) を参照のこと。
 
 - **Vue-Phaser通信**: `EventBus.emit` / `EventBus.on` を介する（`src/game/EventBus.ts`）
-- **マップ上のオブジェクト**: 階段・トラップ・敵などは全て `MapObject` を継承し、`DungeonMap._objects` で統一管理（`instanceof` で型別フィルタ）。`around-0` は踏んだとき自動発火、`around-0-self` は「足下」ボタンで明示発火（`dispatchSelfEvent`）
-- **モーダルモード**: `isModalMode`（`currentSceneActions !== defaultSceneActions`）が真のとき全キー入力をブロック。攻撃方向選択・階段確認・トラップ確認がこれを使用
-- **データ駆動**: `public/data/*.yml` を対応する Loader クラス（`StatsLoader`、`ItemsLoader`、`EnemyLoader`）が読み込む
-- **キー操作**: W=前進、A=左回転、S=後退（180°回転）、D=右回転、スペース=正面の敵を攻撃
-- **メッセージログ**: `EventBus.emit('message-log', text)` で発行 → `PhaserGame.vue` の `<textarea>` に表示。戦闘・アイテム・フロア移動など全イベントをこのチャンネルに流すこと
+- **マップ上のオブジェクト**: 階段・トラップ・敵・落ちているアイテムなどは全て `MapObject` を継承し、`MapObjectStore`（`DungeonMap` 経由でアクセス）で統一管理（`instanceof` で型別フィルタ）。`around-0` は踏んだとき自動発火、`around-0-self` は「足下」ボタンで明示発火（`dispatchSelfEvent`）
+- **モーダルモード**: `isModalMode`（`currentSceneActions !== defaultSceneActions`）が真のとき全キー入力をブロック。攻撃方向選択・階段確認・トラップ確認・アイテム使用一覧・装備変更などがこれを使用
+- **データ駆動 (`base.yml` 中心)**: `public/data/*.yml` を対応する Loader クラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`）が読み込む。**`base.yml` がゲーム全体の中核設定**で、ダメージ計算式・経験値必要量・レベルアップボーナス・フロア別構成（マップサイズ・敵プール・トラップ数）を formula 文字列として保持する（`expr-eval-fork` で評価）。ハードコードされた戦闘式やレベル式は存在しない
+- **カスタムデータ**: ローカル ZIP から YAML 群を差し込む機構（`CustomDataStore` + `PhaserGame.vue` の ZIP UI）。タイトルから「カスタムデータで開始」を選んだ場合 `public/data/` の代わりにこのストアの内容を使用
+- **キー操作**: W=前進、A=左回転、S=後退（180°回転）、D=右回転、スペース=正面の敵を攻撃、M=ミニマップ切替、C=ステータス表示、1〜0=画面下シーンアクションボタンのショートカット（左から順に割当）。E/Q キーは現在未実装（`Game.ts` でコメントアウト）
+- **メッセージログ**: `EventBus.emit('message-log', text, turnCount?)` で発行 → `PhaserGame.vue` の `<textarea>` に最新50件を表示。戦闘・アイテム・フロア移動・状態異常など全イベントをこのチャンネルに流すこと
+- **セーブ/ロード**: `SaveManager` が LocalStorage にスロット単位で保存（`SaveDialog` / `LoadDialog` 経由）。`yamlDigest` でデータ互換性を確認する
+- **YAML 横断バリデーション**: `YamlCrossValidator.validate()` が起動直後に走り、`base.yml` の floor 定義と `enemies.yml` / `traps.yml` のクロスリファレンスを検証。エラーは `YamlErrorDialog` に表示
 
 ### プロジェクト構造メモ
 
 - `src/game/main.ts`のゲーム設定（1024x768解像度、黒背景）
 - Phaserのフレームレートは `target: 20, limit: 20` に固定（アニメーション実装時は 20fps 前提で計算すること）
 - `public/assets/`のアセット（Vite経由で読み込み）
-- `public/data/`のゲームデータ（YAMLファイル）
+- `public/data/`のゲームデータ（YAMLファイル: `base.yml`, `stats.yml`, `items.yml`, `enemies.yml`, `effects.yml`, `traps.yml`）
 - 複数ファイルに分割されたTypeScript設定
 - Viteの設定は `vite/config.dev.mjs` と `vite/config.prod.mjs` に分離
 - 開発サーバーはポート8081で実行
 - UI要素に日本語フォントを使用
+- デバッグ用に `window.applyStatusEffect(name)` / `window.findPath(...)` を `Game.create()` でグローバル公開（DevTools コンソールから利用）
+
+### ドキュメント更新ルール
+
+- `src/lib/*Loader.ts` / `src/game/scenes/*.ts` を変更したら、`docs/architecture.md` の該当セクションも同コミットで更新する
+- `base.yml` のキーを追加/削除したら `docs/architecture.md` の「base.yml — ゲーム全体設定」表を更新する
+- `EventBus` の新イベントを追加したら `docs/architecture.md` の該当イベント一覧表に行を追加する
 
 ### 未実装機能
 

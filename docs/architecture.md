@@ -12,19 +12,30 @@
 - **MainView**（`src/lib/MainView.ts`）: 透視投影を使用したメインの3Dスタイルダンジョンビューをレンダリング
 - **MiniMapView**（`src/lib/MiniMapView.ts`）: 探索済みエリアを含む俯瞰ミニマップを表示。`render(dun, showAllEnemies)` の第2引数が `false`（デフォルト）の場合、敵は現在の視界内のみ描画し、探索済みだが視界外のマスには半透明の白マスクを重ねる。`true` の場合は従来通り全敵を描画しマスクも適用しない
 - **InfoView**（`src/lib/InfoView.ts`）: プレイヤーステータスとフロア情報のUIオーバーレイを管理
-- **Player**（`src/lib/Player.ts`）: プレイヤーのステータス、インベントリ、装備を管理
-- **Enemy**（`src/lib/Enemy.ts`）: `MapObject`を継承した敵クラス。敵のステータスと戦闘ロジックを管理
+- **EquipmentView**（`src/lib/EquipmentView.ts`）: 装備中のスロット（武器・主防具・副防具1/2）をPhaserグラフィックスで描画
+- **Player**（`src/lib/Player.ts`）: プレイヤーのステータス、インベントリ、装備、持続効果、状態異常を管理。`getEffectiveFormulaVars()` で base / 装備 / 持続効果 / `permanent` 状態異常を合算した変数辞書を返し、`BaseLoader` の formula 評価に渡される
+- **Enemy**（`src/lib/Enemy.ts`）: `MapObject`を継承した敵クラス。ステータス、戦闘ロジック、ターゲット記憶を保持。ダメージ計算は `BaseLoader` の formula に委譲
 - **Item**（`src/lib/Item.ts`）: アイテムの効果と情報を管理
 - **Inventory**（`src/lib/Inventory.ts`）: プレイヤーのアイテム所持を管理
+- **BaseLoader**（`src/lib/BaseLoader.ts`）: `base.yml` の読み込みとゲーム全体設定（ダメージ式・経験値式・レベルアップボーナス・フロア構成・敵自動湧き判定）を集中管理。詳細は後述「base.yml — ゲーム全体設定」を参照
+- **SaveManager**（`src/lib/SaveManager.ts`）: LocalStorage ベースのセーブ/ロード。スロット毎に `meta`/`player`/`dungeon`/`floor` を JSON 化。`yamlDigest` で YAML 互換性を確認
+- **CustomDataStore**（`src/lib/CustomDataStore.ts`）: ZIP からロードしたカスタム YAML テキストの一時ストア（モジュールスコープ）。タイトル画面で「カスタムデータで開始」した場合に各 Loader の `customText` 引数として注入される
+- **YamlCrossValidator**（`src/lib/YamlCrossValidator.ts`）: 起動時に各 Loader 完了後に走る横断バリデータ。`errors` / `infos` を返し、エラー時は `YamlErrorDialog` でユーザ表示
 
 ## ゲームシーン構造
 
+Phaser のシーン構成は `src/game/main.ts` で定義：`Boot` → `Preloader` → `MainMenu` → `Game` ⇄ `GameOver` / `GameClear`。
+
 メインゲームシーン（`src/game/scenes/Game.ts`）は以下を調整します：
 
-- 入力処理（WASD移動、スペースキーで攻撃、Mでミニマップ切り替え）
-- 複数ビューのレンダリング（メインビュー、ミニマップ、情報パネル）
-- フロア進行とプレイヤー状態管理
+- 入力処理（WASD 移動・スペース攻撃・M ミニマップ切替・C ステータス表示・1〜0 シーンアクションショートカット）
+- 複数ビューのレンダリング（メインビュー、ミニマップ、情報パネル、装備パネル）
+- フロア進行とプレイヤー状態管理（`BaseLoader.getFloorConfig(floor)` でサイズ・敵プール・トラップ数を取得）
 - UIテキストの日本語フォントレンダリング
+
+**ゴール到達処理:** `enterStairMode()` で `this.floor >= BaseLoader.getGoalFloor()` のとき `GameClear` シーンへ遷移。それ以外は階段確認ダイアログ→`floor++`→マップ再生成。
+
+**マップオブジェクト生成:** `src/lib/map/MapObjects.ts` が `StairsObject` / `TrapObject` / `ItemObject` の `MapObject` 派生クラスを定義し、`src/game/scenes/mapObjectFactory.ts` の `buildStairsObject` / `buildTrapObject` が `Game.ts` 側のコールバックと組み合わせてイベントハンドラを差し込む。
 
 ## Vue-Phaser通信
 
@@ -108,17 +119,20 @@ src/components/dialogs/
 
 ゲームデータはYAMLファイルで管理されています：
 
+- **base.yml**（`public/data/base.yml`）: ゲーム全体の中核設定。ゲーム名・最終フロア・ダメージ式・経験値式・レベルアップボーナス・フロア毎構成・敵自動湧き判定式を保持。詳細は後述「base.yml — ゲーム全体設定」参照
 - **stats.yml**（`public/data/stats.yml`）: プレイヤーのステータス定義（HP、MP、攻撃力、防御力など）
 - **items.yml**（`public/data/items.yml`）: アイテム定義（武器、防具、消耗品）
 - **enemies.yml**（`public/data/enemies.yml`）: 敵の定義（HP、攻撃力、防御力、経験値、表示色）。`walk` フィールドで移動パターンを指定（後述「敵システム」参照）
 - **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
 - **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
 
-各データファイルは対応するLoaderクラス（`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`）によって読み込まれます。
+各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`）によって読み込まれます。
 
 ### Loader クラスと YamlDefinitionStore
 
-各Loaderはシングルトンパターンを持つクラスで、固有のバリデーションとドメイン固有ゲッターのみを実装します。fetch・YAMLパース・格納・基本ゲッターの共通処理は `YamlDefinitionStore<T>`（`src/lib/YamlDefinitionStore.ts`）に委譲されます（コンポジション）。
+`StatsLoader` / `ItemsLoader` / `EnemyLoader` / `EffectsLoader` / `TrapsLoader` はシングルトンパターンを持つクラスで、固有のバリデーションとドメイン固有ゲッターのみを実装します。fetch・YAMLパース・格納・基本ゲッターの共通処理は `YamlDefinitionStore<T>`（`src/lib/YamlDefinitionStore.ts`）に委譲されます（コンポジション）。
+
+`BaseLoader` は単一スカラー/フォーマット混在の構造（`floors[]` 配列、複数 formula、スカラー定数）のため `YamlDefinitionStore` に乗らず独自に fetch/parse する。
 
 ```text
 StatsLoader ──────┐
@@ -126,6 +140,8 @@ ItemsLoader ──────┤
 EnemyLoader ──────┼─── YamlDefinitionStore<T>（fetch / parse / store / getAll / getByName）
 EffectsLoader ────┤
 TrapsLoader ──────┘
+
+BaseLoader ───────── 独自実装（fetch / parse / formula コンパイル）
 ```
 
 `YamlDefinitionStore<T extends { name: string }>` が提供するメソッド：
@@ -150,6 +166,96 @@ TrapsLoader ──────┘
 **EffectsLoader の特殊構成:**
 
 `EffectsLoader` は `YamlDefinitionStore<EffectDefinition>` に加え、`compiledByName: Map<string, CompiledEffect>` を独自に保持します。`loadEffects()` では `store.load()` 完了後に全エントリの数式を `expr-eval-fork` でコンパイルし、`getCompiledEffect(name)` で高速参照できるようキャッシュします。
+
+## base.yml — ゲーム全体設定
+
+`base.yml` はゲームの根幹挙動（戦闘式・成長式・フロア構成）を定義する **必須** データファイル。すべての formula 文字列は `expr-eval-fork` の `Parser` で起動時にコンパイルされ、`Expression` としてキャッシュされる。
+
+### スカラー設定
+
+| キー | 必須 | フォールバック | 用途 |
+| --- | --- | --- | --- |
+| `name` | 任意 | `'Dungeon Game'` | タイトル・セーブメタの `gameName` |
+| `goalFloor` | 任意 | `10` | このフロアの階段で `GameClear` シーンへ遷移 |
+| `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
+| `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |
+
+### 死亡判定 (`dead` / `enemyDead`)
+
+```yaml
+dead:
+  use: [life]              # （ドキュメント目的、実装は formula から自動解決）
+  formula: "life <= 0"     # 真のとき死亡
+```
+
+`enemyDead` は省略時 `dead.formula`、それも無ければ「`defaultEnemyDamageStat` <= 0」にフォールバック。
+
+### ダメージ計算 (`damageToPlayer` / `damageFromPlayer`)
+
+両方とも **必須**。formula 内で `player_<stat>` / `enemy_<stat>` プレフィックス付きで両者のステータスを参照可能。結果は `Math.max(1, Math.floor(...))` でクランプ。
+
+```yaml
+damageFromPlayer:
+  player: { use: [power] }
+  enemy:  { use: [defense] }
+  formula: "player_power - enemy_defense / 2"
+```
+
+`use` セクションはドキュメント上の依存宣言で、実装では参照されない（formula 内に書かれた変数名で動的に解決）。
+
+### 経験値式 (`requiredExp`) — 必須
+
+```yaml
+requiredExp:
+  use: [level]
+  formula: "level * 50"
+```
+
+`Player.expToNextLevel()` が `getFormulaVars()`（プレイヤーの実効ステータス + `level` + `exp`）を引数に評価。
+
+### レベルアップボーナス (`levelUpBonus`)
+
+配列。各エントリは `{ target, formula, reset? }`：
+
+- `target`: ステータス名
+- `formula`: 加算量。current 値で評価される
+- `reset: yes` （または `true`）: `stats.yml` で fluctuation 許可されているステータスのとき、最大値増分後に現在値を最大値に揃える（HP 全回復など）
+
+`fluctuation` 非対応ステータスでは `addStat()` 経由で base に加算。
+
+### フロア毎構成 (`floors`)
+
+配列。各要素は `{ <floorNum>: FloorConfigRaw }` のマップ。`getFloorConfig(floor)` は **指定フロア以下で最大のキー** を採用し、結果を `resolvedCache` にキャッシュ。
+
+```yaml
+floors:
+  - 1:
+      size: 15                  # number か { w, h }
+      enemyCount: 4             # ランダム敵の追加湧き目標
+      enemies:                  # 名前文字列 → ランダムプール、{ name, count } → 固定配置
+        - slime
+        - { name: ogre, count: 1 }
+      trapCount: 0              # number か { min, max }
+      traps: [spike, swamp]     # トラップ候補プール（空可）
+```
+
+`enemies` 内で `enemies.yml` に存在しない名前は warn + スキップ。`traps` も同様。`trapCount > 0` で `traps` が空の場合は warn のみ。
+
+### 敵自動湧き判定 (`autoSpawner`)
+
+ランダム敵プールから敵を抽選する際、敵が当該フロアに「相応しいか」を判定する formula：
+
+```yaml
+autoSpawner:
+  use: [currentFloor, life]
+  formula: "currentFloor <= 2 ? life <= 40 : ..."
+```
+
+利用可能な変数：敵の全ステータス（`life`, `power`, `defense` ...）+ `currentFloor` + `maxFloor` + `rank` / `minRank` / `maxRank`。formula 省略時は「`rank / (maxRank - minRank) * maxFloor <= currentFloor`」というデフォルト式。
+
+### カスタムデータでの上書き
+
+`CustomDataStore.set('base', text)` で ZIP からのカスタム `base.yml` を注入可能。`BaseLoader.load(customText)` がこのテキストを優先採用する（fetch をスキップ）。
 
 ## マップオブジェクトシステム
 
@@ -202,11 +308,11 @@ TrapsLoader ──────┘
 
 1. プレイヤーがスペースキーを押す → `DungeonMap.attackPlayer()` を呼び出す
 2. 正面座標の敵を取得し、`canAttack()` で壁チェックを行う
-3. ダメージ計算: `max(1, playerPower - floor(enemyDefense / 2))`
-4. 敵が死亡した場合: マップから除去し、`player.addExp()` で経験値付与
+3. ダメージ計算: `BaseLoader.calculateDamageFromPlayer(playerVars, enemyVars)` が `base.yml` の `damageFromPlayer.formula` を評価（`Math.max(1, Math.floor(...))` クランプ）
+4. 敵が死亡した場合（`BaseLoader.isEnemyDead` 判定）: マップから除去し、`player.addExp()` で経験値付与
 5. `dispatchObjectEvent()` を呼び出し、隣接する敵の反撃ターンを処理
-6. 敵の反撃: `around-1` イベントが `canAttack()` を通過した場合のみ攻撃
-7. プレイヤーHP が 0 以下になった場合: `EventBus.emit('game-over')` → GameOver シーンへ遷移
+6. 敵の反撃: `around-1` イベントが `canAttack()` を通過した場合のみ攻撃。ダメージは `BaseLoader.calculateDamageToPlayer` を経由
+7. プレイヤー死亡時（`BaseLoader.isDead`）: `EventBus.emit('game-over')` → GameOver シーンへ遷移
 
 ### 壁越し攻撃の判定（`DungeonMap.canAttack()`）
 
@@ -225,8 +331,8 @@ TrapsLoader ──────┘
 ### 経験値・レベルアップ（`Player`）
 
 - `player.addExp(amount): number` — 経験値を加算し、上昇したレベル数を返す（複数レベルアップに対応）
-- 必要経験値: `level × 50`
-- レベルアップ時: 最大HP +10（HP全回復）、攻撃力 +2、防御力 +1
+- 必要経験値: `BaseLoader.getRequiredExp(vars)` が `base.yml` の `requiredExp.formula` を評価（既定の `base.yml` では `level * 50`）
+- レベルアップ時の上昇量: `base.yml` の `levelUpBonus` 配列で完全に設定駆動。`reset: yes` が付いていて fluctuation 対応のステータスは最大値増分後に現値を最大値へ揃える（既定では `life` の HP 全回復）
 
 ### メッセージログ（`PhaserGame.vue`）
 
@@ -391,3 +497,42 @@ Game シーンのデフォルト SceneActions は「アイテム使用」「装�
 ### `around-0-self` イベント
 
 `'around-0'`（プレイヤーが踏んだとき自動発火）とは別に、`'around-0-self'` を登録すると「足下アクション」による明示的な発火が可能です。`MapObjectStore.dispatchSelfEvent()` / `DungeonMap.dispatchSelfEvent()` がプレイヤー位置のオブジェクトを走査して呼び出します。階段とトラップはどちらのイベントも持ち、踏む・足下どちらからでも同じダイアログを起動します。
+
+## セーブ/ロード
+
+`SaveManager`（`src/lib/SaveManager.ts`）が LocalStorage にスロット単位でセーブデータを保存・読込します。
+
+### データ構造
+
+`SaveData` は以下のサブ構造から構成：
+
+- `meta`: `savedAt` / `memo` / `gameName` / `yamlDigest`
+- `floor`: 現在フロア
+- `player`: `PlayerSaveData`（レベル・経験値・stats/maxStats・インベントリ・装備 ID・持続効果・状態異常）
+- `dungeon`: `DungeonSaveData`（マップ・フォグ・歩行済み・プレイヤー位置/向き・ターン数・部屋構造・全オブジェクト・全敵）
+
+### yamlDigest による整合性チェック
+
+セーブ時に `calculateDigest()` で現在ロード中の YAML 全体のハッシュを計算して `meta.yamlDigest` に保存。ロード時に `LoadDialog` 内で再計算し、不一致なら確認パネルを表示（強行ロードか中止を選択させる）。
+
+### スロット運用
+
+複数スロット + メモ機能で `SaveDialog` / `LoadDialog` がスロット一覧を表示する。
+
+## カスタムデータ機能 (ZIP インポート)
+
+タイトル画面（`MainMenu` / `PhaserGame.vue` 側 UI）から ZIP ファイルを選択すると、`JSZip` でデコードして `CustomDataStore.set(key, text)` に格納。各 Loader の `load(customText?)` メソッドが優先採用します。
+
+- 対応キー: `base`, `stats`, `items`, `enemies`, `effects`, `traps`（`CustomDataStore.YAML_KEYS`）
+- 1つでもカスタムが入っていれば `CustomDataStore.isCustom() === true`
+- セーブデータの `gameName` に `BaseLoader.getName()` を埋め込むため、カスタム作品ごとにセーブが識別される
+
+## YAML 横断バリデーション
+
+`YamlCrossValidator.validate()`（`src/lib/YamlCrossValidator.ts`）は全 Loader の `load()` 完了後に走り、以下のクロス参照を検証する：
+
+- `base.yml` の `floors[].enemies` / `floors[].traps` 名が `enemies.yml` / `traps.yml` に存在するか
+- `traps.yml` の `effect[].type === 'addEffect'` の `value` が `effects.yml` に存在するか
+- `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
+
+`{ errors: string[], infos: string[] }` を返し、`errors.length > 0` のとき `EventBus.emit('yaml-cross-validation-errors', errors)` で `YamlErrorDialog` を表示。INFO レベルは現状コンソール出力のみ。
