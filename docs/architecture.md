@@ -38,6 +38,49 @@ EventBus.emit('event-name', data);
 EventBus.on('event-name', callback);
 ```
 
+## ダイアログコンポーネント
+
+ゲーム中のモーダルダイアログは `src/components/dialogs/` 配下の Vue コンポーネントとして分離されています。`PhaserGame.vue` は EventBus リスナーで表示フラグ・初期データを管理し、各コンポーネントへ props で渡します。
+
+```text
+src/components/dialogs/
+  ModalOverlay.vue       共通オーバーレイ外枠（全ダイアログが使用）
+  SettingsDialog.vue     設定（視界範囲・フォグ・敵表示）
+  StatusDialog.vue       キャラクターステータス表示
+  SaveDialog.vue         セーブスロット選択・メモ入力
+  LoadDialog.vue         ロードスロット選択・ダイジェスト確認
+  YamlErrorDialog.vue    YAMLバリデーションエラー一覧
+```
+
+**`ModalOverlay.vue`** は `v-show` によるオーバーレイ背景とダイアログ枠を提供し、`slot` で内部コンテンツを受け取ります。`variant="error"` を指定すると背景・枠線をエラー配色（`#1a0a0a` / `#f55`）に切り替えます。
+
+**各ダイアログの責務分担：**
+
+| コンポーネント | 内部 state | PhaserGame.vue 側で管理する state |
+| --- | --- | --- |
+| `SettingsDialog` | `localViewRange/Fog/ShowAllEnemies`（`visible` watch でリセット） | `settingsVisible`, `settingsViewRange/Fog/ShowAllEnemies` |
+| `StatusDialog` | なし | `statusVisible`, `statusText` |
+| `SaveDialog` | `selectedSlot`, `memo`（`visible` watch でリセット） | `saveDialogVisible`, `saveSlotMetas` |
+| `LoadDialog` | `digestMismatchVisible`, `digestMismatchSaveData` | `loadDialogVisible`, `loadSlotMetas` |
+| `YamlErrorDialog` | なし | `yamlErrorVisible`, `yamlValidationErrors` |
+
+**`LoadDialog` のダイジェスト確認フロー：** コンポーネント内で `SaveManager.loadFromSlot()` と `calculateDigest()` を実行し、バージョン不一致時は内部パネルを表示します。ロード確定時のみ `loadConfirmed` emit が発火し、`PhaserGame.vue` が `EventBus.emit('load-game', saveData)` を呼びます。
+
+**ダイアログ関連の EventBus イベント：**
+
+| イベント名 | 方向 | payload | 用途 |
+| --- | --- | --- | --- |
+| `open-settings` | Phaser→Vue | `{ viewRange, enableFog, showAllEnemies }` | 設定ダイアログを開く |
+| `settings-confirmed` | Vue→Phaser | `{ viewRange, enableFog, showAllEnemies }` | 設定を確定してゲームに反映 |
+| `open-status` | Phaser→Vue | `string` | ステータスダイアログを開く |
+| `open-save-dialog` | Phaser→Vue | なし | セーブダイアログを開く |
+| `save-to-slot` | Vue→Phaser | `{ slot: number, memo: string }` | セーブ実行 |
+| `close-save-dialog` | Phaser→Vue | なし | セーブダイアログを閉じる（セーブ完了時） |
+| `open-load-dialog` | Phaser→Vue | なし | ロードダイアログを開く |
+| `close-load-dialog` | Phaser→Vue | なし | ロードダイアログを閉じる |
+| `load-game` | Vue→Phaser | `SaveData` | ロード実行 |
+| `yaml-cross-validation-errors` | Phaser→Vue | `string[]` | YAMLエラーモーダルを開く |
+
 ## マップ系モジュール構成
 
 `DungeonMap`（`src/lib/MapGenerator.ts`）は薄いファサードとして以下のモジュール群へ責務を委譲します：
