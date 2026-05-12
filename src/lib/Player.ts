@@ -692,6 +692,18 @@ export class Player {
         return vars;
     }
 
+    /**
+     * 効果込みの実効値 + 各ステータスの最大値（`<stat>_max`）を露出した変数辞書を返す。
+     * スキルコスト formula の評価で使用する。
+     */
+    getEffectiveFormulaVarsWithMax(): Record<string, number> {
+        const vars = this.getEffectiveFormulaVars();
+        for (const [key] of this.stats) {
+            vars[`${key}_max`] = this.getMaxStat(key);
+        }
+        return vars;
+    }
+
     expToNextLevel(): number {
         return BaseLoader.getInstance().getRequiredExp(this.getFormulaVars());
     }

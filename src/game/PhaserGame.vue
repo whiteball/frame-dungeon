@@ -434,7 +434,7 @@ defineExpose({ scene, game });
                         background: i === selectedIndex ? '#335' : 'transparent'
                     }"
                     :title="it.disabled && it.disabledReason ? it.disabledReason : it.description"
-                >{{ (it.isEquipped ? '[E] ' : '') + it.label }}</li>
+                >{{ (it.isEquipped ? '[E] ' : '') + it.label + (it.costSummary ? ' (' + it.costSummary + ')' : '') }}</li>
                 <li
                     v-if="itemList.length === 0"
                     style="padding: 2px 4px; opacity: 0.6;"

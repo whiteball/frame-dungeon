@@ -1,3 +1,4 @@
+import { Parser, type Expression } from 'expr-eval-fork';
 import { YamlDefinitionStore } from './YamlDefinitionStore';
 import { CustomDataStore } from './CustomDataStore';
 
@@ -33,9 +34,20 @@ export interface SkillDefinition {
     mastery?: SkillMasteryEntry[];
 }
 
+/**
+ * パース済みコスト式付きのスキル定義
+ * - cost: ステータス名 → コンパイル済み Expression（数値リテラルも文字列化して統一）
+ */
+interface CompiledSkill {
+    definition: SkillDefinition;
+    cost: Map<string, Expression>;
+}
+
 export class SkillsLoader {
     private static instance: SkillsLoader;
     private store = new YamlDefinitionStore<SkillDefinition>();
+    private parser: Parser = new Parser();
+    private compiledByName: Map<string, CompiledSkill> = new Map();
 
     private constructor() {}
 
@@ -47,8 +59,30 @@ export class SkillsLoader {
     }
 
     async loadSkills(): Promise<void> {
+        this.compiledByName.clear();
         const customText = CustomDataStore.get('skills');
         await this.store.load('/data/skills.yml', 'スキル', s => this.validateSkill(s), { customText });
+        for (const skill of this.store.getAll()) {
+            this.compiledByName.set(skill.name, this.compile(skill));
+        }
+    }
+
+    /**
+     * スキル定義からコンパイル済み版（コスト式を事前パース）を生成
+     */
+    private compile(def: SkillDefinition): CompiledSkill {
+        const cost = new Map<string, Expression>();
+        if (def.cost) {
+            for (const [stat, formulaOrNum] of Object.entries(def.cost)) {
+                const src = typeof formulaOrNum === 'number' ? String(formulaOrNum) : formulaOrNum;
+                try {
+                    cost.set(stat, this.parser.parse(src));
+                } catch (e) {
+                    console.warn(`Failed to parse cost formula "${src}" for skill "${def.name}":`, e);
+                }
+            }
+        }
+        return { definition: def, cost };
     }
 
     private validateSkill(skill: any): void {
@@ -136,6 +170,13 @@ export class SkillsLoader {
     }
 
     /**
+     * コンパイル済みスキル（コスト式パース済み）を取得する
+     */
+    getCompiledSkill(name: string): CompiledSkill | undefined {
+        return this.compiledByName.get(name);
+    }
+
+    /**
      * `exact: N` を `{ least: N, rate: 1 }` に展開して正規化した mastery 配列を返す。
      * validation で `exact` または `least + rate` のいずれかが保証されているため、
      * 戻り値のエントリは必ず `least` と `rate` の両方を持つ。
@@ -151,3 +192,5 @@ export class SkillsLoader {
         return { least: m.least!, rate: m.rate! };
     }
 }
+
+export type { CompiledSkill };

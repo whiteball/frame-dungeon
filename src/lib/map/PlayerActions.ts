@@ -4,6 +4,7 @@ import type { DungeonMap } from '../MapGenerator';
 import { MapDirection, getDirectionOffset } from './MapDirection';
 import { EffectsLoader } from '../EffectsLoader';
 import { SkillsLoader } from '../SkillsLoader';
+import { evaluateCost, canPayCost, payCost } from '../skills/SkillExecutor';
 import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
 import { StairsObject, TrapObject, ItemObject } from './MapObjects';
@@ -199,26 +200,40 @@ export function changeEquipment(dungeon: DungeonMap, instanceId: string): Change
 }
 
 /**
- * プレイヤーがスキルを発動する（Phase 3: モック実装）
+ * プレイヤーがスキルを発動する（Phase 6: コスト評価対応）
  *
- * 現時点ではコスト評価・target 解決・action 実行は行わず、
- * メッセージログ出力と 1 ターン消費のみを行う。
+ * 現時点ではコスト評価・支払い・差し戻しまでを実装し、
+ * action 本体は引き続きモック（ログ出力 + 1 ターン消費）。
  * 後続フェーズで以下を実装する：
- *   - Phase 6: コスト評価・支払い・差し戻し
  *   - Phase 7: target 解決と front 方向選択
  *   - Phase 8〜11: 各 action（attack / damage / heal / reveal_trap）
  *   - Phase 12: スタン中の発動ブロック
  *
  * @param skillName 発動するスキル名
- * @returns 発動成功時 true（ターン消費あり）。プレイヤー未設定／未習得／未定義の場合 false
+ * @returns 発動成功時 true（ターン消費あり）。
+ *          プレイヤー未設定／未習得／未定義／コスト支払い不能の場合 false（ターン非消費）
  */
 export function useSkill(dungeon: DungeonMap, skillName: string): boolean {
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
   if (!player.hasSkill(skillName)) return false;
-  const def = SkillsLoader.getInstance().getSkill(skillName);
-  if (!def) return false;
+  const compiled = SkillsLoader.getInstance().getCompiledSkill(skillName);
+  if (!compiled) return false;
+  const def = compiled.definition;
 
+  // コスト評価・検証（差し戻し時はステータス未変更）
+  const deltas = evaluateCost(player, compiled);
+  if (!canPayCost(player, deltas)) {
+    EventBus.emit('message-log',
+      `スキル「${def.label}」を発動できない（コストを支払えない）`,
+      dungeon.getTurnCount());
+    return false;
+  }
+
+  // コスト支払い
+  payCost(player, deltas);
+
+  // モック発動（Phase 7 以降で target / action を実装）
   EventBus.emit('message-log',
     `スキル「${def.label}」を発動した（モック）`,
     dungeon.getTurnCount());

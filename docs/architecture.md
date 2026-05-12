@@ -595,6 +595,28 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム使�
 - **アイテム使用**：消耗品の `effect.immediate.learnSkill: <skillName>` で習得。既習得スキルでもアイテムは消費され、ログ「習得済み」を表示する。同 `immediate` 内に `life: 30` 等の他効果を併記すると両方適用される
 - **デバッグ用 `window.learnSkill(name)`**：DevTools コンソールから直接付与
 
+### コスト評価・支払いフロー
+
+スキル発動時、`SkillsLoader.getCompiledSkill(name)` で `Expression` パース済みコスト式を取得し、`src/lib/skills/SkillExecutor.ts` の以下の関数で評価・適用する：
+
+- `evaluateCost(player, compiled)`：コスト式を `player.getEffectiveFormulaVarsWithMax()`（実効値 + `<stat>_max` + `level` / `exp`）で評価し、`Map<stat, delta>`（delta は負値）を返す。端数は `Math.floor`、負値結果は警告 + 0 にクランプ
+- `canPayCost(player, deltas)`：仮想評価のみで以下を検証（実ステータスは未変更）
+  - 適用後にいずれかのステータスが `< 0` → false
+  - `BaseLoader.isDead(postVars)` が真 → false（自殺コストは禁止）
+- `payCost(player, deltas)`：実際にコストを `addStat` 経由で適用（fluctuation クランプを通す）
+- `formatCostSummary(deltas)`：UI 表示用文字列を生成（例：`HP:10, MP:2`、`0` のエントリは省略）
+
+`PlayerActions.useSkill` のフロー：
+
+1. プレイヤー・スキル定義・習得済みかをチェック
+2. `evaluateCost` でコスト差分を算出
+3. `canPayCost` で支払い可否を検証（失敗時はログ「コストを支払えない」＋ ターン非消費で return）
+4. `payCost` でコスト適用
+5. action 実行（Phase 7 以降）
+6. `dispatchObjectEvent` で敵反撃・tick 進行
+
+UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCost` + `canPayCost` + `formatCostSummary` を呼び、`open-item-list` のペイロード（`costSummary` / `disabled` / `disabledReason`）に反映する。スキル一覧表示時にコストが視覚化され、支払い不能スキルは半透明 + tooltip「コスト不足」になる。
+
 ### スキル発動 UI フロー
 
 シーンアクションの「スキル」ボタン（`1` キー）または `Game.toggleList('skill')` でスキル一覧を開きます。アイテム一覧と同じ `open-item-list` EventBus イベントを `mode: 'skill'` で発行し、`PhaserGame.vue` の既存リスト UI を共有します。

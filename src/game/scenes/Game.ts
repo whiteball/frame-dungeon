@@ -14,6 +14,7 @@ import { TrapsLoader } from '../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { EffectsLoader } from '../../lib/EffectsLoader';
 import { SkillsLoader } from '../../lib/SkillsLoader';
+import { evaluateCost, canPayCost, formatCostSummary } from '../../lib/skills/SkillExecutor';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
@@ -740,19 +741,20 @@ export class Game extends Scene {
             disabled?: boolean; disabledReason?: string;
         }> = [];
         for (const name of skillNames) {
-            const def = loader.getSkill(name);
-            if (!def) continue;
+            const compiled = loader.getCompiledSkill(name);
+            if (!compiled) continue;
+            const def = compiled.definition;
+            const deltas = evaluateCost(this.player, compiled);
+            const canPay = canPayCost(this.player, deltas);
             result.push({
                 id: name,
                 label: def.label,
                 description: def.description,
-                // Phase 6 で costSummary を実装
-                costSummary: '',
+                costSummary: formatCostSummary(deltas),
                 // Phase 7 で targetSummary を実装
                 targetSummary: '',
-                // Phase 6 で disabled / disabledReason を実装
-                disabled: false,
-                disabledReason: '',
+                disabled: !canPay,
+                disabledReason: canPay ? '' : 'コスト不足',
             });
         }
         return result;
