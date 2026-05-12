@@ -1,4 +1,4 @@
-export const YAML_KEYS = ['base', 'stats', 'items', 'enemies', 'effects', 'traps'] as const;
+export const YAML_KEYS = ['base', 'stats', 'items', 'enemies', 'effects', 'traps', 'skills'] as const;
 export type YamlKey = typeof YAML_KEYS[number];
 
 const store: Partial<Record<YamlKey, string>> = {};

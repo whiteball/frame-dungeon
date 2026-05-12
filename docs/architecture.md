@@ -125,12 +125,13 @@ src/components/dialogs/
 - **enemies.yml**（`public/data/enemies.yml`）: 敵の定義（HP、攻撃力、防御力、経験値、表示色）。`walk` フィールドで移動パターンを指定（後述「敵システム」参照）
 - **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
 - **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
+- **skills.yml**（`public/data/skills.yml`）: スキル定義（コスト・ターゲット・action 列・習得条件）。詳細は後述「スキルシステム」参照
 
-各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`）によって読み込まれます。
+各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`）によって読み込まれます。
 
 ### Loader クラスと YamlDefinitionStore
 
-`StatsLoader` / `ItemsLoader` / `EnemyLoader` / `EffectsLoader` / `TrapsLoader` はシングルトンパターンを持つクラスで、固有のバリデーションとドメイン固有ゲッターのみを実装します。fetch・YAMLパース・格納・基本ゲッターの共通処理は `YamlDefinitionStore<T>`（`src/lib/YamlDefinitionStore.ts`）に委譲されます（コンポジション）。
+`StatsLoader` / `ItemsLoader` / `EnemyLoader` / `EffectsLoader` / `TrapsLoader` / `SkillsLoader` はシングルトンパターンを持つクラスで、固有のバリデーションとドメイン固有ゲッターのみを実装します。fetch・YAMLパース・格納・基本ゲッターの共通処理は `YamlDefinitionStore<T>`（`src/lib/YamlDefinitionStore.ts`）に委譲されます（コンポジション）。
 
 `BaseLoader` は単一スカラー/フォーマット混在の構造（`floors[]` 配列、複数 formula、スカラー定数）のため `YamlDefinitionStore` に乗らず独自に fetch/parse する。
 
@@ -139,7 +140,8 @@ StatsLoader ──────┐
 ItemsLoader ──────┤
 EnemyLoader ──────┼─── YamlDefinitionStore<T>（fetch / parse / store / getAll / getByName）
 EffectsLoader ────┤
-TrapsLoader ──────┘
+TrapsLoader ──────┤
+SkillsLoader ─────┘
 
 BaseLoader ───────── 独自実装（fetch / parse / formula コンパイル）
 ```
@@ -508,7 +510,7 @@ Game シーンのデフォルト SceneActions は「アイテム使用」「装�
 
 - `meta`: `savedAt` / `memo` / `gameName` / `yamlDigest`
 - `floor`: 現在フロア
-- `player`: `PlayerSaveData`（レベル・経験値・stats/maxStats・インベントリ・装備 ID・持続効果・状態異常）
+- `player`: `PlayerSaveData`（レベル・経験値・stats/maxStats・インベントリ・装備 ID・持続効果・状態異常・習得スキル）
 - `dungeon`: `DungeonSaveData`（マップ・フォグ・歩行済み・プレイヤー位置/向き・ターン数・部屋構造・全オブジェクト・全敵）
 
 ### yamlDigest による整合性チェック
@@ -523,9 +525,63 @@ Game シーンのデフォルト SceneActions は「アイテム使用」「装�
 
 タイトル画面（`MainMenu` / `PhaserGame.vue` 側 UI）から ZIP ファイルを選択すると、`JSZip` でデコードして `CustomDataStore.set(key, text)` に格納。各 Loader の `load(customText?)` メソッドが優先採用します。
 
-- 対応キー: `base`, `stats`, `items`, `enemies`, `effects`, `traps`（`CustomDataStore.YAML_KEYS`）
+- 対応キー: `base`, `stats`, `items`, `enemies`, `effects`, `traps`, `skills`（`CustomDataStore.YAML_KEYS`）
 - 1つでもカスタムが入っていれば `CustomDataStore.isCustom() === true`
 - セーブデータの `gameName` に `BaseLoader.getName()` を埋め込むため、カスタム作品ごとにセーブが識別される
+
+## スキルシステム
+
+`skills.yml` で定義された data-driven なスキルを管理します。Phase 2 時点ではデータ基盤と永続化のみを実装しており、実発動・コスト評価・mastery 抽選・action 実行は後続フェーズで実装予定です。
+
+### スキル定義（skills.yml）
+
+```yaml
+- name: double_attack          # 識別子
+  label: 2回攻撃                # 表示名
+  description: 1ターンで2回攻撃する
+  target: front                # front / around / room / map / self
+  cost:                        # 使用時に支払うコスト（省略可）
+    magic: 2
+    life: life * 0.1           # 数式も可（実効値 + <stat>_max を露出）
+  action:                      # 実行するアクションの配列（順次実行）
+    - attack                   # パラメータなし
+    - damage: 30               # 単一キーオブジェクト（数値 or formula）
+  mastery:                     # 習得条件（省略可、空ならアイテム/イベントのみ）
+    - exact: 2                 # = { least: 2, rate: 1 } のシュガー
+    - least: 5
+      rate: 0.5
+```
+
+`target` 種別：
+
+| 値 | 意味 |
+| --- | --- |
+| `front` | UI で前方3方向から1セル選択。発動者は含まれない |
+| `around` | 発動者隣接 8 マス（Chebyshev 距離1、発動者除外） |
+| `room` | 発動者と視覚的に繋がった範囲（部屋＋通路、扉で繋がる範囲も含む。発動者除外） |
+| `map` | マップ全体（発動者除外） |
+| `self` | 発動者自身のみ |
+
+`mastery` の各エントリは `exact: N`（`{ least: N, rate: 1 }` のシュガー）または `least: N, rate: R`（0〜1）の形式。複数エントリがある場合、レベルアップ抽選時は post-level >= `least` を満たすうち `least` が最大のエントリのレートを使用する。
+
+### Player.learnedSkills
+
+`Player` に習得済みスキル名の `Set<string>` を保持。関連 API：
+
+- `learnSkill(name)`：未習得・既定義スキルなら習得して `true`。未定義 or 既習得は `false`
+- `hasSkill(name)`：習得済みかを判定
+- `getLearnedSkillNames()`：習得済みスキル名の配列を取得
+- `forgetSkill(name)`：習得を取り消す（デバッグ・テスト用）
+
+セーブデータ（`PlayerSaveData.learnedSkills: string[]`）として永続化される。ロード時に `skills.yml` に存在しないスキル名は警告ログ + スキップ。
+
+### スキルのデバッグ用付与
+
+`Game.create()` で以下のグローバルヘルパーを公開：
+
+- `window.learnSkill(name)`：スキルを習得
+- `window.forgetSkill(name)`：習得を取り消し
+- `window.listSkills()`：習得済みスキル一覧を取得
 
 ## YAML 横断バリデーション
 

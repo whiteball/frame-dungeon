@@ -423,6 +423,29 @@ export class Game extends Scene {
             return ok;
         };
 
+        // デバッグ用: コンソールから window.learnSkill('double_attack') 等でスキル習得
+        (window as unknown as { learnSkill: (name: string) => boolean }).learnSkill = (name: string) => {
+            const ok = this.player.learnSkill(name);
+            EventBus.emit('message-log',
+                ok ? `（debug）スキル「${name}」を習得` : `（debug）スキル「${name}」習得失敗（未定義 or 既習得）`,
+                this.dungeon.getTurnCount());
+            return ok;
+        };
+
+        // デバッグ用: コンソールから window.forgetSkill('double_attack') 等でスキル習得を取り消し
+        (window as unknown as { forgetSkill: (name: string) => boolean }).forgetSkill = (name: string) => {
+            const ok = this.player.forgetSkill(name);
+            EventBus.emit('message-log',
+                ok ? `（debug）スキル「${name}」を忘却` : `（debug）スキル「${name}」は未習得`,
+                this.dungeon.getTurnCount());
+            return ok;
+        };
+
+        // デバッグ用: コンソールから window.listSkills() で習得済みスキル一覧を取得
+        (window as unknown as { listSkills: () => string[] }).listSkills = () => {
+            return this.player.getLearnedSkillNames();
+        };
+
         // デバッグ用: コンソールから window.window.findPath(1,1,2,7,false) 等で経路を表示
         (window as unknown as { findPath: (
             startX: integer,

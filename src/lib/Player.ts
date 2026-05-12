@@ -8,6 +8,7 @@ import { EnemyLoader } from './EnemyLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { TrapsLoader } from './TrapsLoader';
 import { BaseLoader } from './BaseLoader';
+import { SkillsLoader } from './SkillsLoader';
 import type { PlayerSaveData } from './SaveManager';
 
 interface ActiveContinuousEffect {
@@ -35,6 +36,7 @@ export class Player {
     private static enemyLoader: EnemyLoader;
     private static effectsLoader: EffectsLoader;
     private static trapsLoader: TrapsLoader;
+    private static skillsLoader: SkillsLoader;
 
     level: number = 1;
     exp: number = 0;
@@ -50,6 +52,9 @@ export class Player {
 
     // 状態異常/強化効果スロット（同名効果は 1 エントリのみ、count をリセット）
     private activeStatusEffects: ActiveStatusEffect[] = [];
+
+    // 習得済みスキル名（skills.yml の name と対応）
+    private learnedSkills: Set<string> = new Set();
 
     constructor() {
         this.stats = new Map();
@@ -87,6 +92,11 @@ export class Player {
         await BaseLoader.getInstance().load();
     }
 
+    static async initializeSkillsSystem(): Promise<void> {
+        this.skillsLoader = SkillsLoader.getInstance();
+        await this.skillsLoader.loadSkills();
+    }
+
     static async initializeAllSystems(): Promise<void> {
         await this.initializeStatsSystem();
         await this.initializeItemsSystem();
@@ -94,6 +104,7 @@ export class Player {
         await this.initializeEffectsSystem();
         await this.initializeTrapsSystem();
         await this.initializeBaseSystem();
+        await this.initializeSkillsSystem();
     }
 
     private initializeStats(): void {
@@ -470,6 +481,43 @@ export class Player {
         }));
     }
 
+    /**
+     * スキルを習得する
+     * @returns 新規習得に成功した場合 true。未定義スキル名や既習得の場合 false
+     */
+    learnSkill(name: string): boolean {
+        if (!Player.skillsLoader || !Player.skillsLoader.hasSkill(name)) {
+            return false;
+        }
+        if (this.learnedSkills.has(name)) {
+            return false;
+        }
+        this.learnedSkills.add(name);
+        return true;
+    }
+
+    /**
+     * 習得済みスキルかを判定する
+     */
+    hasSkill(name: string): boolean {
+        return this.learnedSkills.has(name);
+    }
+
+    /**
+     * 習得済みスキルの一覧を取得する（順序非保証）
+     */
+    getLearnedSkillNames(): string[] {
+        return Array.from(this.learnedSkills);
+    }
+
+    /**
+     * スキル習得を取り消す（デバッグ・テスト用）
+     * @returns 解除に成功した場合 true
+     */
+    forgetSkill(name: string): boolean {
+        return this.learnedSkills.delete(name);
+    }
+
     getInventory(): Inventory {
         return this.inventory;
     }
@@ -711,6 +759,7 @@ export class Player {
                 name: e.name,
                 count: e.count,
             })),
+            learnedSkills: Array.from(this.learnedSkills),
         };
     }
 
@@ -751,6 +800,16 @@ export class Player {
             name: e.name,
             count: e.count,
         }));
+
+        // 習得スキル復元（旧セーブには存在しないため ?? [] で互換、未定義スキル名は警告 + スキップ）
+        this.learnedSkills = new Set();
+        for (const name of data.learnedSkills ?? []) {
+            if (Player.skillsLoader && Player.skillsLoader.hasSkill(name)) {
+                this.learnedSkills.add(name);
+            } else {
+                console.warn(`Unknown skill in save data, skipped: ${name}`);
+            }
+        }
     }
 
     // アイテム作成ヘルパー

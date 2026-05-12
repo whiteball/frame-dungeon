@@ -33,6 +33,7 @@ export interface PlayerSaveData {
     equippedSubArmor2Id: string | null;
     activeContinuousEffects: ContinuousEffectSaveData[];
     activeStatusEffects: StatusEffectSaveData[];
+    learnedSkills: string[];
 }
 
 export type MapObjectSaveData =

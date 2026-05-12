@@ -1,0 +1,47 @@
+- name: double_attack
+  label: 2回攻撃
+  description: 1ターンで2回攻撃する
+  target: front
+  cost:
+    magic: 2
+  action:
+    - attack
+    - attack
+  mastery:
+    - exact: 2
+
+- name: explosion
+  label: 爆発
+  description: 部屋全体に大ダメージを与える
+  target: room
+  cost:
+    life: life * 0.1
+    magic: magic_max * 0.2
+  action:
+    - damage: 30
+  mastery:
+    - least: 5
+      rate: 0.5
+
+- name: self_heal
+  label: 自己治癒
+  description: 自分のHPを回復する
+  target: self
+  cost:
+    magic: 5
+  action:
+    - heal: 30
+
+- name: scan_room
+  label: 部屋探知
+  description: 同じ部屋内のトラップを発見する
+  target: room
+  cost:
+    magic: 3
+  action:
+    - reveal_trap
+  mastery:
+    - least: 3
+      rate: 0.2
+    - least: 5
+      rate: 0.5
