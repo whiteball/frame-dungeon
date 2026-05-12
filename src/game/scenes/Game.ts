@@ -15,6 +15,7 @@ import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { EffectsLoader } from '../../lib/EffectsLoader';
 import { SkillsLoader } from '../../lib/SkillsLoader';
 import { evaluateCost, canPayCost, formatCostSummary } from '../../lib/skills/SkillExecutor';
+import { getFrontCandidates, formatTargetSummary } from '../../lib/skills/TargetResolver';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
@@ -329,6 +330,17 @@ export class Game extends Scene {
         });
 
         EventBus.on('use-skill', (payload: { skillName: string }) => {
+            const def = SkillsLoader.getInstance().getSkill(payload.skillName);
+            if (!def) return;
+
+            if (def.target === 'front') {
+                // リストを閉じて方向選択モードに移行
+                this.closeList();
+                this.enterSkillTargetSelectMode(payload.skillName);
+                return;
+            }
+
+            // それ以外（self / around / room / map）は即発動
             if (this.dungeon.useSkill(payload.skillName)) {
                 // スキル発動成功時は一覧を再描画して開いたままにする
                 // （アイテム使用と同じ思想。スキルは消費しないため常に同じ一覧）
@@ -751,8 +763,7 @@ export class Game extends Scene {
                 label: def.label,
                 description: def.description,
                 costSummary: formatCostSummary(deltas),
-                // Phase 7 で targetSummary を実装
-                targetSummary: '',
+                targetSummary: formatTargetSummary(def.target),
                 disabled: !canPay,
                 disabledReason: canPay ? '' : 'コスト不足',
             });
@@ -971,6 +982,46 @@ export class Game extends Scene {
     }
 
     private exitAttackDirectionMode(): void {
+        this.setSceneActions(this.defaultSceneActions);
+    }
+
+    /**
+     * target: front スキルの方向選択モードに移行する。
+     * 左/中央/右/キャンセル の 4 ボタンを表示し、選択でスキル発動、
+     * キャンセルでコスト未消費・defaultSceneActions に復帰する。
+     */
+    private enterSkillTargetSelectMode(skillName: string): void {
+        const candidates = getFrontCandidates(this.dungeon);
+        const actions: SceneAction[] = [
+            {
+                label: '左',
+                disabled: !candidates[0].valid,
+                onClick: () => this.executeSkillWithFront(skillName, candidates[0].cell),
+            },
+            {
+                label: '中央',
+                disabled: !candidates[1].valid,
+                onClick: () => this.executeSkillWithFront(skillName, candidates[1].cell),
+            },
+            {
+                label: '右',
+                disabled: !candidates[2].valid,
+                onClick: () => this.executeSkillWithFront(skillName, candidates[2].cell),
+            },
+            {
+                label: 'キャンセル',
+                onClick: () => this.exitSkillTargetSelectMode(),
+            },
+        ];
+        this.setSceneActions(actions);
+    }
+
+    private executeSkillWithFront(skillName: string, cell: { x: integer; y: integer }): void {
+        this.exitSkillTargetSelectMode();
+        this.executeAction(() => this.dungeon.useSkill(skillName, cell));
+    }
+
+    private exitSkillTargetSelectMode(): void {
         this.setSceneActions(this.defaultSceneActions);
     }
 

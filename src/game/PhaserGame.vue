@@ -127,6 +127,13 @@ function showDescription() {
     EventBus.emit('message-log', `${line1}\n${line2}`);
 }
 
+function buildSummaryText(it: ItemListEntry): string {
+    const parts: string[] = [];
+    if (it.targetSummary) parts.push(it.targetSummary);
+    if (it.costSummary) parts.push(it.costSummary);
+    return parts.length ? ' (' + parts.join(' / ') + ')' : '';
+}
+
 function requestClose() {
     EventBus.emit('close-item-list-request');
 }
@@ -434,7 +441,7 @@ defineExpose({ scene, game });
                         background: i === selectedIndex ? '#335' : 'transparent'
                     }"
                     :title="it.disabled && it.disabledReason ? it.disabledReason : it.description"
-                >{{ (it.isEquipped ? '[E] ' : '') + it.label + (it.costSummary ? ' (' + it.costSummary + ')' : '') }}</li>
+                >{{ (it.isEquipped ? '[E] ' : '') + it.label + buildSummaryText(it) }}</li>
                 <li
                     v-if="itemList.length === 0"
                     style="padding: 2px 4px; opacity: 0.6;"

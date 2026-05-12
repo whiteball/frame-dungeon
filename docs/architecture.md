@@ -617,6 +617,42 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム使�
 
 UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCost` + `canPayCost` + `formatCostSummary` を呼び、`open-item-list` のペイロード（`costSummary` / `disabled` / `disabledReason`）に反映する。スキル一覧表示時にコストが視覚化され、支払い不能スキルは半透明 + tooltip「コスト不足」になる。
 
+### target 解決と方向選択 UI
+
+`src/lib/skills/TargetResolver.ts` がスキルの `target` スコープをセル配列に解決する：
+
+| target | 解決ルール |
+| --- | --- |
+| `self` | caster の現在位置 1 セル |
+| `front` | UI で選ばれた 1 セル（未指定なら空配列、`useSkill` で発動不可と判定） |
+| `around` | caster 隣接 8 マス（Chebyshev 距離 1、caster 自身は含まない）のうち、`canAttack` で到達可能なセルのみ。壁に塞がれた方向や、対角線で両側の L 字経路がともに壁の方向は除外される |
+| `room` | `DungeonMap.getCellsInZone(px, py)` の結果から caster を除いたもの。壁・扉で囲まれた視覚的開放空間（`getDoorTargetsInZone` と同じ BFS 方針、扉では止まる） |
+| `map` | マップ全体の playable 範囲 `(1..getWidth(), 1..getHeight())` のうち、壁マス (`getAt = -1`) と caster 位置を除いたセル |
+
+`getCellsInZone(x, y)` は壁または扉ビットが立っていない方向にのみ BFS で展開する（door bit は wall bit と共に立つ実装が前提）。
+
+`target: front` の UI フローは [`enterAttackDirectionMode`](src/game/scenes/Game.ts) を踏襲：
+
+```text
+[スキル一覧で front スキル選択]
+  → EventBus 'use-skill'
+  → Game.ts ハンドラが def.target === 'front' を検出
+  → closeList で一覧を閉じる
+  → enterSkillTargetSelectMode：左/中央/右/キャンセルの 4 ボタン
+     ・各候補は getFrontCandidates で取得（valid = canAttack 判定）
+     ・無効方向は disabled で表示
+  → ユーザ選択 → executeSkillWithFront → dungeon.useSkill(name, cell)
+     ・キャンセル時はコスト未消費、defaultSceneActions に復帰
+```
+
+`target: self / around / room / map` は即発動（一覧再表示で開いたまま）。
+
+`buildSkillListPayload` は `formatTargetSummary` の結果を `targetSummary` フィールドに、`formatCostSummary` の結果を `costSummary` フィールドに埋める。`PhaserGame.vue` の `buildSummaryText` ヘルパーが両者を `/` 区切りで括弧内に並べて表示する。表示例：
+
+- `2回攻撃 (前方 / MP:2)`
+- `自己治癒 (自分 / MP:5)`
+- `爆発 (部屋 / HP:10, MP:10)`
+
 ### スキル発動 UI フロー
 
 シーンアクションの「スキル」ボタン（`1` キー）または `Game.toggleList('skill')` でスキル一覧を開きます。アイテム一覧と同じ `open-item-list` EventBus イベントを `mode: 'skill'` で発行し、`PhaserGame.vue` の既存リスト UI を共有します。

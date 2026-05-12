@@ -5,6 +5,7 @@ import { MapDirection, getDirectionOffset } from './MapDirection';
 import { EffectsLoader } from '../EffectsLoader';
 import { SkillsLoader } from '../SkillsLoader';
 import { evaluateCost, canPayCost, payCost } from '../skills/SkillExecutor';
+import { resolveTarget, type TargetCell } from '../skills/TargetResolver';
 import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
 import { StairsObject, TrapObject, ItemObject } from './MapObjects';
@@ -200,26 +201,39 @@ export function changeEquipment(dungeon: DungeonMap, instanceId: string): Change
 }
 
 /**
- * プレイヤーがスキルを発動する（Phase 6: コスト評価対応）
+ * プレイヤーがスキルを発動する（Phase 7: target 解決対応）
  *
- * 現時点ではコスト評価・支払い・差し戻しまでを実装し、
- * action 本体は引き続きモック（ログ出力 + 1 ターン消費）。
+ * 現時点で実装済み：コスト評価・支払い・差し戻し + target スコープ解決。
+ * action 本体は引き続きモック（target セル数を含むログ出力 + 1 ターン消費）。
  * 後続フェーズで以下を実装する：
- *   - Phase 7: target 解決と front 方向選択
  *   - Phase 8〜11: 各 action（attack / damage / heal / reveal_trap）
  *   - Phase 12: スタン中の発動ブロック
  *
  * @param skillName 発動するスキル名
+ * @param selectedTarget target=front の場合に UI で選ばれた対象セル
  * @returns 発動成功時 true（ターン消費あり）。
- *          プレイヤー未設定／未習得／未定義／コスト支払い不能の場合 false（ターン非消費）
+ *          プレイヤー未設定／未習得／未定義／front 対象未選択／コスト支払い不能の場合 false（ターン非消費）
  */
-export function useSkill(dungeon: DungeonMap, skillName: string): boolean {
+export function useSkill(
+  dungeon: DungeonMap,
+  skillName: string,
+  selectedTarget?: TargetCell,
+): boolean {
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
   if (!player.hasSkill(skillName)) return false;
   const compiled = SkillsLoader.getInstance().getCompiledSkill(skillName);
   if (!compiled) return false;
   const def = compiled.definition;
+
+  // target 解決（front は selectedTarget 必須）
+  const targetCells = resolveTarget(def.target, dungeon, selectedTarget);
+  if (def.target === 'front' && targetCells.length === 0) {
+    EventBus.emit('message-log',
+      `スキル「${def.label}」を発動できない（対象が選択されていない）`,
+      dungeon.getTurnCount());
+    return false;
+  }
 
   // コスト評価・検証（差し戻し時はステータス未変更）
   const deltas = evaluateCost(player, compiled);
@@ -233,9 +247,9 @@ export function useSkill(dungeon: DungeonMap, skillName: string): boolean {
   // コスト支払い
   payCost(player, deltas);
 
-  // モック発動（Phase 7 以降で target / action を実装）
+  // モック発動（Phase 8 以降で targetCells を各 action に渡して実行）
   EventBus.emit('message-log',
-    `スキル「${def.label}」を発動した（モック）`,
+    `スキル「${def.label}」を発動した（モック target=${targetCells.length}セル）`,
     dungeon.getTurnCount());
 
   dungeon.dispatchObjectEvent();

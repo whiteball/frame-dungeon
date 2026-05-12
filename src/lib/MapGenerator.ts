@@ -602,9 +602,10 @@ export class DungeonMap {
 
   /**
    * プレイヤーがスキルを発動する
+   * @param selectedTarget target=front の場合に UI で選ばれた対象セル
    */
-  public useSkill(skillName: string): boolean {
-    return PlayerActions.useSkill(this, skillName);
+  public useSkill(skillName: string, selectedTarget?: { x: integer; y: integer }): boolean {
+    return PlayerActions.useSkill(this, skillName, selectedTarget);
   }
 
   /**
@@ -920,6 +921,39 @@ export class DungeonMap {
 
   public hasLineOfSight(x1: integer, y1: integer, x2: integer, y2: integer): boolean {
     return hasLineOfSight(this, x1, y1, x2, y2);
+  }
+
+  /**
+   * 指定座標を起点に、壁・扉で囲まれた視覚的開放空間内のすべてのセルを BFS で列挙する。
+   * 扉は「視覚的境界」とみなして突破しない（getDoorTargetsInZone と同方針）。
+   * スキルの target: room 解決に使用する。
+   */
+  public getCellsInZone(startX: integer, startY: integer): [integer, integer][] {
+    const cells: [integer, integer][] = [];
+    const visited = new Set<integer>();
+    const queue: [integer, integer][] = [[startX, startY]];
+    visited.add(startY * this._width + startX);
+
+    while (queue.length > 0) {
+      const [cx, cy] = queue.shift()!;
+      const val = this.getAt(cx, cy);
+      if (val === -1) continue;
+      cells.push([cx, cy]);
+
+      for (let d = 0; d < 4; d++) {
+        // 壁または扉があるならその方向には進まない（扉ビットは壁ビットと共に立つ前提）
+        if (val & (1 << d)) continue;
+        const [dx, dy] = getDirectionOffset(d as MapDirection);
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= this._width || ny >= this._height) continue;
+        const nKey = ny * this._width + nx;
+        if (visited.has(nKey)) continue;
+        visited.add(nKey);
+        queue.push([nx, ny]);
+      }
+    }
+    return cells;
   }
 
   /**
