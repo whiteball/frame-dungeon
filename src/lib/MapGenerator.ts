@@ -601,6 +601,13 @@ export class DungeonMap {
   }
 
   /**
+   * プレイヤーがスキルを発動する
+   */
+  public useSkill(skillName: string): boolean {
+    return PlayerActions.useSkill(this, skillName);
+  }
+
+  /**
    * プレイヤーを現在の向きから右方向に移動させる
    * @returns 移動に成功した場合1、移動できない場合0
    */

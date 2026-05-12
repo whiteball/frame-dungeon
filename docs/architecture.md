@@ -438,10 +438,11 @@ autoSpawner:
 
 | イベント名 | 方向 | payload | 用途 |
 | --- | --- | --- | --- |
-| `open-item-list` | Phaser→Vue | `{ items: Array<{ id, label, description }> }` | 一覧 UI を開く・再描画する |
+| `open-item-list` | Phaser→Vue | `{ items: Array<{ id, label, description, ... }>, mode, actionLabel }` | 一覧 UI を開く・再描画する。`mode` は `'item' / 'equip' / 'drop' / 'skill'` |
 | `close-item-list` | Phaser→Vue | なし | 一覧 UI を閉じる確定通知 |
 | `close-item-list-request` | Vue→Phaser | なし | Vue 側（ESC/キャンセル/外側トリガ）からのクローズ要求 |
-| `use-item` | Vue→Phaser | `{ instanceId: string }` | 使用確定 |
+| `use-item` | Vue→Phaser | `{ instanceId: string }` | アイテム使用確定 |
+| `use-skill` | Vue→Phaser | `{ skillName: string }` | スキル発動確定 |
 
 ## トラップシステム
 
@@ -480,7 +481,7 @@ autoSpawner:
 
 シーンごとの操作ボタン（画面下部の「アイテム使用」「ステータス」等）は `EventBus.emit('scene-actions', [{ label, onClick }, ...])` で発行します。`PhaserGame.vue` が受け取り、ボタン列として左寄せで表示します。
 
-Game シーンのデフォルト SceneActions は「アイテム使用」「装備変更」「ステータス」「足下」の4ボタンです。数字キー `1〜0`（10 個まで）を左から順に割り当てます（`Phaser.Input.Keyboard.KeyCodes.ONE`〜`ZERO` を `addKey` で登録し、`down` イベントで該当 `onClick` を呼び出す）。アイテム一覧表示中は `keyboard.enabled = false` によりこれらのショートカットも自動的に無効化されます。
+Game シーンのデフォルト SceneActions は `[スキル, アイテム使用, 装備変更, ステータス, 足下, セーブ]` の 6 ボタンで、数字キー `1`〜`6` に対応します。数字キー `1〜0`（10 個まで）を左から順に割り当てます（`Phaser.Input.Keyboard.KeyCodes.ONE`〜`ZERO` を `addKey` で登録し、`down` イベントで該当 `onClick` を呼び出す）。アイテム一覧表示中は `keyboard.enabled = false` によりこれらのショートカットも自動的に無効化されます。
 
 ### 足下アクション
 
@@ -574,6 +575,25 @@ Game シーンのデフォルト SceneActions は「アイテム使用」「装�
 - `forgetSkill(name)`：習得を取り消す（デバッグ・テスト用）
 
 セーブデータ（`PlayerSaveData.learnedSkills: string[]`）として永続化される。ロード時に `skills.yml` に存在しないスキル名は警告ログ + スキップ。
+
+### スキル発動 UI フロー
+
+シーンアクションの「スキル」ボタン（`1` キー）または `Game.toggleList('skill')` でスキル一覧を開きます。アイテム一覧と同じ `open-item-list` EventBus イベントを `mode: 'skill'` で発行し、`PhaserGame.vue` の既存リスト UI を共有します。
+
+```text
+[1 キー / スキルボタン] → Game.toggleList('skill') → openList('skill')
+  → buildSkillListPayload で習得済みスキルのペイロード生成
+  → EventBus.emit('open-item-list', { items, mode: 'skill', actionLabel: '発動' })
+  → ユーザ選択 → 確定（Enter / 発動ボタン / ダブルクリック）
+  → EventBus.emit('use-skill', { skillName })
+  → DungeonMap.useSkill → PlayerActions.useSkill
+  → モック発動ログ + dispatchObjectEvent（敵反撃 + tick）
+  → 一覧を再描画して開いたまま
+```
+
+Phase 3 時点では `PlayerActions.useSkill` はモック実装（メッセージログとターン消費のみ）。コスト評価・target 解決・action 実行は後続フェーズで順次実装します。
+
+`buildSkillListPayload` が返すエントリには Phase 6/7 で使用する `costSummary` / `targetSummary` / `disabled` / `disabledReason` フィールドの足場が含まれます（Phase 3 では全て空 or false）。
 
 ### スキルのデバッグ用付与
 

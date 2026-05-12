@@ -13,6 +13,7 @@ import type { ItemDefinition } from '../../lib/ItemsLoader';
 import { TrapsLoader } from '../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { EffectsLoader } from '../../lib/EffectsLoader';
+import { SkillsLoader } from '../../lib/SkillsLoader';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
@@ -50,7 +51,7 @@ export class Game extends Scene {
     params: Map<string, number | string>;
     player: Player;
 
-    private listMode: 'item' | 'equip' | 'drop' | null = null;
+    private listMode: 'item' | 'equip' | 'drop' | 'skill' | null = null;
     private pendingPickup: { mapObject: MapObject, itemDef: ItemDefinition } | null = null;
     private defaultSceneActions: SceneAction[] = [];
     private currentSceneActions: SceneAction[] = [];
@@ -137,6 +138,7 @@ export class Game extends Scene {
         EventBus.removeAllListeners('game-over');
         EventBus.removeAllListeners('game-clear');
         EventBus.removeAllListeners('use-item');
+        EventBus.removeAllListeners('use-skill');
         EventBus.removeAllListeners('equip-item');
         EventBus.removeAllListeners('close-item-list-request');
         EventBus.removeAllListeners('open-drop-list-for-pickup');
@@ -325,6 +327,20 @@ export class Game extends Scene {
             }
         });
 
+        EventBus.on('use-skill', (payload: { skillName: string }) => {
+            if (this.dungeon.useSkill(payload.skillName)) {
+                // スキル発動成功時は一覧を再描画して開いたままにする
+                // （アイテム使用と同じ思想。スキルは消費しないため常に同じ一覧）
+                const learned = this.player.getLearnedSkillNames();
+                EventBus.emit('open-item-list', {
+                    items: this.buildSkillListPayload(learned),
+                    mode: 'skill',
+                    actionLabel: '発動',
+                });
+                this.render();
+            }
+        });
+
         EventBus.on('equip-item', (payload: { instanceId: string }) => {
             const result = this.dungeon.changeEquipment(payload.instanceId);
             if (result.success) {
@@ -468,6 +484,7 @@ export class Game extends Scene {
         };
 
         this.defaultSceneActions = [
+            { label: 'スキル', onClick: () => this.toggleList('skill') },
             { label: 'アイテム使用', onClick: () => this.toggleList('item') },
             { label: '装備変更', onClick: () => this.toggleList('equip') },
             { label: 'ステータス', onClick: () => this.openStatus() },
@@ -611,7 +628,7 @@ export class Game extends Scene {
         EventBus.emit('open-status', lines.join('\n'));
     }
 
-    private toggleList(mode: 'item' | 'equip'): void {
+    private toggleList(mode: 'item' | 'equip' | 'skill'): void {
         if (this.listMode === mode) {
             this.closeList();
         } else {
@@ -637,8 +654,21 @@ export class Game extends Scene {
         this.render();
     }
 
-    private openList(mode: 'item' | 'equip' | 'drop'): void {
+    private openList(mode: 'item' | 'equip' | 'drop' | 'skill'): void {
         if (this.listMode !== null) this.closeList();
+
+        if (mode === 'skill') {
+            const learned = this.player.getLearnedSkillNames();
+            this.listMode = 'skill';
+            if (this.input.keyboard) this.input.keyboard.enabled = false;
+            EventBus.emit('open-item-list', {
+                items: this.buildSkillListPayload(learned),
+                mode: 'skill',
+                actionLabel: '発動',
+            });
+            return;
+        }
+
         let items: Item[];
         let actionLabel: string;
         if (mode === 'item') {
@@ -664,6 +694,36 @@ export class Game extends Scene {
             mode,
             actionLabel,
         });
+    }
+
+    private buildSkillListPayload(skillNames: string[]): Array<{
+        id: string; label: string; description: string;
+        costSummary?: string; targetSummary?: string;
+        disabled?: boolean; disabledReason?: string;
+    }> {
+        const loader = SkillsLoader.getInstance();
+        const result: Array<{
+            id: string; label: string; description: string;
+            costSummary?: string; targetSummary?: string;
+            disabled?: boolean; disabledReason?: string;
+        }> = [];
+        for (const name of skillNames) {
+            const def = loader.getSkill(name);
+            if (!def) continue;
+            result.push({
+                id: name,
+                label: def.label,
+                description: def.description,
+                // Phase 6 で costSummary を実装
+                costSummary: '',
+                // Phase 7 で targetSummary を実装
+                targetSummary: '',
+                // Phase 6 で disabled / disabledReason を実装
+                disabled: false,
+                disabledReason: '',
+            });
+        }
+        return result;
     }
 
     private openDropList(): void {

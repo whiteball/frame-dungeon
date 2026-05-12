@@ -14,8 +14,13 @@ import LoadDialog from '../components/dialogs/LoadDialog.vue';
 import YamlErrorDialog from '../components/dialogs/YamlErrorDialog.vue';
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
-type ListMode = 'item' | 'equip' | 'drop';
-type ItemListEntry = { id: string, label: string, description: string, isEquipped?: boolean, type?: string, effectJson?: string };
+type ListMode = 'item' | 'equip' | 'drop' | 'skill';
+type ItemListEntry = {
+    id: string, label: string, description: string,
+    isEquipped?: boolean, type?: string, effectJson?: string,
+    costSummary?: string, targetSummary?: string,
+    disabled?: boolean, disabledReason?: string,
+};
 
 const scene = ref();
 const game = ref();
@@ -102,10 +107,13 @@ function onListKeyDown(e: KeyboardEvent) {
 function confirmSelect() {
     const it = itemList.value[selectedIndex.value];
     if (!it) return;
+    if (it.disabled) return;
     if (listMode.value === 'equip') {
         EventBus.emit('equip-item', { instanceId: it.id });
     } else if (listMode.value === 'drop') {
         EventBus.emit('drop-item', { instanceId: it.id });
+    } else if (listMode.value === 'skill') {
+        EventBus.emit('use-skill', { skillName: it.id });
     } else {
         EventBus.emit('use-item', { instanceId: it.id });
     }
@@ -396,7 +404,7 @@ defineExpose({ scene, game });
                        border-radius: 6px;
                        padding: 12px 32px;
                        box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);"
-            >{{ listMode === 'equip' ? '装備変更中' : listMode === 'drop' ? '置くもの選択中' : 'アイテム選択中' }}</span>
+            >{{ listMode === 'skill' ? 'スキル選択中' : listMode === 'equip' ? '装備変更中' : listMode === 'drop' ? '置くもの選択中' : 'アイテム選択中' }}</span>
         </div>
         <div
             v-show="itemListVisible"
@@ -419,14 +427,18 @@ defineExpose({ scene, game });
                     :key="it.id"
                     @click="selectedIndex = i"
                     @dblclick="confirmSelect"
-                    :style="{ padding: '2px 4px', cursor: 'pointer',
-                              background: i === selectedIndex ? '#335' : 'transparent' }"
-                    :title="it.description"
+                    :style="{
+                        padding: '2px 4px',
+                        cursor: it.disabled ? 'not-allowed' : 'pointer',
+                        opacity: it.disabled ? 0.5 : 1,
+                        background: i === selectedIndex ? '#335' : 'transparent'
+                    }"
+                    :title="it.disabled && it.disabledReason ? it.disabledReason : it.description"
                 >{{ (it.isEquipped ? '[E] ' : '') + it.label }}</li>
                 <li
                     v-if="itemList.length === 0"
                     style="padding: 2px 4px; opacity: 0.6;"
-                >{{ listMode === 'equip' ? '装備できる物がない' : listMode === 'drop' ? '置けるアイテムがない' : '使える薬がない' }}</li>
+                >{{ listMode === 'skill' ? '習得しているスキルがない' : listMode === 'equip' ? '装備できる物がない' : listMode === 'drop' ? '置けるアイテムがない' : '使える薬がない' }}</li>
             </ul>
             <div style="display: flex; gap: 4px; padding: 4px; border-top: 1px solid #666;">
                 <button
