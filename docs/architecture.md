@@ -674,7 +674,17 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 - damage: "target_life_max * 0.1"           # 敵の最大 HP の 10%
 ```
 
-未実装 action（Phase 10〜11）：`heal`、`reveal_trap`。未知の action 名は警告ログのみで継続する。
+- **`heal`**（`src/lib/skills/actions/HealAction.ts`）：target スコープ内のエンティティ（caster を含む可能性あり）に `defaultDamageStat`（通常 `life`=HP）を回復させる。対象判定は「cells に caster の現在位置が含まれる場合 caster を含む、各 cell の生存 Enemy も含む」のシンプル位置ベース。`target: self` のみ caster が含まれ、`target: around / room / map` は caster を除外したスコープなので caster は対象にならない（プレイヤー発動のヒールは事実上 self 以外では敵を回復する）。変数規則は damage と同じ（caster 側プレフィックスなし、target 側 `target_` プレフィックス）。端数は `Math.floor`、負値は警告 + 0 クランプ。回復は `addStat` 経由で fluctuation 上限クランプを通る（最大値を超えない）。ログは caster 自身なら `HPが N 回復した`、Enemy なら `{敵label}のHPが N 回復した`。formula は module 内 Map でキャッシュ
+
+例：
+
+```yaml
+- heal: 30                                  # 固定値 30
+- heal: "life_max * 0.3"                    # caster 最大 HP の 30%（self 用途）
+- heal: "target_life_max * 0.5"             # 対象最大 HP の 50%
+```
+
+未実装 action（Phase 11）：`reveal_trap`。未知の action 名は警告ログのみで継続する。
 
 ### スキル発動 UI フロー
 

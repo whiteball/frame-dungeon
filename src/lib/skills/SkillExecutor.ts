@@ -6,6 +6,7 @@ import type { DungeonMap } from '../MapGenerator';
 import type { TargetCell } from './TargetResolver';
 import { executeAttackAction } from './actions/AttackAction';
 import { executeDamageAction } from './actions/DamageAction';
+import { executeHealAction } from './actions/HealAction';
 
 /**
  * コスト formula を評価し、各ステータスの差分（負値）を返す。
@@ -99,7 +100,13 @@ export function executeActions(
                 }
                 executeDamageAction(dungeon, caster, cells, param);
                 break;
-            // Phase 10: case 'heal':
+            case 'heal':
+                if (param === null) {
+                    console.warn(`heal action requires a parameter in skill "${compiled.definition.name}"`);
+                    break;
+                }
+                executeHealAction(dungeon, caster, cells, param);
+                break;
             // Phase 11: case 'reveal_trap':
             default:
                 console.warn(`Unknown skill action "${name}" in skill "${compiled.definition.name}"`);
