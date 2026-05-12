@@ -684,7 +684,9 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 - heal: "target_life_max * 0.5"             # 対象最大 HP の 50%
 ```
 
-未実装 action（Phase 11）：`reveal_trap`。未知の action 名は警告ログのみで継続する。
+- **`reveal_trap`**（`src/lib/skills/actions/RevealTrapAction.ts`）：target スコープ内のセルにある未発見の `TrapObject` を `visible = true` にする。既に visible なトラップは無視。発見毎に「{label} を発見した！」ログを出す。caster ステータスは参照しない（パラメータシグネチャ統一のため受け取るのみ）
+
+未知の action 名は警告ログのみで継続する。YamlCrossValidator での事前検証は今後の改善ポイント。
 
 ### スキル発動 UI フロー
 

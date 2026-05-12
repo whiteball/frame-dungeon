@@ -7,6 +7,7 @@ import type { TargetCell } from './TargetResolver';
 import { executeAttackAction } from './actions/AttackAction';
 import { executeDamageAction } from './actions/DamageAction';
 import { executeHealAction } from './actions/HealAction';
+import { executeRevealTrapAction } from './actions/RevealTrapAction';
 
 /**
  * コスト formula を評価し、各ステータスの差分（負値）を返す。
@@ -107,7 +108,9 @@ export function executeActions(
                 }
                 executeHealAction(dungeon, caster, cells, param);
                 break;
-            // Phase 11: case 'reveal_trap':
+            case 'reveal_trap':
+                executeRevealTrapAction(dungeon, caster, cells);
+                break;
             default:
                 console.warn(`Unknown skill action "${name}" in skill "${compiled.definition.name}"`);
         }
