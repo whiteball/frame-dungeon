@@ -462,6 +462,38 @@ export class Game extends Scene {
             return this.player.getLearnedSkillNames();
         };
 
+        // デバッグ用: コンソールから window.addExp(50) で経験値を加算しレベルアップ＋mastery 抽選を発火
+        (window as unknown as { addExp: (n: number) => { levels: Array<{ level: number; learnedSkills: string[] }> } }).addExp = (n: number) => {
+            const result = this.player.addExp(n);
+            EventBus.emit('message-log', `（debug）経験値+${n}`, this.dungeon.getTurnCount());
+            const skillsLoader = SkillsLoader.getInstance();
+            for (const lv of result.levels) {
+                EventBus.emit('message-log', `レベルアップ！Lv${lv.level}`, this.dungeon.getTurnCount());
+                for (const skillName of lv.learnedSkills) {
+                    const label = skillsLoader.getSkill(skillName)?.label ?? skillName;
+                    EventBus.emit('message-log', `スキル「${label}」を習得した！`, this.dungeon.getTurnCount());
+                }
+            }
+            this.render();
+            return result;
+        };
+
+        // デバッグ用: コンソールから window.levelUpN(3) で経験値を介さず直接 n 回 levelUp を呼ぶ（mastery 抽選確認用）
+        (window as unknown as { levelUpN: (n?: number) => string[] }).levelUpN = (n: number = 1) => {
+            const allLearned: string[] = [];
+            for (let i = 0; i < n; i++) {
+                const learned = this.player.levelUp();
+                allLearned.push(...learned);
+                EventBus.emit('message-log', `（debug）レベルアップ！Lv${this.player.level}`, this.dungeon.getTurnCount());
+                for (const skillName of learned) {
+                    const label = SkillsLoader.getInstance().getSkill(skillName)?.label ?? skillName;
+                    EventBus.emit('message-log', `スキル「${label}」を習得した！`, this.dungeon.getTurnCount());
+                }
+            }
+            this.render();
+            return allLearned;
+        };
+
         // デバッグ用: コンソールから window.window.findPath(1,1,2,7,false) 等で経路を表示
         (window as unknown as { findPath: (
             startX: integer,

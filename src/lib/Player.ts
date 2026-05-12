@@ -696,18 +696,29 @@ export class Player {
         return BaseLoader.getInstance().getRequiredExp(this.getFormulaVars());
     }
 
-    addExp(amount: number): number {
+    /**
+     * 経験値を加算する。閾値を超える分だけ levelUp を繰り返し呼び出す。
+     * @returns 各レベルアップの結果（到達レベルとそのレベルで新規習得したスキル名）
+     */
+    addExp(amount: number): { levels: Array<{ level: number; learnedSkills: string[] }> } {
         this.exp += amount;
-        let levelsGained = 0;
+        const levels: Array<{ level: number; learnedSkills: string[] }> = [];
         while (this.exp >= this.expToNextLevel()) {
             this.exp -= this.expToNextLevel();
-            this.levelUp();
-            levelsGained++;
+            const learned = this.levelUp();
+            levels.push({ level: this.level, learnedSkills: learned });
         }
-        return levelsGained;
+        return { levels };
     }
 
-    levelUp(): void {
+    /**
+     * レベルアップ処理を実行する。
+     * - base.yml の levelUpBonus を適用
+     * - skills.yml の mastery 配列に基づき、未習得スキルの抽選を行う
+     *   （post-level >= least を満たすうち least が最大のエントリの rate で抽選）
+     * @returns 今回のレベルアップで新規習得したスキル名の配列
+     */
+    levelUp(): string[] {
         this.level++;
         const vars = this.getFormulaVars();
         for (const { target, formula, reset } of BaseLoader.getInstance().getLevelUpBonuses()) {
@@ -723,6 +734,34 @@ export class Player {
                 this.addStat(target, amount);
             }
         }
+
+        // mastery 抽選
+        const newlyLearned: string[] = [];
+        if (Player.skillsLoader) {
+            for (const skill of Player.skillsLoader.getSkills()) {
+                if (this.learnedSkills.has(skill.name)) continue;
+                const mastery = Player.skillsLoader.getNormalizedMastery(skill.name);
+                if (mastery.length === 0) continue;
+
+                // post-level >= least を満たすエントリのうち、least が最大のものを採用
+                let chosen: { least: number; rate: number } | null = null;
+                for (const m of mastery) {
+                    if (m.least <= this.level) {
+                        if (chosen === null || m.least > chosen.least) {
+                            chosen = m;
+                        }
+                    }
+                }
+                if (chosen === null) continue;
+
+                if (Math.random() < chosen.rate) {
+                    if (this.learnSkill(skill.name)) {
+                        newlyLearned.push(skill.name);
+                    }
+                }
+            }
+        }
+        return newlyLearned;
     }
 
     // 表示用の能力値を取得（略称付き、装備ボーナス・持続効果ボーナス込み）

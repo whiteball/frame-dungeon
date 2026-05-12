@@ -71,10 +71,15 @@ export function attackEnemyAt(dungeon: DungeonMap, targetX: integer, targetY: in
 
   if (!enemy.isAlive()) {
     dungeon.removeEnemy(targetX, targetY);
-    const levelsGained = player.addExp(enemy.getExp());
+    const result = player.addExp(enemy.getExp());
     EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`, dungeon.getTurnCount());
-    for (let i = 0; i < levelsGained; i++) {
-      EventBus.emit('message-log', `レベルアップ！Lv${player.level}`, dungeon.getTurnCount());
+    const skillsLoader = SkillsLoader.getInstance();
+    for (const lv of result.levels) {
+      EventBus.emit('message-log', `レベルアップ！Lv${lv.level}`, dungeon.getTurnCount());
+      for (const skillName of lv.learnedSkills) {
+        const label = skillsLoader.getSkill(skillName)?.label ?? skillName;
+        EventBus.emit('message-log', `スキル「${label}」を習得した！`, dungeon.getTurnCount());
+      }
     }
   }
 

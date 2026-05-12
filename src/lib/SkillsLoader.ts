@@ -134,4 +134,20 @@ export class SkillsLoader {
     hasSkill(name: string): boolean {
         return this.store.has(name);
     }
+
+    /**
+     * `exact: N` を `{ least: N, rate: 1 }` に展開して正規化した mastery 配列を返す。
+     * validation で `exact` または `least + rate` のいずれかが保証されているため、
+     * 戻り値のエントリは必ず `least` と `rate` の両方を持つ。
+     */
+    getNormalizedMastery(skillName: string): Array<{ least: number; rate: number }> {
+        const def = this.getSkill(skillName);
+        if (!def?.mastery) return [];
+        return def.mastery.map(SkillsLoader.normalizeMasteryEntry);
+    }
+
+    private static normalizeMasteryEntry(m: SkillMasteryEntry): { least: number; rate: number } {
+        if (m.exact !== undefined) return { least: m.exact, rate: 1 };
+        return { least: m.least!, rate: m.rate! };
+    }
 }

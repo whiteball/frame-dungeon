@@ -332,9 +332,11 @@ autoSpawner:
 
 ### 経験値・レベルアップ（`Player`）
 
-- `player.addExp(amount): number` — 経験値を加算し、上昇したレベル数を返す（複数レベルアップに対応）
+- `player.addExp(amount): { levels: Array<{ level, learnedSkills }> }` — 経験値を加算し、各レベルアップの結果（到達レベルとそこで mastery 抽選により新規習得したスキル名）を順序付きで返す
+- `player.levelUp(): string[]` — 直接 1 段階レベルアップする。今回のレベルアップで新規習得したスキル名を返す
 - 必要経験値: `BaseLoader.getRequiredExp(vars)` が `base.yml` の `requiredExp.formula` を評価（既定の `base.yml` では `level * 50`）
 - レベルアップ時の上昇量: `base.yml` の `levelUpBonus` 配列で完全に設定駆動。`reset: yes` が付いていて fluctuation 対応のステータスは最大値増分後に現値を最大値へ揃える（既定では `life` の HP 全回復）
+- mastery 抽選: `skills.yml` の各スキルに対し、未習得かつ post-level >= `least` を満たすエントリのうち `least` が最大のものを採用し、その `rate` で `Math.random()` 抽選。`exact: N` は `{ least: N, rate: 1 }` の省略表記として SkillsLoader 内で正規化される。複数レベルアップ時（`addExp` で N → N+3 等）は各 `levelUp` ごとに抽選が走る
 
 ### メッセージログ（`PhaserGame.vue`）
 
@@ -587,12 +589,11 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム使�
 
 ### スキル習得経路
 
-スキルは現状以下の経路で習得できます：
+スキルは以下の経路で習得できます：
 
+- **レベルアップ抽選**：`skills.yml` の `mastery` 配列に基づき、`Player.levelUp()` 末尾で未習得スキルそれぞれを抽選。post-level >= `least` を満たすエントリのうち `least` が最大のものを採用し、その `rate` で抽選成功時に習得。`exact: N` は `{ least: N, rate: 1 }` の省略表記。`addExp` の複数レベルアップ時は各 `levelUp` ごとに走るため、レベル飛ばしでも各段階で抽選が発生する
 - **アイテム使用**：消耗品の `effect.immediate.learnSkill: <skillName>` で習得。既習得スキルでもアイテムは消費され、ログ「習得済み」を表示する。同 `immediate` 内に `life: 30` 等の他効果を併記すると両方適用される
 - **デバッグ用 `window.learnSkill(name)`**：DevTools コンソールから直接付与
-
-レベルアップ抽選（mastery）は Phase 5 で実装予定。
 
 ### スキル発動 UI フロー
 
@@ -620,6 +621,8 @@ Phase 3 時点では `PlayerActions.useSkill` はモック実装（メッセー�
 - `window.learnSkill(name)`：スキルを習得
 - `window.forgetSkill(name)`：習得を取り消し
 - `window.listSkills()`：習得済みスキル一覧を取得
+- `window.addExp(n)`：経験値を `n` 加算（敵討伐と同じ経路で levelUp + mastery 抽選が走る）
+- `window.levelUpN(n=1)`：経験値計算を介さず直接 `n` 回 `levelUp` を呼ぶ（純粋な mastery 抽選確認用）
 
 ## YAML 横断バリデーション
 
