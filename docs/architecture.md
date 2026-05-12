@@ -688,6 +688,15 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 
 未知の action 名は警告ログのみで継続する。YamlCrossValidator での事前検証は今後の改善ポイント。
 
+### 状態異常との相互作用
+
+プレイヤーが `_action: skip` ディレクティブを持つ状態異常（麻痺・睡眠等）にかかっている間はスキル発動も封じられる。W/Space キーの既存挙動と整合させた「動けない！」+ 1 ターン消費の扱いで、防御を 2 段で構成する：
+
+- **UI 側ガード**：`Game.buildSkillListPayload` がスタンを検出してスキル一覧の全項目を `disabled = true, disabledReason: '動けない'` に設定する。スタンはコスト不足判定より優先（ツールチップ上も「動けない」が表示）。プレイヤーは項目を見られるが click / dblclick / Enter で発動できない（`confirmSelect` の `it.disabled` 早期 return）
+- **ライブラリ側ガード**：`PlayerActions.useSkill` の冒頭でも `Player.getPlayerActionDirective()` を検査し、スタン中は「動けない！」ログ発行 + `dispatchObjectEvent` でターン消費して return する。DevTools 等から直接 `dungeon.useSkill` を呼んだ場合も同じく無効化される
+
+スタン解除は既存の状態異常システム（`Player.tickStatusEffects` / `effects.yml` の `clear.formula`）に従う。
+
 ### スキル発動 UI フロー
 
 シーンアクションの「スキル」ボタン（`1` キー）または `Game.toggleList('skill')` でスキル一覧を開きます。アイテム一覧と同じ `open-item-list` EventBus イベントを `mode: 'skill'` で発行し、`PhaserGame.vue` の既存リスト UI を共有します。

@@ -746,6 +746,7 @@ export class Game extends Scene {
         costSummary?: string; targetSummary?: string;
         disabled?: boolean; disabledReason?: string;
     }> {
+        const stunned = this.player.getPlayerActionDirective() === 'skip';
         const loader = SkillsLoader.getInstance();
         const result: Array<{
             id: string; label: string; description: string;
@@ -758,14 +759,16 @@ export class Game extends Scene {
             const def = compiled.definition;
             const deltas = evaluateCost(this.player, compiled);
             const canPay = canPayCost(this.player, deltas);
+            const disabled = stunned || !canPay;
+            const disabledReason = stunned ? '動けない' : (canPay ? '' : 'コスト不足');
             result.push({
                 id: name,
                 label: def.label,
                 description: def.description,
                 costSummary: formatCostSummary(deltas),
                 targetSummary: formatTargetSummary(def.target),
-                disabled: !canPay,
-                disabledReason: canPay ? '' : 'コスト不足',
+                disabled,
+                disabledReason,
             });
         }
         return result;

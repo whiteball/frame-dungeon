@@ -163,10 +163,17 @@
   - [ ] 実績達成判定
   - [ ] 実績一覧画面
 
-- [ ] スキルシステム
-  - [ ] スキルツリー
-  - [ ] 特殊技の実装
-  - [ ] 魔法システム
+- [x] スキルシステム
+  - [x] skills.yml + SkillsLoader（コスト・target・action・mastery のフォーマット）
+  - [x] レベルアップ抽選による習得（mastery：exact / least+rate、複数 least 評価）
+  - [x] アイテム使用による習得（`effect.immediate.learnSkill` 効果、既習得時もアイテム消費）
+  - [x] スキル一覧 UI（mode='skill'、disabled / costSummary / targetSummary 表示）
+  - [x] target 解決（front / around / room / map / self）と front 方向選択 UI
+  - [x] コスト評価・支払い・差し戻し（`<stat>_max` 露出、formula 評価、原子適用）
+  - [x] action: attack / damage / heal / reveal_trap
+  - [x] スタン (`_action: skip`) 連携（UI/ライブラリ 2 段ガード）
+  - [ ] 敵によるスキル使用（将来拡張：YAML での enemies.skills 定義、AI から発動）
+  - [ ] スキル定義のクロスバリデーション強化（YamlCrossValidator で skills.yml 内の cost / damage / heal formula の変数や効果参照を事前検証）
 
 ## 技術的改善
 

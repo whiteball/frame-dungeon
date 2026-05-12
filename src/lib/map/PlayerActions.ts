@@ -221,6 +221,14 @@ export function useSkill(
 ): boolean {
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
+
+  // スタン中（_action: skip）はスキル発動も封じる。W/Space と同じ「動けない！」処理
+  if (player.getPlayerActionDirective() === 'skip') {
+    EventBus.emit('message-log', '動けない！', dungeon.getTurnCount());
+    dungeon.dispatchObjectEvent();
+    return true;
+  }
+
   if (!player.hasSkill(skillName)) return false;
   const compiled = SkillsLoader.getInstance().getCompiledSkill(skillName);
   if (!compiled) return false;
