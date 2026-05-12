@@ -23,6 +23,13 @@
     immediate:
       life: 30
   description: 傷を治す薬
+- name: mana potion
+  label: 魔法の薬
+  type: consumable
+  effect:
+    immediate:
+      magic: 30
+  description: MPを回復する薬
 - name: power potion
   label: 力の薬
   type: consumable

@@ -42,6 +42,9 @@ levelUpBonus:
   - target: life
     formula: 10
     reset: yes
+  - target: magic
+    formula: 5
+    reset: yes
   - target: power
     formula: 2
   - target: defense

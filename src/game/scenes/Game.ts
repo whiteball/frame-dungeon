@@ -689,14 +689,16 @@ export class Game extends Scene {
         const ring = Player.createItem('silver ring');
         const potion = Player.createItem('potion');
         const powerPotion = Player.createItem('power potion');
+        const manaPotion = Player.createItem('mana potion');
         
-        if (sword && shield && ring && potion && powerPotion) {
+        if (sword && shield && ring && potion && powerPotion && manaPotion) {
             console.log('✓ アイテム作成成功');
             console.log('- 鉄の剣:', sword.toString());
             console.log('- 丸い盾:', shield.toString());
             console.log('- 銀の指輪:', ring.toString());
             console.log('- 薬:', potion.toString());
             console.log('- 力の薬:', powerPotion.toString());
+            console.log('- 魔法の薬:', manaPotion.toString());
             
             // インベントリ追加テスト
             const inventory = this.player.getInventory();
@@ -705,6 +707,7 @@ export class Game extends Scene {
             inventory.addItem(ring);
             inventory.addItem(potion);
             inventory.addItem(powerPotion);
+            inventory.addItem(manaPotion);
             
             console.log('✓ インベントリ追加成功');
             console.log(`インベントリ使用量: ${inventory.getUsedCapacity()}/${inventory.getCapacity()}`);
