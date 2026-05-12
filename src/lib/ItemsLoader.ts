@@ -4,13 +4,15 @@ import { CustomDataStore } from './CustomDataStore';
 export type ItemType = 'weapon' | 'main_armor' | 'sub_armor' | 'consumable';
 
 /**
- * 即座効果。能力値変動（statName: number）に加え、状態異常付与/解除の特殊キーを持つ
+ * 即座効果。能力値変動（statName: number）に加え、特殊キーを持つ
  * - applyEffect: <effectName> — 状態異常を付与
  * - clearEffect: <effectName> — 状態異常を解除
+ * - learnSkill: <skillName> — スキルを習得（既習得ならログのみ・アイテムは消費）
  */
 export interface ImmediateEffect {
     applyEffect?: string;
     clearEffect?: string;
+    learnSkill?: string;
     [statName: string]: number | string | undefined;
 }
 

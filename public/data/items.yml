@@ -54,3 +54,18 @@
     - immediate:
         life: 10
   description: 毒状態を消し、わずかに体力も回復する
+- name: double attack scroll
+  label: 2回攻撃の巻物
+  type: consumable
+  effect:
+    immediate:
+      learnSkill: double_attack
+  description: 唱えるとスキル「2回攻撃」を習得する
+- name: heal scroll
+  label: 自己治癒の巻物
+  type: consumable
+  effect:
+    immediate:
+      learnSkill: self_heal
+      life: 10
+  description: 唱えるとスキル「自己治癒」を習得し、わずかに体力も回復する

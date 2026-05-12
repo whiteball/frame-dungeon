@@ -177,17 +177,22 @@ export class Player {
      * - 数値キーは能力値変動
      * - applyEffect: <name> は状態異常の付与
      * - clearEffect: <name> は状態異常の解除
+     * - learnSkill: <name> はスキル習得（既習得でもアイテムは消費される仕様）
      * @param effect 即座効果
-     * @returns 適用結果（能力値変動 + 付与/解除した状態異常名）
+     * @returns 適用結果（能力値変動 + 付与/解除した状態異常名 + 新規/既習得スキル名）
      */
     applyImmediateEffect(effect: ImmediateEffect): {
         stats: Map<string, number>;
         appliedEffects: string[];
         clearedEffects: string[];
+        learnedSkills: string[];
+        alreadyLearnedSkills: string[];
     } {
         const stats = new Map<string, number>();
         const appliedEffects: string[] = [];
         const clearedEffects: string[] = [];
+        const learnedSkills: string[] = [];
+        const alreadyLearnedSkills: string[] = [];
         for (const [key, value] of Object.entries(effect)) {
             if (key === 'applyEffect') {
                 if (typeof value === 'string' && this.applyStatusEffect(value)) {
@@ -197,13 +202,23 @@ export class Player {
                 if (typeof value === 'string' && this.clearStatusEffect(value)) {
                     clearedEffects.push(value);
                 }
+            } else if (key === 'learnSkill') {
+                if (typeof value === 'string') {
+                    if (this.learnSkill(value)) {
+                        learnedSkills.push(value);
+                    } else if (Player.skillsLoader?.hasSkill(value)) {
+                        // 既習得（スキル定義は存在するが既に持っている）
+                        // skills.yml に存在しないスキル名は YamlCrossValidator で起動時に検出されるためここでは無視
+                        alreadyLearnedSkills.push(value);
+                    }
+                }
             } else if (typeof value === 'number') {
                 const before = this.getStat(key);
                 this.addStat(key, value);
                 stats.set(key, this.getStat(key) - before);
             }
         }
-        return { stats, appliedEffects, clearedEffects };
+        return { stats, appliedEffects, clearedEffects, learnedSkills, alreadyLearnedSkills };
     }
 
     /**

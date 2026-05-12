@@ -4,6 +4,7 @@ import { TrapsLoader } from './TrapsLoader';
 import { EffectsLoader } from './EffectsLoader';
 import { StatsLoader } from './StatsLoader';
 import { ItemsLoader } from './ItemsLoader';
+import { SkillsLoader } from './SkillsLoader';
 
 export interface ValidationResult {
     errors: string[];
@@ -21,6 +22,7 @@ export class YamlCrossValidator {
         const effects = EffectsLoader.getInstance();
         const stats = StatsLoader.getInstance();
         const items = ItemsLoader.getInstance();
+        const skills = SkillsLoader.getInstance();
 
         // ─── INFOレベル: base.yml のオプションフィールド ──────────────────────────
 
@@ -119,6 +121,10 @@ export class YamlCrossValidator {
                         if (k === 'applyEffect' || k === 'clearEffect') {
                             if (typeof v === 'string' && !effects.hasEffect(v)) {
                                 errors.push(`items.yml "${item.name}": immediate.${k} "${v}" が effects.yml に存在しません`);
+                            }
+                        } else if (k === 'learnSkill') {
+                            if (typeof v === 'string' && !skills.hasSkill(v)) {
+                                errors.push(`items.yml "${item.name}": immediate.learnSkill "${v}" が skills.yml に存在しません`);
                             }
                         } else if (typeof v === 'number' && !stats.getStat(k)) {
                             errors.push(`items.yml "${item.name}": immediate.${k} が stats.yml に存在しません`);

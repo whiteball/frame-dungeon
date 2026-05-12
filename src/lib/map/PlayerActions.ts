@@ -116,6 +116,8 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
   const messageParts: string[] = [];
   const effectsLoader = EffectsLoader.getInstance();
 
+  const skillsLoader = SkillsLoader.getInstance();
+
   for (const spec of specs) {
     if (spec.immediate) {
       const result = player.applyImmediateEffect(spec.immediate);
@@ -130,6 +132,14 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
       for (const effName of result.clearedEffects) {
         const label = effectsLoader.getEffect(effName)?.label ?? effName;
         parts.push(`${label}状態が消えた`);
+      }
+      for (const skillName of result.learnedSkills) {
+        const label = skillsLoader.getSkill(skillName)?.label ?? skillName;
+        parts.push(`スキル「${label}」を習得した`);
+      }
+      for (const skillName of result.alreadyLearnedSkills) {
+        const label = skillsLoader.getSkill(skillName)?.label ?? skillName;
+        parts.push(`スキル「${label}」は習得済み`);
       }
       if (parts.length) messageParts.push(parts.join('、'));
     }

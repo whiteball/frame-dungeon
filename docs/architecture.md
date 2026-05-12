@@ -372,6 +372,15 @@ autoSpawner:
 6. 使用後、残りの消耗品があれば一覧を更新再描画、なければ `closeItemList()` で UI を閉じる
 7. `closeItemList()` は `resetKeys()` で Phaser Key 状態をクリアしてから `keyboard.enabled = true` に戻す（`enabled=false` 中に取りこぼした keyup により `Key.isDown` が固定される副作用の対策）
 
+### ImmediateEffect で扱える特殊キー
+
+| キー | 内容 |
+| --- | --- |
+| `<stat>: number` | 能力値変動（`addStat` 経由、fluctuation クランプ） |
+| `applyEffect: <effectName>` | 状態異常を付与（`effects.yml` 参照） |
+| `clearEffect: <effectName>` | 状態異常を解除 |
+| `learnSkill: <skillName>` | スキルを習得（`skills.yml` 参照、既習得時はログ「習得済み」のみだがアイテムは消費。同 `ImmediateEffect` 内で他効果と併記可） |
+
 ### 持続効果のターン進行
 
 `DungeonMap.dispatchObjectEvent()` は player の行動 → 敵反撃 を処理した最後で `Player.tickContinuousEffects()` を呼び、各エントリの残ターン数を1減らします。残ターン数が 0 以下になったエントリは削除され、「○○の効果が切れた」とログ出力されます。
@@ -576,6 +585,15 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム使�
 
 セーブデータ（`PlayerSaveData.learnedSkills: string[]`）として永続化される。ロード時に `skills.yml` に存在しないスキル名は警告ログ + スキップ。
 
+### スキル習得経路
+
+スキルは現状以下の経路で習得できます：
+
+- **アイテム使用**：消耗品の `effect.immediate.learnSkill: <skillName>` で習得。既習得スキルでもアイテムは消費され、ログ「習得済み」を表示する。同 `immediate` 内に `life: 30` 等の他効果を併記すると両方適用される
+- **デバッグ用 `window.learnSkill(name)`**：DevTools コンソールから直接付与
+
+レベルアップ抽選（mastery）は Phase 5 で実装予定。
+
 ### スキル発動 UI フロー
 
 シーンアクションの「スキル」ボタン（`1` キー）または `Game.toggleList('skill')` でスキル一覧を開きます。アイテム一覧と同じ `open-item-list` EventBus イベントを `mode: 'skill'` で発行し、`PhaserGame.vue` の既存リスト UI を共有します。
@@ -609,6 +627,7 @@ Phase 3 時点では `PlayerActions.useSkill` はモック実装（メッセー�
 
 - `base.yml` の `floors[].enemies` / `floors[].traps` 名が `enemies.yml` / `traps.yml` に存在するか
 - `traps.yml` の `effect[].type === 'addEffect'` の `value` が `effects.yml` に存在するか
+- `items.yml` の `effect.immediate.learnSkill` が `skills.yml` に存在するか
 - `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
 
 `{ errors: string[], infos: string[] }` を返し、`errors.length > 0` のとき `EventBus.emit('yaml-cross-validation-errors', errors)` で `YamlErrorDialog` を表示。INFO レベルは現状コンソール出力のみ。
