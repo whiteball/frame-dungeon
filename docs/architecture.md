@@ -664,8 +664,17 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 実装済み action：
 
 - **`attack`**（`src/lib/skills/actions/AttackAction.ts`）：target セル内の生存敵を抽出し、`base.yml` の `damageFromPlayer` formula で各敵にダメージを与える。死亡時は除去 + `caster.addExp` + レベルアップログ + mastery 抽選ログ。攻撃フラッシュは「ヒットした敵が 1 体以上いる場合」に 1 回のみ発行。既存の通常攻撃（[`attackEnemyAt`](src/lib/map/PlayerActions.ts)）と damage 計算ロジックが重複するが、共通化は他 action 実装後に判断する
+- **`damage`**（`src/lib/skills/actions/DamageAction.ts`）：独自 formula でダメージを与える。パラメータは数値リテラルまたは formula 文字列。使用可能変数は caster 側 `<stat>` / `<stat>_max` / `level` / `exp`（プレフィックスなし）、target 側 `target_<stat>` / `target_<stat>_max`（`target_` プレフィックス、敵生ステータス）。端数は `Math.floor` のみ、`Math.max(1, ...)` クランプは行わず 0 ダメージを許容する（負値結果は `addStat` の fluctuation クランプを通すため敵 HP 上限超過は発生しない）。死亡時の処理は attack と同じ。formula は module 内 Map でキャッシュする
 
-未実装 action（Phase 9〜11）：`damage`（独自 formula）、`heal`、`reveal_trap`。未知の action 名は警告ログのみで継続する。
+例：
+
+```yaml
+- damage: 30                                # 固定値 30
+- damage: "power * 2 - target_defense"      # caster 視点の formula
+- damage: "target_life_max * 0.1"           # 敵の最大 HP の 10%
+```
+
+未実装 action（Phase 10〜11）：`heal`、`reveal_trap`。未知の action 名は警告ログのみで継続する。
 
 ### スキル発動 UI フロー
 

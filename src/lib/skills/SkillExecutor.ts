@@ -5,6 +5,7 @@ import type { CompiledSkill, SkillActionEntry } from '../SkillsLoader';
 import type { DungeonMap } from '../MapGenerator';
 import type { TargetCell } from './TargetResolver';
 import { executeAttackAction } from './actions/AttackAction';
+import { executeDamageAction } from './actions/DamageAction';
 
 /**
  * コスト formula を評価し、各ステータスの差分（負値）を返す。
@@ -91,13 +92,18 @@ export function executeActions(
             case 'attack':
                 executeAttackAction(dungeon, caster, cells);
                 break;
-            // Phase 9: case 'damage':
+            case 'damage':
+                if (param === null) {
+                    console.warn(`damage action requires a parameter in skill "${compiled.definition.name}"`);
+                    break;
+                }
+                executeDamageAction(dungeon, caster, cells, param);
+                break;
             // Phase 10: case 'heal':
             // Phase 11: case 'reveal_trap':
             default:
                 console.warn(`Unknown skill action "${name}" in skill "${compiled.definition.name}"`);
         }
-        void param;  // Phase 9 以降で利用
     }
 }
 
