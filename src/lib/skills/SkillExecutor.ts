@@ -1,7 +1,10 @@
 import { Player } from '../Player';
 import { BaseLoader } from '../BaseLoader';
 import { StatsLoader } from '../StatsLoader';
-import type { CompiledSkill } from '../SkillsLoader';
+import type { CompiledSkill, SkillActionEntry } from '../SkillsLoader';
+import type { DungeonMap } from '../MapGenerator';
+import type { TargetCell } from './TargetResolver';
+import { executeAttackAction } from './actions/AttackAction';
 
 /**
  * コスト formula を評価し、各ステータスの差分（負値）を返す。
@@ -69,4 +72,39 @@ export function formatCostSummary(deltas: Map<string, number>): string {
         parts.push(`${abbr}:${-delta}`);
     }
     return parts.join(', ');
+}
+
+/**
+ * スキルの action 配列を順次実行する。
+ * 各 action は target セル全体を独立に処理する（[attack, attack] なら全敵を 2 回叩く）。
+ * 未知の action 名は警告のみで継続する。
+ */
+export function executeActions(
+    dungeon: DungeonMap,
+    caster: Player,
+    compiled: CompiledSkill,
+    cells: TargetCell[],
+): void {
+    for (const entry of compiled.definition.action) {
+        const { name, param } = parseActionEntry(entry);
+        switch (name) {
+            case 'attack':
+                executeAttackAction(dungeon, caster, cells);
+                break;
+            // Phase 9: case 'damage':
+            // Phase 10: case 'heal':
+            // Phase 11: case 'reveal_trap':
+            default:
+                console.warn(`Unknown skill action "${name}" in skill "${compiled.definition.name}"`);
+        }
+        void param;  // Phase 9 以降で利用
+    }
+}
+
+function parseActionEntry(entry: SkillActionEntry): { name: string; param: number | string | null } {
+    if (typeof entry === 'string') return { name: entry, param: null };
+    const keys = Object.keys(entry);
+    if (keys.length === 0) return { name: '', param: null };
+    const key = keys[0];
+    return { name: key, param: entry[key] };
 }

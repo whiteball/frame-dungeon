@@ -653,6 +653,20 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 - `自己治癒 (自分 / MP:5)`
 - `爆発 (部屋 / HP:10, MP:10)`
 
+### アクション実行
+
+`SkillExecutor.executeActions(dungeon, caster, compiled, cells)` がスキルの `action` 配列を順次ディスパッチする。各 action は target セル全体を独立に処理する：
+
+- `[attack, attack]` + `target: front` → 選択セルの敵を 2 回叩く
+- `[attack]` + `target: room` → 部屋＋通路内の全敵に 1 回ダメージ
+- `[attack, attack]` + `target: room` → 全敵を 2 周分叩く（イテレーション意味論：sequence × multi-target = 各 action が独立にスコープ全体を回る）
+
+実装済み action：
+
+- **`attack`**（`src/lib/skills/actions/AttackAction.ts`）：target セル内の生存敵を抽出し、`base.yml` の `damageFromPlayer` formula で各敵にダメージを与える。死亡時は除去 + `caster.addExp` + レベルアップログ + mastery 抽選ログ。攻撃フラッシュは「ヒットした敵が 1 体以上いる場合」に 1 回のみ発行。既存の通常攻撃（[`attackEnemyAt`](src/lib/map/PlayerActions.ts)）と damage 計算ロジックが重複するが、共通化は他 action 実装後に判断する
+
+未実装 action（Phase 9〜11）：`damage`（独自 formula）、`heal`、`reveal_trap`。未知の action 名は警告ログのみで継続する。
+
 ### スキル発動 UI フロー
 
 シーンアクションの「スキル」ボタン（`1` キー）または `Game.toggleList('skill')` でスキル一覧を開きます。アイテム一覧と同じ `open-item-list` EventBus イベントを `mode: 'skill'` で発行し、`PhaserGame.vue` の既存リスト UI を共有します。

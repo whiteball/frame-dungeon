@@ -4,7 +4,7 @@ import type { DungeonMap } from '../MapGenerator';
 import { MapDirection, getDirectionOffset } from './MapDirection';
 import { EffectsLoader } from '../EffectsLoader';
 import { SkillsLoader } from '../SkillsLoader';
-import { evaluateCost, canPayCost, payCost } from '../skills/SkillExecutor';
+import { evaluateCost, canPayCost, payCost, executeActions } from '../skills/SkillExecutor';
 import { resolveTarget, type TargetCell } from '../skills/TargetResolver';
 import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
@@ -201,12 +201,12 @@ export function changeEquipment(dungeon: DungeonMap, instanceId: string): Change
 }
 
 /**
- * プレイヤーがスキルを発動する（Phase 7: target 解決対応）
+ * プレイヤーがスキルを発動する（Phase 8: attack action 実装）
  *
- * 現時点で実装済み：コスト評価・支払い・差し戻し + target スコープ解決。
- * action 本体は引き続きモック（target セル数を含むログ出力 + 1 ターン消費）。
+ * 現時点で実装済み：コスト評価・支払い・差し戻し + target スコープ解決 +
+ * action 配列の順次実行（attack のみ実装、他はモック）。
  * 後続フェーズで以下を実装する：
- *   - Phase 8〜11: 各 action（attack / damage / heal / reveal_trap）
+ *   - Phase 9〜11: 各 action（damage / heal / reveal_trap）
  *   - Phase 12: スタン中の発動ブロック
  *
  * @param skillName 発動するスキル名
@@ -247,10 +247,13 @@ export function useSkill(
   // コスト支払い
   payCost(player, deltas);
 
-  // モック発動（Phase 8 以降で targetCells を各 action に渡して実行）
+  // 発動開始ログ（区切り用）
   EventBus.emit('message-log',
-    `スキル「${def.label}」を発動した（モック target=${targetCells.length}セル）`,
+    `スキル「${def.label}」を発動した！`,
     dungeon.getTurnCount());
+
+  // action 配列を順次実行
+  executeActions(dungeon, player, compiled, targetCells);
 
   dungeon.dispatchObjectEvent();
   return true;
