@@ -16,8 +16,11 @@ import { StairsObject, TrapObject, ItemObject } from './map/MapObjects';
 import { ItemsLoader } from './ItemsLoader';
 import { TrapsLoader } from './TrapsLoader';
 import { EnemyLoader } from './EnemyLoader';
+import { StatsLoader } from './StatsLoader';
 import type { DungeonSaveData } from './SaveManager';
 import type { TrapDefinition } from './TrapsLoader';
+import { EventBus } from '../game/EventBus';
+import { makeStatFluctuatedMessage } from './util/text';
 
 export type DungeonRestoreCallbacks = {
     onEnterStair: (dungeon: DungeonMap) => void;
@@ -823,9 +826,25 @@ export class DungeonMap {
    */
   public tickEnemies(): void {
     const enemies = this.getEnemies();
+    const turn = this._turnCount;
+    const statsLoader = StatsLoader.getInstance();
     for (const enemy of enemies) {
       if (!enemy.isAlive()) continue;
       enemy.act(this);
+      if (!enemy.isAlive()) continue;
+
+      const result = enemy.tickStatusEffects();
+      for (const a of result.applied) {
+        const statName = statsLoader.getAbbreviation(a.statName) || a.statName;
+        EventBus.emit('message-log', `${enemy.getLabel()}は${a.label}で ${makeStatFluctuatedMessage(statName, a.delta)}`, turn);
+      }
+      for (const c of result.cleared) {
+        EventBus.emit('message-log', `${enemy.getLabel()}の${c.label}が解けた`, turn);
+      }
+      if (!enemy.isAlive()) {
+        EventBus.emit('message-log', `${enemy.getLabel()}は力尽きた`, turn);
+        this.removeEnemy(enemy.x, enemy.y);
+      }
     }
   }
 
@@ -1124,7 +1143,7 @@ export class DungeonMap {
       const def = enemyLoader.getEnemy(enemyData.name);
       if (!def) continue;
       const enemy = new Enemy(def, enemyData.x, enemyData.y, enemyData.instanceId);
-      enemy.restoreAfterLoad(enemyData.stats, enemyData.maxStats, enemyData.isDead, enemyData.target);
+      enemy.restoreAfterLoad(enemyData.stats, enemyData.maxStats, enemyData.isDead, enemyData.target, enemyData.activeStatusEffects);
       this._objectStore.add(enemy);
     }
 

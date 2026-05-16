@@ -14,7 +14,7 @@
 - **InfoView**（`src/lib/InfoView.ts`）: プレイヤーステータスとフロア情報のUIオーバーレイを管理
 - **EquipmentView**（`src/lib/EquipmentView.ts`）: 装備中のスロット（武器・主防具・副防具1/2）をPhaserグラフィックスで描画
 - **Player**（`src/lib/Player.ts`）: プレイヤーのステータス、インベントリ、装備、持続効果、状態異常を管理。`getEffectiveFormulaVars()` で base / 装備 / 持続効果 / `permanent` 状態異常を合算した変数辞書を返し、`BaseLoader` の formula 評価に渡される。`getEffectiveResists()` で装備 / 持続効果 / 付与中 status effect の `resist` を集約した「現在新規付与を阻止する effect 名」集合を返す
-- **Enemy**（`src/lib/Enemy.ts`）: `MapObject`を継承した敵クラス。ステータス、戦闘ロジック、ターゲット記憶を保持。ダメージ計算は `BaseLoader` の formula に委譲
+- **Enemy**（`src/lib/Enemy.ts`）: `MapObject`を継承した敵クラス。ステータス、戦闘ロジック、ターゲット記憶、状態異常 (`activeStatusEffects`) を保持。Player と対称に `applyStatusEffect` / `tickStatusEffects` / `notifyDamageTaken` / `getEffectiveStat` / `getEffectiveFormulaVars` / `getActionDirective` / `getEffectiveResists` を備え、ダメージ計算は基本値ではなく実効値を `BaseLoader` の formula に渡す
 - **Item**（`src/lib/Item.ts`）: アイテムの効果と情報を管理
 - **Inventory**（`src/lib/Inventory.ts`）: プレイヤーのアイテム所持を管理
 - **BaseLoader**（`src/lib/BaseLoader.ts`）: `base.yml` の読み込みとゲーム全体設定（ダメージ式・経験値式・レベルアップボーナス・フロア構成・敵自動湧き判定）を集中管理。詳細は後述「base.yml — ゲーム全体設定」を参照
@@ -422,18 +422,18 @@ autoSpawner:
 
 発動タイミング：
 
-- `onPlayerAction`：プレイヤー入力受付前
+- `onAction`：行動主体（プレイヤー／敵）の入力受付前。`_action: skip` で行動スキップを指示できる
 - `onTurnEnd`：ターン終了時（`dispatchObjectEvent` 内、`tickContinuousEffects` の後）
 - `permanent`：常時（`Player.getEffectiveStat` 計算時に formula を順次適用）
 
 特殊 target：
 
-- `_action: skip`：プレイヤーの W/Space 入力を無視してターン消費（麻痺・睡眠）
+- `_action: skip`：プレイヤーの W/Space 入力／敵の `act()` を無視してターン消費（麻痺・睡眠）。Player は `getPlayerActionDirective`、Enemy は `getActionDirective` で参照
 
 `clear` セクション：
 
 - `formula`：`count` を変数とした 0〜1 の確率式。ターン終了時（`onTurnEnd` 適用後 → `count++` の後）に評価
-- `onDamage: true`：プレイヤーがダメージを被弾した時にも即座に解除
+- `onDamage: true`：被弾した時にも即座に解除（Player は `Enemy.attackPlayer` から、Enemy は `Enemy.damage()` 内から `notifyDamageTaken()` が呼ばれる）
 
 数式評価には `expr-eval-fork` ライブラリを使用。`Parser` で事前パースして `Expression` をキャッシュします（`EffectsLoader.getCompiledEffect`）。
 
@@ -447,15 +447,33 @@ autoSpawner:
 - `getEffectiveStat(key)`：base + 装備 + 持続効果ボーナスに加え、`permanent` 効果の formula を順次適用した値を返す
 - `getActiveStatusEffects()`：UI 表示用のスナップショット（label, description, count）
 
+### 主要 API（Enemy）
+
+Player と同じシグネチャ・同じ意味で以下を実装：
+
+- `applyStatusEffect(name)` / `clearStatusEffect(name)` / `getActiveStatusEffects()`
+- `getEffectiveResists()`（definition.resist + 付与中 effect 自身の resist を集約）
+- `getEffectiveStat(key)` / `getEffectiveFormulaVars()`（permanent 効果を反映した実効値。装備・continuous は持たない）
+- `getActionDirective()`：`_action: skip` で `'skip'` を返す。`Enemy.act()` 先頭で評価し、stun / sleep 中の敵は移動・攻撃をスキップ
+- `tickStatusEffects()`：Player と同じく onTurnEnd → count++ → clear 判定。`MapGenerator.tickEnemies()` から `enemy.act()` 後に呼ばれ、結果は message-log に流される
+- `notifyDamageTaken()`：`Enemy.damage()` の内部から呼ばれる。`takeDamageFromPlayer()` は `{ dealt, cleared }` を返し、呼び出し側（AttackAction / DamageAction）がログを出す
+- `Enemy.calculateDamageToPlayer` / `takeDamageFromPlayer` は実効値経路。`DamageAction` の formula 評価でも `target_<stat>` は実効値を渡す
+- tick 経過で敵が死亡した場合は `MapGenerator.tickEnemies()` がマップから除去するが、経験値は付与しない（プレイヤーが直接倒したわけではないため）
+
 ### `count` の進行ルール
 
 - 効果適用時は `count = 0`
 - `tickStatusEffects` の処理順序：(1) onTurnEnd を `count` 現在値で適用 → (2) `count++` → (3) clear 判定
-- 例：stun の `count > 1 ? 1 : 0` は適用ターン末で `count=1`（解除されず）、次ターン onPlayerAction で skip → そのターン末で `count=2`（解除）→ "1 ターン動けない" と一致
+- 例：stun の `count > 1 ? 1 : 0` は適用ターン末で `count=1`（解除されず）、次ターン onAction で skip → そのターン末で `count=2`（解除）→ "1 ターン動けない" と一致
 
 ### デバッグ用付与
 
-`Game.create()` で `window.applyStatusEffect(name)` を公開しているため、ブラウザの DevTools コンソールから動作確認可能です。トリガ機構（罠・敵・アイテム経由）はフレームワーク外で個別に実装します。
+`Game.create()` で以下を公開しているため、ブラウザの DevTools コンソールから動作確認可能です：
+
+- `window.applyStatusEffect(name)`：プレイヤーに状態異常を付与
+- `window.applyStatusEffectToEnemy(name, instanceId?)`：指定 instanceId の敵、未指定なら視界内で最も近い敵に状態異常を付与（プレイヤー側から敵に状態異常をかける正規経路は未実装で、スキル action 化は次タスク）
+
+トリガ機構（罠・敵・アイテム経由）はフレームワーク外で個別に実装します。
 
 ### EventBus イベント一覧（アイテム使用関連）
 

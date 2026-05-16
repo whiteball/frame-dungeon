@@ -18,7 +18,7 @@ interface ActiveContinuousEffect {
     resists: string[];
 }
 
-interface ActiveStatusEffect {
+export interface ActiveStatusEffect {
     name: string;
     count: number;
 }
@@ -400,7 +400,7 @@ export class Player {
     }
 
     /**
-     * onPlayerAction の効果を走査し、プレイヤーの行動を上書きするディレクティブを返す
+     * onAction の効果を走査し、プレイヤーの行動を上書きするディレクティブを返す
      * 現状は _action: skip のみサポート
      */
     getPlayerActionDirective(): 'skip' | null {
@@ -408,7 +408,7 @@ export class Player {
         for (const entry of this.activeStatusEffects) {
             const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
             if (!compiled) continue;
-            for (const spec of compiled.onPlayerAction) {
+            for (const spec of compiled.onAction) {
                 if (spec.target === '_action') {
                     const v = Player.literalValueOf(spec);
                     if (v === 'skip') return 'skip';

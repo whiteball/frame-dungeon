@@ -1,12 +1,14 @@
 import type { EnemyDefinition } from './EnemyLoader';
 import { MapObject, MapMark } from './MapObject';
 import { StatsLoader } from './StatsLoader';
-import { EffectsLoader } from './EffectsLoader';
+import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { BaseLoader } from './BaseLoader';
 import { EventBus } from '../game/EventBus';
 import type { DungeonMap } from './MapGenerator';
 import { getDirectionOffset, MapDirection } from './map/MapDirection';
 import { getRandomInt } from './util/random';
+import type { ActiveStatusEffect, ApplyStatusEffectResult, StatusEffectTickResult } from './Player';
+import type { StatusEffectSaveData } from './SaveManager';
 
 /**
  * ゲーム内の敵インスタンスを表すクラス
@@ -19,6 +21,8 @@ export class Enemy extends MapObject {
     private maxStats: Map<string, number>;
     private isDead: boolean = false;
     private target: { x: integer; y: integer } | null = null;
+    // 状態異常/強化効果スロット（Player と同形式、同名効果は 1 エントリ）
+    private activeStatusEffects: ActiveStatusEffect[] = [];
 
     constructor(definition: EnemyDefinition, x: integer, y: integer, instanceId?: string) {
         super();
@@ -55,6 +59,11 @@ export class Enemy extends MapObject {
      */
     public act(dungeon: DungeonMap): void {
         if (!this.isAlive()) return;
+
+        if (this.getActionDirective() === 'skip') {
+            EventBus.emit('message-log', `${this.getLabel()}は動けない！`, dungeon.getTurnCount());
+            return;
+        }
 
         const walkMode = this.definition.walk ?? 'default';
         const { x: px, y: py } = dungeon.getPlayerPos();
@@ -212,11 +221,24 @@ export class Enemy extends MapObject {
     }
 
     /**
-     * この敵が指定 effect への耐性を持つかを返す。
-     * 現時点で敵は状態異常になる経路を持たないため判定メソッドのみ提供する
+     * 装備や持続効果がない代わりに、definition.resist と付与中 status effect 自身の
+     * resist を集約した「現在新規付与を阻止する effect 名」集合を返す
+     */
+    getEffectiveResists(): Set<string> {
+        const resists = new Set<string>();
+        for (const r of this.definition.resist ?? []) resists.add(r);
+        const effectsLoader = EffectsLoader.getInstance();
+        for (const entry of this.activeStatusEffects) {
+            for (const r of effectsLoader.getResistsOf(entry.name)) resists.add(r);
+        }
+        return resists;
+    }
+
+    /**
+     * この敵が指定 effect への耐性を持つかを返す
      */
     hasResist(effectName: string): boolean {
-        return this.definition.resist?.includes(effectName) ?? false;
+        return this.getEffectiveResists().has(effectName);
     }
 
     // ステータス操作
@@ -234,6 +256,204 @@ export class Enemy extends MapObject {
             vars[key] = value;
         }
         return vars;
+    }
+
+    /**
+     * base stat に付与中 status effect の permanent spec を順次適用した実効値を返す
+     */
+    getEffectiveStat(key: string): number {
+        let value = this.getStat(key);
+        const effectsLoader = EffectsLoader.getInstance();
+        for (const entry of this.activeStatusEffects) {
+            const compiled = effectsLoader.getCompiledEffect(entry.name);
+            if (!compiled) continue;
+            for (const spec of compiled.permanent) {
+                if (spec.target !== key) continue;
+                value = Enemy.evaluateTargetSpec(spec, value, entry.count) ?? value;
+            }
+        }
+        return value;
+    }
+
+    /**
+     * stats.yml の全ステータスについて実効値を集約した formula 変数辞書
+     */
+    getEffectiveFormulaVars(): Record<string, number> {
+        const vars: Record<string, number> = {};
+        for (const key of this.stats.keys()) {
+            vars[key] = this.getEffectiveStat(key);
+        }
+        return vars;
+    }
+
+    private static evaluateTargetSpec(spec: CompiledTargetSpec, currentValue: number, count: number): number | null {
+        if (spec.formula) {
+            try {
+                const result = spec.formula.evaluate({ x: currentValue, count });
+                return typeof result === 'number' && Number.isFinite(result) ? result : null;
+            } catch (e) {
+                console.warn(`Failed to evaluate formula for target "${spec.target}":`, e);
+                return null;
+            }
+        }
+        if (typeof spec.value === 'number') return spec.value;
+        return null;
+    }
+
+    private static literalValueOf(spec: CompiledTargetSpec): string | number | null {
+        return spec.value ?? null;
+    }
+
+    /**
+     * 状態異常/強化効果を付与する
+     * 同名効果が既にあれば count を 0 にリセット（重複は 1 エントリのみ）
+     */
+    applyStatusEffect(name: string): ApplyStatusEffectResult {
+        const effectsLoader = EffectsLoader.getInstance();
+        if (!effectsLoader.hasEffect(name)) {
+            console.warn(`Status effect not found: ${name}`);
+            return 'unknown';
+        }
+        if (this.getEffectiveResists().has(name)) {
+            return 'resisted';
+        }
+        const existing = this.activeStatusEffects.find(e => e.name === name);
+        if (existing) {
+            existing.count = 0;
+        } else {
+            this.activeStatusEffects.push({ name, count: 0 });
+        }
+        return 'applied';
+    }
+
+    /**
+     * 指定 name の状態異常を解除する
+     */
+    clearStatusEffect(name: string): boolean {
+        const idx = this.activeStatusEffects.findIndex(e => e.name === name);
+        if (idx < 0) return false;
+        this.activeStatusEffects.splice(idx, 1);
+        return true;
+    }
+
+    /**
+     * onAction の効果を走査し、行動を上書きするディレクティブを返す
+     * 現状は _action: skip のみサポート
+     */
+    getActionDirective(): 'skip' | null {
+        const effectsLoader = EffectsLoader.getInstance();
+        for (const entry of this.activeStatusEffects) {
+            const compiled = effectsLoader.getCompiledEffect(entry.name);
+            if (!compiled) continue;
+            for (const spec of compiled.onAction) {
+                if (spec.target === '_action') {
+                    const v = Enemy.literalValueOf(spec);
+                    if (v === 'skip') return 'skip';
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * ターン終了時の状態効果処理（Player.tickStatusEffects と同形式）
+     */
+    tickStatusEffects(): StatusEffectTickResult {
+        const result: StatusEffectTickResult = { applied: [], cleared: [] };
+        const effectsLoader = EffectsLoader.getInstance();
+        const statsLoader = StatsLoader.getInstance();
+
+        // 1. onTurnEnd 効果を適用
+        for (const entry of this.activeStatusEffects) {
+            const compiled = effectsLoader.getCompiledEffect(entry.name);
+            if (!compiled) continue;
+            for (const spec of compiled.onTurnEnd) {
+                if (spec.target.startsWith('_')) continue;
+                const before = this.getStat(spec.target);
+                const evaluated = Enemy.evaluateTargetSpec(spec, before, entry.count);
+                if (evaluated === null) continue;
+                let next = Math.floor(evaluated);
+                if (statsLoader.isFluctuationAllowed(spec.target)) {
+                    next = Math.max(0, Math.min(next, this.getMaxStat(spec.target)));
+                } else {
+                    next = Math.max(0, next);
+                }
+                if (next !== before) {
+                    this.setStat(spec.target, next);
+                    result.applied.push({
+                        label: compiled.definition.label,
+                        statName: spec.target,
+                        delta: next - before,
+                    });
+                }
+            }
+        }
+
+        // 2. count++ → clear 判定
+        const remaining: ActiveStatusEffect[] = [];
+        for (const entry of this.activeStatusEffects) {
+            entry.count++;
+            const compiled = effectsLoader.getCompiledEffect(entry.name);
+            let cleared = false;
+            if (compiled?.clearFormula) {
+                try {
+                    const p = compiled.clearFormula.evaluate({ count: entry.count });
+                    const probability = typeof p === 'number' && Number.isFinite(p)
+                        ? Math.max(0, Math.min(1, p))
+                        : 0;
+                    if (Math.random() < probability) {
+                        cleared = true;
+                    }
+                } catch (e) {
+                    console.warn(`Failed to evaluate clear formula for "${entry.name}":`, e);
+                }
+            }
+            if (cleared && compiled) {
+                result.cleared.push({ label: compiled.definition.label });
+            } else {
+                remaining.push(entry);
+            }
+        }
+        this.activeStatusEffects = remaining;
+        return result;
+    }
+
+    /**
+     * ダメージ被弾時の通知。clear.onDamage が true のエントリを即座に解除する
+     */
+    notifyDamageTaken(): Array<{ label: string }> {
+        const cleared: Array<{ label: string }> = [];
+        const effectsLoader = EffectsLoader.getInstance();
+        const remaining: ActiveStatusEffect[] = [];
+        for (const entry of this.activeStatusEffects) {
+            const compiled = effectsLoader.getCompiledEffect(entry.name);
+            if (compiled?.clearOnDamage) {
+                cleared.push({ label: compiled.definition.label });
+            } else {
+                remaining.push(entry);
+            }
+        }
+        this.activeStatusEffects = remaining;
+        return cleared;
+    }
+
+    /**
+     * アクティブな状態異常のスナップショット（UI 表示用）
+     */
+    getActiveStatusEffects(): Array<{ name: string; label: string; description: string; count: number }> {
+        const list: Array<{ name: string; label: string; description: string; count: number }> = [];
+        const effectsLoader = EffectsLoader.getInstance();
+        for (const entry of this.activeStatusEffects) {
+            const def = effectsLoader.getEffect(entry.name);
+            if (!def) continue;
+            list.push({
+                name: entry.name,
+                label: def.label,
+                description: def.description,
+                count: entry.count,
+            });
+        }
+        return list;
     }
 
     setStat(key: string, value: number): void {
@@ -265,10 +485,11 @@ export class Enemy extends MapObject {
         return this.instanceId;
     }
 
-    damage(amount: number): number {
+    damage(amount: number): { dealt: number; cleared: Array<{ label: string }> } {
         const actualDamage = Math.max(1, amount);
         this.addStat(BaseLoader.getInstance().getDefaultEnemyDamageStat(), -actualDamage);
-        return actualDamage;
+        const cleared = this.notifyDamageTaken();
+        return { dealt: actualDamage, cleared };
     }
 
     heal(amount: number): void {
@@ -291,16 +512,16 @@ export class Enemy extends MapObject {
      * @returns 計算されたダメージ
      */
     calculateDamageToPlayer(playerVars: Record<string, number>): number {
-        return BaseLoader.getInstance().calculateDamageToPlayer(this.getEnemyFormulaVars(), playerVars);
+        return BaseLoader.getInstance().calculateDamageToPlayer(this.getEffectiveFormulaVars(), playerVars);
     }
 
     /**
      * プレイヤーからこの敵へのダメージを計算して適用
      * @param playerVars プレイヤーの実効ステータス一式
-     * @returns 実際に与えたダメージ
+     * @returns 実際に与えたダメージと、被弾で解除された effect のラベル一覧
      */
-    takeDamageFromPlayer(playerVars: Record<string, number>): number {
-        const damage = BaseLoader.getInstance().calculateDamageFromPlayer(playerVars, this.getEnemyFormulaVars());
+    takeDamageFromPlayer(playerVars: Record<string, number>): { dealt: number; cleared: Array<{ label: string }> } {
+        const damage = BaseLoader.getInstance().calculateDamageFromPlayer(playerVars, this.getEffectiveFormulaVars());
         return this.damage(damage);
     }
 
@@ -312,6 +533,7 @@ export class Enemy extends MapObject {
         }
         clone.isDead = this.isDead;
         clone.target = this.target ? { ...this.target } : null;
+        clone.activeStatusEffects = this.activeStatusEffects.map(e => ({ name: e.name, count: e.count }));
         return clone;
     }
 
@@ -337,7 +559,13 @@ export class Enemy extends MapObject {
         let result = `${this.getLabel()} (${this.getName()})\n`;
         for (const [key, value] of this.stats) {
             const description = statsLoader.getDescription(key);
-            result += `${description}: ${value}/${this.getMaxStat(key)}\n`;
+            const effective = this.getEffectiveStat(key);
+            const suffix = effective !== value ? `（実効${effective}）` : '';
+            result += `${description}: ${value}/${this.getMaxStat(key)}${suffix}\n`;
+        }
+        if (this.activeStatusEffects.length > 0) {
+            const labels = this.getActiveStatusEffects().map(e => e.label).join('、');
+            result += `状態: ${labels}\n`;
         }
         result += `経験値: ${this.getExp()}`;
         return result;
@@ -347,6 +575,7 @@ export class Enemy extends MapObject {
         instanceId: string; name: string; x: number; y: number;
         stats: Record<string, number>; maxStats: Record<string, number>;
         isDead: boolean; target: { x: number; y: number } | null;
+        activeStatusEffects: StatusEffectSaveData[];
     } {
         return {
             instanceId: this.instanceId,
@@ -357,6 +586,7 @@ export class Enemy extends MapObject {
             maxStats: Object.fromEntries(this.maxStats),
             isDead: this.isDead,
             target: this.target ? { ...this.target } : null,
+            activeStatusEffects: this.activeStatusEffects.map(e => ({ name: e.name, count: e.count })),
         };
     }
 
@@ -365,10 +595,21 @@ export class Enemy extends MapObject {
         maxStats: Record<string, number>,
         isDead: boolean,
         target: { x: number; y: number } | null,
+        activeStatusEffects?: StatusEffectSaveData[],
     ): void {
         this.stats = new Map(Object.entries(stats));
         this.maxStats = new Map(Object.entries(maxStats));
         this.isDead = isDead;
         this.target = target;
+
+        this.activeStatusEffects = [];
+        const effectsLoader = EffectsLoader.getInstance();
+        for (const e of activeStatusEffects ?? []) {
+            if (effectsLoader.hasEffect(e.name)) {
+                this.activeStatusEffects.push({ name: e.name, count: e.count });
+            } else {
+                console.warn(`Unknown status effect in save data, skipped: ${e.name}`);
+            }
+        }
     }
 }

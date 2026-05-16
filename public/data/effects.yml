@@ -20,7 +20,7 @@
   label: 麻痺
   description: 1ターン動けない
   timing:
-    onPlayerAction:
+    onAction:
       target: _action
       value: skip
   clear:
@@ -29,7 +29,7 @@
   label: 睡眠
   description: しばらく動けない
   timing:
-    onPlayerAction:
+    onAction:
       target: _action
       value: skip
   clear:

@@ -60,8 +60,8 @@ export function executeDamageAction(
 
     for (const enemy of enemies) {
         const vars: Record<string, number> = { ...casterVarsBase };
-        for (const [k, v] of enemy.getStats()) {
-            vars[`target_${k}`] = v;
+        for (const k of enemy.getStats().keys()) {
+            vars[`target_${k}`] = enemy.getEffectiveStat(k);
             vars[`target_${k}_max`] = enemy.getMaxStat(k);
         }
 
@@ -76,6 +76,12 @@ export function executeDamageAction(
 
         enemy.addStat(damageStat, -damage);
         EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`, turn);
+        if (damage > 0) {
+            const cleared = enemy.notifyDamageTaken();
+            for (const c of cleared) {
+                EventBus.emit('message-log', `${enemy.getLabel()}の${c.label}が解けた`, turn);
+            }
+        }
 
         if (!enemy.isAlive()) {
             dungeon.removeEnemy(enemy.x, enemy.y);

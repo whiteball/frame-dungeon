@@ -7,6 +7,7 @@ import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
 import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
+import type { Enemy } from '../../lib/Enemy';
 import type { Item } from '../../lib/Item';
 import { ItemsLoader } from '../../lib/ItemsLoader';
 import type { ItemDefinition } from '../../lib/ItemsLoader';
@@ -452,6 +453,39 @@ export class Game extends Scene {
                 EventBus.emit('message-log', `（debug）${name} を耐性で防いだ`, this.dungeon.getTurnCount());
             } else {
                 EventBus.emit('message-log', `（debug）${name} は未定義 effect`, this.dungeon.getTurnCount());
+            }
+            return result;
+        };
+
+        // デバッグ用: コンソールから window.applyStatusEffectToEnemy('poison') 等で敵に状態異常を付与
+        // instanceId 未指定なら視界内で最も近い生存敵を選択
+        (window as unknown as { applyStatusEffectToEnemy: (name: string, instanceId?: string) => string }).applyStatusEffectToEnemy = (name: string, instanceId?: string) => {
+            const turn = this.dungeon.getTurnCount();
+            const enemies = this.dungeon.getEnemies().filter(e => e.isAlive());
+            let target: Enemy | null = (instanceId ? enemies.find(e => e.getInstanceId() === instanceId) : undefined) ?? null;
+            if (!target) {
+                const { x: px, y: py } = this.dungeon.getPlayerPos();
+                let best: Enemy | null = null;
+                let bestDist = Infinity;
+                for (const e of enemies) {
+                    if (!this.dungeon.hasLineOfSight(e.x, e.y, px, py)) continue;
+                    const d = Math.max(Math.abs(e.x - px), Math.abs(e.y - py));
+                    if (d < bestDist) { best = e; bestDist = d; }
+                }
+                target = best;
+            }
+            if (!target) {
+                EventBus.emit('message-log', `（debug）対象の敵が見つかりません`, turn);
+                return 'no-target';
+            }
+            const result = target.applyStatusEffect(name);
+            if (result === 'applied') {
+                EventBus.emit('message-log', `（debug）${target.getLabel()}に${name}を付与`, turn);
+                this.render();
+            } else if (result === 'resisted') {
+                EventBus.emit('message-log', `（debug）${target.getLabel()}は${name}を耐性で防いだ`, turn);
+            } else {
+                EventBus.emit('message-log', `（debug）${name} は未定義 effect`, turn);
             }
             return result;
         };
@@ -1134,7 +1168,7 @@ export class Game extends Scene {
     }
 
     /**
-     * プレイヤー行動ディレクティブ（onPlayerAction の状態異常効果）を処理する
+     * プレイヤー行動ディレクティブ（onAction の状態異常効果）を処理する
      * skip ディレクティブの場合は空アクションでターン消費し true を返す
      * @returns ディレクティブにより通常アクションをスキップした場合 true
      */

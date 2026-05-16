@@ -96,7 +96,7 @@ export class YamlCrossValidator {
         }
 
         // effects.yml timing.*.target（_始まり以外）→ stats.yml
-        const TIMING_KEYS = ['onPlayerAction', 'onTurnEnd', 'permanent'] as const;
+        const TIMING_KEYS = ['onAction', 'onTurnEnd', 'permanent'] as const;
         for (const effect of effects.getEffects()) {
             for (const timing of TIMING_KEYS) {
                 const spec = effect.timing?.[timing];

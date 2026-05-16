@@ -30,8 +30,11 @@ export function executeAttackAction(
     const skillsLoader = SkillsLoader.getInstance();
 
     for (const enemy of enemies) {
-        const damage = enemy.takeDamageFromPlayer(casterVars);
-        EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`, turn);
+        const { dealt, cleared } = enemy.takeDamageFromPlayer(casterVars);
+        EventBus.emit('message-log', `${enemy.getLabel()}に${dealt}のダメージ！`, turn);
+        for (const c of cleared) {
+            EventBus.emit('message-log', `${enemy.getLabel()}の${c.label}が解けた`, turn);
+        }
 
         if (!enemy.isAlive()) {
             dungeon.removeEnemy(enemy.x, enemy.y);

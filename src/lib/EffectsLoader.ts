@@ -32,7 +32,7 @@ export interface EffectDefinition {
     label: string;
     description: string;
     timing: {
-        onPlayerAction?: EffectTargetSpec | EffectTargetSpec[];
+        onAction?: EffectTargetSpec | EffectTargetSpec[];
         onTurnEnd?: EffectTargetSpec | EffectTargetSpec[];
         permanent?: EffectTargetSpec | EffectTargetSpec[];
     };
@@ -43,7 +43,7 @@ export interface EffectDefinition {
     resist?: string[];
 }
 
-export type EffectTiming = 'onPlayerAction' | 'onTurnEnd' | 'permanent';
+export type EffectTiming = 'onAction' | 'onTurnEnd' | 'permanent';
 
 /**
  * パース済み式キャッシュ用エントリ
@@ -56,7 +56,7 @@ interface CompiledTargetSpec {
 
 interface CompiledEffect {
     definition: EffectDefinition;
-    onPlayerAction: CompiledTargetSpec[];
+    onAction: CompiledTargetSpec[];
     onTurnEnd: CompiledTargetSpec[];
     permanent: CompiledTargetSpec[];
     clearFormula: Expression | null;
@@ -125,7 +125,7 @@ export class EffectsLoader {
 
         return {
             definition: def,
-            onPlayerAction: compileSpecs(EffectsLoader.normalizeSpecs(def.timing?.onPlayerAction)),
+            onAction: compileSpecs(EffectsLoader.normalizeSpecs(def.timing?.onAction)),
             onTurnEnd: compileSpecs(EffectsLoader.normalizeSpecs(def.timing?.onTurnEnd)),
             permanent: compileSpecs(EffectsLoader.normalizeSpecs(def.timing?.permanent)),
             clearFormula,

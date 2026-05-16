@@ -51,6 +51,7 @@ export interface EnemySaveData {
     maxStats: Record<string, number>;
     isDead: boolean;
     target: { x: number; y: number } | null;
+    activeStatusEffects?: StatusEffectSaveData[];
 }
 
 interface RectData {

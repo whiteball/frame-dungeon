@@ -67,9 +67,12 @@ export function attackEnemyAt(dungeon: DungeonMap, targetX: integer, targetY: in
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
 
-  const damage = enemy.takeDamageFromPlayer(player.getEffectiveFormulaVars());
+  const { dealt, cleared } = enemy.takeDamageFromPlayer(player.getEffectiveFormulaVars());
   EventBus.emit('attack-flash', 0xFFFFFF);
-  EventBus.emit('message-log', `${enemy.getLabel()}に${damage}のダメージ！`, dungeon.getTurnCount());
+  EventBus.emit('message-log', `${enemy.getLabel()}に${dealt}のダメージ！`, dungeon.getTurnCount());
+  for (const c of cleared) {
+    EventBus.emit('message-log', `${enemy.getLabel()}の${c.label}が解けた`, dungeon.getTurnCount());
+  }
 
   if (!enemy.isAlive()) {
     dungeon.removeEnemy(targetX, targetY);
