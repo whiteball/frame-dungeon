@@ -172,7 +172,12 @@
   - [x] コスト評価・支払い・差し戻し（`<stat>_max` 露出、formula 評価、原子適用）
   - [x] action: attack / damage / heal / reveal_trap
   - [x] スタン (`_action: skip`) 連携（UI/ライブラリ 2 段ガード）
-  - [ ] 敵によるスキル使用（将来拡張：YAML での enemies.skills 定義、AI から発動）
+  - [x] 敵のパッシブスキル（`trigger: on_attack`）：`enemies.yml` の `skills[]` から `EnemySkillExecutor` 経由で発動
+  - [ ] パッシブスキルの拡張
+    - [ ] `trigger: on_turn` — 毎ターン終了時に自動発動するパッシブ
+    - [ ] `trigger: on_damage` — ダメージを受けた際に発動するリアクション
+    - [ ] プレイヤーの装備・アイテムから `on_attack` パッシブを付与する機能
+    - [ ] `EnemySkillExecutor` への `damage` アクション対応（追加ダメージ型スキル）
   - [ ] スキル定義のクロスバリデーション強化（YamlCrossValidator で skills.yml 内の cost / damage / heal formula の変数や効果参照を事前検証）
 
 ## 技術的改善

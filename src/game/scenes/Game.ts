@@ -798,6 +798,18 @@ export class Game extends Scene {
             const compiled = loader.getCompiledSkill(name);
             if (!compiled) continue;
             const def = compiled.definition;
+            if ((def.trigger ?? 'active') === 'on_attack') {
+                result.push({
+                    id: name,
+                    label: def.label,
+                    description: def.description,
+                    costSummary: '',
+                    targetSummary: 'パッシブ',
+                    disabled: true,
+                    disabledReason: 'パッシブスキル',
+                });
+                continue;
+            }
             const deltas = evaluateCost(this.player, compiled);
             const canPay = canPayCost(this.player, deltas);
             const disabled = stunned || !canPay;

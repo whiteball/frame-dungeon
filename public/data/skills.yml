@@ -59,3 +59,34 @@
   mastery:
     - least: 2
       rate: 0.4
+
+# 敵専用パッシブスキル（trigger: on_attack）
+- name: stun_strike
+  label: スタン打撃
+  description: 攻撃時にスタン状態にすることがある
+  trigger: on_attack
+  target: hit
+  action:
+    - apply_effect:
+        effect: stun
+        rate: 1.0
+
+- name: fear_strike
+  label: 恐怖の一撃
+  description: 攻撃時に恐怖状態にすることがある
+  trigger: on_attack
+  target: hit
+  action:
+    - apply_effect:
+        effect: fear
+        rate: 1.0
+
+- name: poison_bite
+  label: 毒噛み
+  description: 攻撃時に毒状態にすることがある
+  trigger: on_attack
+  target: hit
+  action:
+    - apply_effect:
+        effect: poison
+        rate: 1.0

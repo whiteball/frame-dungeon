@@ -9,6 +9,7 @@ import { getDirectionOffset, MapDirection } from './map/MapDirection';
 import { getRandomInt } from './util/random';
 import type { ActiveStatusEffect, ApplyStatusEffectResult, StatusEffectTickResult } from './Player';
 import type { StatusEffectSaveData } from './SaveManager';
+import { executeEnemyOnAttackSkill } from './skills/EnemySkillExecutor';
 
 /**
  * ゲーム内の敵インスタンスを表すクラス
@@ -167,21 +168,11 @@ export class Enemy extends MapObject {
             EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
         }
 
-        const abilities = this.definition.ability;
-        if (abilities && !baseLoader.isDead(player.getFormulaVars())) {
-            for (const ab of abilities) {
-                if (ab.effectAttack) {
-                    const { name, rate } = ab.effectAttack;
-                    if (Math.random() < rate) {
-                        const result = player.applyStatusEffect(name);
-                        const effDef = EffectsLoader.getInstance().getEffect(name);
-                        const effLabel = effDef?.label ?? name;
-                        if (result === 'applied') {
-                            EventBus.emit('message-log', `${this.getLabel()}の攻撃で${effLabel}状態になった！`, dungeon.getTurnCount());
-                        } else if (result === 'resisted') {
-                            EventBus.emit('message-log', `${this.getLabel()}の${effLabel}を耐性で防いだ！`, dungeon.getTurnCount());
-                        }
-                    }
+        const skillDefs = this.definition.skills ?? [];
+        if (skillDefs.length > 0 && !baseLoader.isDead(player.getFormulaVars())) {
+            for (const skillEntry of skillDefs) {
+                if (Math.random() < skillEntry.rate) {
+                    executeEnemyOnAttackSkill(dungeon, this, skillEntry.name);
                 }
             }
         }

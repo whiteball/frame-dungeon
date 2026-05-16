@@ -125,7 +125,7 @@ export function executeActions(
     }
 }
 
-function parseActionEntry(entry: SkillActionEntry): { name: string; param: number | string | Record<string, number | string> | null } {
+export function parseActionEntry(entry: SkillActionEntry): { name: string; param: number | string | Record<string, number | string> | null } {
     if (typeof entry === 'string') return { name: entry, param: null };
     const keys = Object.keys(entry);
     if (keys.length === 0) return { name: '', param: null };

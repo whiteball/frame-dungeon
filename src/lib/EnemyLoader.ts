@@ -4,19 +4,14 @@ import { BaseLoader } from './BaseLoader';
 import { CustomDataStore } from './CustomDataStore';
 
 /**
- * 攻撃時に確率で状態異常を付与する追加効果
+ * 敵が保有するパッシブスキルの1エントリ。
+ * skills.yml に trigger: on_attack で定義されたスキルを参照する。
  */
-export interface EffectAttackSpec {
+export interface EnemySkillEntry {
+    /** skills.yml のスキル名 */
     name: string;
+    /** 攻撃時の発動確率 (0–1) */
     rate: number;
-}
-
-/**
- * 敵の追加能力（ability）の単一エントリ
- * 現在は effectAttack のみサポート。将来的なタイプ拡張も同パターンで可能
- */
-export interface EnemyAbility {
-    effectAttack?: EffectAttackSpec;
 }
 
 export interface EnemyDefinition {
@@ -41,10 +36,6 @@ export interface EnemyDefinition {
      */
     description: string;
     /**
-     * 敵の追加能力リスト
-     */
-    ability?: EnemyAbility[];
-    /**
      * 移動パターン。未指定時は 'default' として扱う
      * 'default': 扉を目標にゾーン内巡回・プレイヤー追跡
      * 'random': ランダムウォーク
@@ -56,13 +47,17 @@ export interface EnemyDefinition {
      */
     resist?: string[];
     /**
+     * 敵が保有するパッシブスキルリスト（trigger: on_attack）
+     */
+    skills?: EnemySkillEntry[];
+    /**
      * ステータス値（stats.ymlのnameをキーとする）
      * 例: { life: 20, power: 5, defense: 2 }
      */
-    [statName: string]: string | number | string[] | EnemyAbility[] | undefined;
+    [statName: string]: string | number | string[] | EnemySkillEntry[] | undefined;
 }
 
-const NON_RANK_FIELDS = new Set(['name', 'label', 'description', 'walk', 'color', 'ability', 'resist']);
+const NON_RANK_FIELDS = new Set(['name', 'label', 'description', 'walk', 'color', 'resist', 'skills']);
 
 export class EnemyLoader {
     private static instance: EnemyLoader;
@@ -121,31 +116,21 @@ export class EnemyLoader {
             }
         }
 
-        // ability フィールドのバリデーション
-        if (enemy.ability !== undefined) {
-            if (!Array.isArray(enemy.ability)) {
-                throw new Error(`Invalid enemy '${enemy.name}': 'ability' must be an array`);
+        // skills フィールドのバリデーション
+        if (enemy.skills !== undefined) {
+            if (!Array.isArray(enemy.skills)) {
+                throw new Error(`Invalid enemy '${enemy.name}': 'skills' must be an array`);
             }
-            for (let i = 0; i < enemy.ability.length; i++) {
-                const ab = enemy.ability[i];
-                if (!ab || typeof ab !== 'object') {
-                    throw new Error(`Invalid enemy '${enemy.name}': ability[${i}] must be an object`);
+            for (let i = 0; i < enemy.skills.length; i++) {
+                const s = enemy.skills[i];
+                if (!s || typeof s !== 'object') {
+                    throw new Error(`Invalid enemy '${enemy.name}': skills[${i}] must be an object`);
                 }
-                let recognized = false;
-                if (ab.effectAttack !== undefined) {
-                    recognized = true;
-                    if (typeof ab.effectAttack !== 'object' || ab.effectAttack === null) {
-                        throw new Error(`Invalid enemy '${enemy.name}': ability[${i}].effectAttack must be an object`);
-                    }
-                    if (typeof ab.effectAttack.name !== 'string') {
-                        throw new Error(`Invalid enemy '${enemy.name}': ability[${i}].effectAttack.name must be a string`);
-                    }
-                    if (typeof ab.effectAttack.rate !== 'number' || ab.effectAttack.rate < 0 || ab.effectAttack.rate > 1) {
-                        throw new Error(`Invalid enemy '${enemy.name}': ability[${i}].effectAttack.rate must be a number between 0 and 1`);
-                    }
+                if (typeof s.name !== 'string') {
+                    throw new Error(`Invalid enemy '${enemy.name}': skills[${i}].name must be a string`);
                 }
-                if (!recognized) {
-                    console.warn(`Enemy '${enemy.name}': ability[${i}] has no recognized type key`);
+                if (typeof s.rate !== 'number' || s.rate < 0 || s.rate > 1) {
+                    throw new Error(`Invalid enemy '${enemy.name}': skills[${i}].rate must be a number between 0 and 1`);
                 }
             }
         }

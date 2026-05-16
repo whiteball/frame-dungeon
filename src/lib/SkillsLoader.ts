@@ -2,9 +2,11 @@ import { Parser, type Expression } from 'expr-eval-fork';
 import { YamlDefinitionStore } from './YamlDefinitionStore';
 import { CustomDataStore } from './CustomDataStore';
 
-export type SkillTarget = 'front' | 'around' | 'room' | 'map' | 'self';
+export type SkillTarget = 'front' | 'around' | 'room' | 'map' | 'self' | 'hit';
+export type SkillTrigger = 'active' | 'on_attack';
 
-const VALID_TARGETS: ReadonlySet<SkillTarget> = new Set<SkillTarget>(['front', 'around', 'room', 'map', 'self']);
+const VALID_TARGETS: ReadonlySet<SkillTarget> = new Set<SkillTarget>(['front', 'around', 'room', 'map', 'self', 'hit']);
+const VALID_TRIGGERS: ReadonlySet<SkillTrigger> = new Set<SkillTrigger>(['active', 'on_attack']);
 
 /**
  * スキル内 action 配列の 1 エントリ
@@ -29,6 +31,8 @@ export interface SkillDefinition {
     name: string;
     label: string;
     description: string;
+    /** 省略時は 'active' として扱う */
+    trigger?: SkillTrigger;
     target: SkillTarget;
     cost?: Record<string, number | string>;
     action: SkillActionEntry[];
@@ -96,8 +100,14 @@ export class SkillsLoader {
         if (!skill.description || typeof skill.description !== 'string') {
             throw new Error(`Invalid skill '${skill.name}': missing or invalid 'description' field`);
         }
+        if (skill.trigger !== undefined && !VALID_TRIGGERS.has(skill.trigger)) {
+            throw new Error(`Invalid skill '${skill.name}': 'trigger' must be one of ${Array.from(VALID_TRIGGERS).join(', ')}`);
+        }
         if (!skill.target || !VALID_TARGETS.has(skill.target)) {
             throw new Error(`Invalid skill '${skill.name}': 'target' must be one of ${Array.from(VALID_TARGETS).join(', ')}`);
+        }
+        if (skill.target === 'hit' && (skill.trigger ?? 'active') !== 'on_attack') {
+            throw new Error(`Invalid skill '${skill.name}': target 'hit' requires trigger 'on_attack'`);
         }
         if (!Array.isArray(skill.action) || skill.action.length === 0) {
             throw new Error(`Invalid skill '${skill.name}': 'action' must be a non-empty array`);

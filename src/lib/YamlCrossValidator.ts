@@ -62,12 +62,15 @@ export class YamlCrossValidator {
             }
         }
 
-        // enemies.yml ability.effectAttack.name → effects.yml
+        // enemies.yml skills[].name → skills.yml（on_attack trigger 必須）
         for (const enemy of enemies.getEnemies()) {
-            for (let i = 0; i < (enemy.ability ?? []).length; i++) {
-                const ab = enemy.ability![i];
-                if (ab.effectAttack && !effects.hasEffect(ab.effectAttack.name)) {
-                    errors.push(`enemies.yml "${enemy.name}": ability[${i}].effectAttack.name "${ab.effectAttack.name}" が effects.yml に存在しません`);
+            for (let i = 0; i < (enemy.skills ?? []).length; i++) {
+                const s = enemy.skills![i];
+                const skillDef = skills.getSkill(s.name);
+                if (!skillDef) {
+                    errors.push(`enemies.yml "${enemy.name}": skills[${i}].name "${s.name}" が skills.yml に存在しません`);
+                } else if ((skillDef.trigger ?? 'active') !== 'on_attack') {
+                    errors.push(`enemies.yml "${enemy.name}": skills[${i}].name "${s.name}" は on_attack スキルではありません`);
                 }
             }
             for (let i = 0; i < (enemy.resist ?? []).length; i++) {

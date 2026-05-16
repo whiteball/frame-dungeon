@@ -247,6 +247,9 @@ export function useSkill(
   if (!compiled) return false;
   const def = compiled.definition;
 
+  // on_attack パッシブスキルはプレイヤーが能動的に使用できない
+  if ((def.trigger ?? 'active') === 'on_attack') return false;
+
   // target 解決（front は selectedTarget 必須）
   const targetCells = resolveTarget(def.target, dungeon, selectedTarget);
   if (def.target === 'front' && targetCells.length === 0) {

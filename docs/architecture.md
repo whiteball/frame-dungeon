@@ -603,6 +603,16 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム使�
 | `room` | 発動者と視覚的に繋がった範囲（部屋＋通路、扉で繋がる範囲も含む。発動者除外） |
 | `map` | マップ全体（発動者除外） |
 | `self` | 発動者自身のみ |
+| `hit` | 攻撃した相手（`on_attack` パッシブ専用）。`EnemySkillExecutor` が自動解決する |
+
+`trigger` フィールド（省略時は `'active'`）：
+
+| 値 | 意味 |
+| --- | --- |
+| `active`（省略可） | プレイヤーが能動的に使用するスキル（既存の全スキル） |
+| `on_attack` | 通常攻撃後に自動発動するパッシブスキル。現在は敵専用（将来: 装備効果等） |
+
+`on_attack` スキルはプレイヤーのスキルリストで `disabled: true`（表示名「パッシブスキル」）として表示され、手動発動はできない。`PlayerActions.useSkill` にもガードがある。
 
 `mastery` の各エントリは `exact: N`（`{ least: N, rate: 1 }` のシュガー）または `least: N, rate: R`（0〜1）の形式。複数エントリがある場合、レベルアップ抽選時は post-level >= `least` を満たすうち `least` が最大のエントリのレートを使用する。
 
@@ -723,6 +733,50 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
   `rate` が数式の場合は `expr-eval-fork` で実行時評価し [0,1] にクランプする。付与結果は `applyStatusEffect()` の戻り値（`'applied'` / `'resisted'` / `'unknown'`）に従ってログを出力する。effect 名の存在チェックは `YamlCrossValidator` が起動時に実施する。
 
 未知の action 名は警告ログのみで継続する。
+
+### 敵のパッシブスキル（on_attack trigger）
+
+敵は `enemies.yml` の `skills` フィールドでパッシブスキルを保有できる。
+
+```yaml
+# enemies.yml の例
+- name: orc
+  skills:
+    - name: stun_strike   # skills.yml に trigger: on_attack で定義
+      rate: 0.1           # 攻撃時の発動確率 (0–1)
+```
+
+`skills.yml` 側では `trigger: on_attack` + `target: hit` で定義する：
+
+```yaml
+- name: stun_strike
+  trigger: on_attack
+  target: hit
+  action:
+    - apply_effect: { effect: stun, rate: 1.0 }
+```
+
+**発動フロー**（`Enemy.attackPlayer()` 末尾）：
+
+```text
+通常攻撃ダメージ適用
+  → プレイヤー生存チェック
+  → skills[] をループ
+     → Math.random() < entry.rate → executeEnemyOnAttackSkill()
+        → SkillsLoader でスキル定義取得
+        → action 配列を順次実行
+           → apply_effect → player.applyStatusEffect() + ログ
+```
+
+複数スキルは独立した rate で並行評価される（同一ターンに複数発動しうる）。
+
+`EnemySkillExecutor`（`src/lib/skills/EnemySkillExecutor.ts`）は
+プレイヤー向け `SkillExecutor` とは別実装。理由：`apply_effect` の対象が
+「キャスター（敵）に隣接するプレイヤー」であり、プレイヤー向け実装の
+「キャスター自身がプレイヤーセルにいるなら caster に適用」という意味論と逆転するため。
+
+クロスバリデーション（`YamlCrossValidator`）：`enemies.yml` の `skills[].name` が
+`skills.yml` に存在し、かつ `trigger: on_attack` であることを起動時に確認する。
 
 ### 状態異常との相互作用
 

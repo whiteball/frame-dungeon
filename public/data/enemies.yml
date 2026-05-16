@@ -32,10 +32,9 @@
   exp: 50
   color: 0x884444
   description: 筋骨隆々とした魔物。攻撃力が高い
-  ability:
-    - effectAttack:
-        name: stun
-        rate: 0.1
+  skills:
+    - name: stun_strike
+      rate: 0.1
 - name: wolf
   label: ウルフ
   life: 45
@@ -44,10 +43,9 @@
   exp: 35
   color: 0x666666
   description: 野生の狼。素早い攻撃が特徴
-  ability:
-    - effectAttack:
-        name: fear
-        rate: 0.1
+  skills:
+    - name: fear_strike
+      rate: 0.1
 - name: bat
   label: コウモリ
   life: 25
@@ -65,10 +63,9 @@
   color: 0x220022
   description: 毒を持つ大きな蜘蛛
   walk: none
-  ability:
-    - effectAttack:
-        name: poison
-        rate: 0.25
+  skills:
+    - name: poison_bite
+      rate: 0.25
 - name: ogre
   label: オーガ
   life: 80
@@ -77,10 +74,9 @@
   exp: 80
   color: 0xAA4444
   description: 巨大な魔物。非常に危険
-  ability:
-    - effectAttack:
-        name: stun
-        rate: 0.2
+  skills:
+    - name: stun_strike
+      rate: 0.2
 - name: dragon
   label: ドラゴン
   life: 150
@@ -89,7 +85,6 @@
   exp: 200
   color: 0xFF0000
   description: 伝説の竜。この階層の主
-  ability:
-    - effectAttack:
-        name: fear
-        rate: 0.3
+  skills:
+    - name: fear_strike
+      rate: 0.3
