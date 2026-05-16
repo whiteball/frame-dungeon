@@ -8,6 +8,7 @@ import { executeAttackAction } from './actions/AttackAction';
 import { executeDamageAction } from './actions/DamageAction';
 import { executeHealAction } from './actions/HealAction';
 import { executeRevealTrapAction } from './actions/RevealTrapAction';
+import { executeApplyEffectAction } from './actions/ApplyEffectAction';
 
 /**
  * コスト formula を評価し、各ステータスの差分（負値）を返す。
@@ -95,15 +96,15 @@ export function executeActions(
                 executeAttackAction(dungeon, caster, cells);
                 break;
             case 'damage':
-                if (param === null) {
-                    console.warn(`damage action requires a parameter in skill "${compiled.definition.name}"`);
+                if (param === null || typeof param === 'object') {
+                    console.warn(`damage action requires a scalar parameter in skill "${compiled.definition.name}"`);
                     break;
                 }
                 executeDamageAction(dungeon, caster, cells, param);
                 break;
             case 'heal':
-                if (param === null) {
-                    console.warn(`heal action requires a parameter in skill "${compiled.definition.name}"`);
+                if (param === null || typeof param === 'object') {
+                    console.warn(`heal action requires a scalar parameter in skill "${compiled.definition.name}"`);
                     break;
                 }
                 executeHealAction(dungeon, caster, cells, param);
@@ -111,16 +112,23 @@ export function executeActions(
             case 'reveal_trap':
                 executeRevealTrapAction(dungeon, caster, cells);
                 break;
+            case 'apply_effect':
+                if (param === null) {
+                    console.warn(`apply_effect action requires a parameter in skill "${compiled.definition.name}"`);
+                    break;
+                }
+                executeApplyEffectAction(dungeon, caster, cells, param as string | Record<string, number | string>);
+                break;
             default:
                 console.warn(`Unknown skill action "${name}" in skill "${compiled.definition.name}"`);
         }
     }
 }
 
-function parseActionEntry(entry: SkillActionEntry): { name: string; param: number | string | null } {
+function parseActionEntry(entry: SkillActionEntry): { name: string; param: number | string | Record<string, number | string> | null } {
     if (typeof entry === 'string') return { name: entry, param: null };
     const keys = Object.keys(entry);
     if (keys.length === 0) return { name: '', param: null };
     const key = keys[0];
-    return { name: key, param: entry[key] };
+    return { name: key, param: (entry as Record<string, number | string | Record<string, number | string>>)[key] };
 }

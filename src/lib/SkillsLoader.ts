@@ -9,9 +9,10 @@ const VALID_TARGETS: ReadonlySet<SkillTarget> = new Set<SkillTarget>(['front', '
 /**
  * スキル内 action 配列の 1 エントリ
  * - 文字列の場合：パラメータなしのアクション（例: 'attack', 'reveal_trap'）
- * - オブジェクトの場合：単一キーオブジェクト（例: { damage: 30 }, { heal: 'life_max * 0.3' }）
+ * - スカラー値オブジェクト：{ damage: 30 }, { heal: 'life_max * 0.3' }
+ * - オブジェクト値オブジェクト：{ apply_effect: { effect: 'poison', rate: 0.5 } }
  */
-export type SkillActionEntry = string | { [actionName: string]: number | string };
+export type SkillActionEntry = string | { [actionName: string]: number | string | Record<string, number | string> };
 
 /**
  * 習得条件エントリ
@@ -108,6 +109,35 @@ export class SkillsLoader {
                 const keys = Object.keys(entry);
                 if (keys.length !== 1) {
                     throw new Error(`Invalid skill '${skill.name}': action[${i}] object must have exactly one key`);
+                }
+                const actionKey = keys[0];
+                if (actionKey === 'apply_effect') {
+                    const val = (entry as Record<string, unknown>)[actionKey];
+                    if (typeof val === 'string') {
+                        // OK: apply_effect: 'poison'
+                    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+                        const p = val as Record<string, unknown>;
+                        if (typeof p.effect !== 'string' || !p.effect) {
+                            throw new Error(`Invalid skill '${skill.name}': action[${i}].apply_effect.effect must be a non-empty string`);
+                        }
+                        if (p.rate !== undefined) {
+                            if (typeof p.rate === 'number') {
+                                if (p.rate < 0 || p.rate > 1) {
+                                    throw new Error(`Invalid skill '${skill.name}': action[${i}].apply_effect.rate must be in [0, 1]`);
+                                }
+                            } else if (typeof p.rate === 'string') {
+                                try {
+                                    this.parser.parse(p.rate);
+                                } catch {
+                                    throw new Error(`Invalid skill '${skill.name}': action[${i}].apply_effect.rate formula parse error: "${p.rate}"`);
+                                }
+                            } else {
+                                throw new Error(`Invalid skill '${skill.name}': action[${i}].apply_effect.rate must be a number or formula string`);
+                            }
+                        }
+                    } else {
+                        throw new Error(`Invalid skill '${skill.name}': action[${i}].apply_effect must be a string (effect name) or object {effect, rate?}`);
+                    }
                 }
                 continue;
             }

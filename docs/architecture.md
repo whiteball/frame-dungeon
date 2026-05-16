@@ -716,7 +716,13 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 
 - **`reveal_trap`**（`src/lib/skills/actions/RevealTrapAction.ts`）：target スコープ内のセルにある未発見の `TrapObject` を `visible = true` にする。既に visible なトラップは無視。発見毎に「{label} を発見した！」ログを出す。caster ステータスは参照しない（パラメータシグネチャ統一のため受け取るのみ）
 
-未知の action 名は警告ログのみで継続する。YamlCrossValidator での事前検証は今後の改善ポイント。
+- **`apply_effect`**（`src/lib/skills/actions/ApplyEffectAction.ts`）：target スコープ内の各対象（プレイヤー or 敵）に状態異常を付与する。param 形式は以下の 2 通り：
+  - 文字列：`apply_effect: poison`（rate=1.0 固定）
+  - オブジェクト：`apply_effect: { effect: poison, rate: 0.6 }`（rate は数値リテラルまたは caster 実効値を変数とする数式文字列）
+  
+  `rate` が数式の場合は `expr-eval-fork` で実行時評価し [0,1] にクランプする。付与結果は `applyStatusEffect()` の戻り値（`'applied'` / `'resisted'` / `'unknown'`）に従ってログを出力する。effect 名の存在チェックは `YamlCrossValidator` が起動時に実施する。
+
+未知の action 名は警告ログのみで継続する。
 
 ### 状態異常との相互作用
 

@@ -172,6 +172,27 @@ export class YamlCrossValidator {
             }
         }
 
+        // skills.yml apply_effect.effect → effects.yml
+        for (const skill of skills.getSkills()) {
+            for (let i = 0; i < skill.action.length; i++) {
+                const entry = skill.action[i];
+                if (typeof entry === 'string') continue;
+                const keys = Object.keys(entry);
+                if (keys[0] !== 'apply_effect') continue;
+                const val = (entry as Record<string, unknown>)['apply_effect'];
+                let effectName: string | undefined;
+                if (typeof val === 'string') {
+                    effectName = val;
+                } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+                    const p = val as Record<string, unknown>;
+                    if (typeof p.effect === 'string') effectName = p.effect;
+                }
+                if (effectName && !effects.hasEffect(effectName)) {
+                    errors.push(`skills.yml "${skill.name}": action[${i}].apply_effect.effect "${effectName}" が effects.yml に存在しません`);
+                }
+            }
+        }
+
         return { errors, infos };
     }
 }

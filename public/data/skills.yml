@@ -45,3 +45,17 @@
       rate: 0.2
     - least: 5
       rate: 0.5
+
+- name: toxic_dart
+  label: 毒矢
+  description: 正面の敵に毒状態を付与する（確率60%）
+  target: front
+  cost:
+    magic: 3
+  action:
+    - apply_effect:
+        effect: poison
+        rate: 0.6
+  mastery:
+    - least: 2
+      rate: 0.4
