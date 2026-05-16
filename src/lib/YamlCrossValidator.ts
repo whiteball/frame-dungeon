@@ -70,6 +70,12 @@ export class YamlCrossValidator {
                     errors.push(`enemies.yml "${enemy.name}": ability[${i}].effectAttack.name "${ab.effectAttack.name}" が effects.yml に存在しません`);
                 }
             }
+            for (let i = 0; i < (enemy.resist ?? []).length; i++) {
+                const name = enemy.resist![i];
+                if (!effects.hasEffect(name)) {
+                    errors.push(`enemies.yml "${enemy.name}": resist[${i}] "${name}" が effects.yml に存在しません`);
+                }
+            }
         }
 
         // traps.yml effect → effects.yml / stats.yml
@@ -102,17 +108,32 @@ export class YamlCrossValidator {
                     }
                 }
             }
+            for (let i = 0; i < (effect.resist ?? []).length; i++) {
+                const name = effect.resist![i];
+                if (!effects.hasEffect(name)) {
+                    errors.push(`effects.yml "${effect.name}": resist[${i}] "${name}" が effects.yml に存在しません`);
+                }
+            }
         }
 
         // items.yml effect → stats.yml / effects.yml
         for (const item of items.getItems()) {
             const specs = Array.isArray(item.effect) ? item.effect : [item.effect];
             for (const spec of specs) {
-                // トップレベルの stat キー（immediate / continuous 以外の数値）
+                // トップレベルの stat キー（immediate / continuous / resist 以外の数値）
                 for (const [k, v] of Object.entries(spec)) {
-                    if (k === 'immediate' || k === 'continuous') continue;
+                    if (k === 'immediate' || k === 'continuous' || k === 'resist') continue;
                     if (typeof v === 'number' && !stats.getStat(k)) {
                         errors.push(`items.yml "${item.name}": effect のキー "${k}" が stats.yml に存在しません`);
+                    }
+                }
+                // トップレベルの resist（装備時に有効な耐性）→ effects.yml
+                if (Array.isArray(spec.resist)) {
+                    for (let i = 0; i < spec.resist.length; i++) {
+                        const name = spec.resist[i];
+                        if (typeof name === 'string' && !effects.hasEffect(name)) {
+                            errors.push(`items.yml "${item.name}": effect.resist[${i}] "${name}" が effects.yml に存在しません`);
+                        }
                     }
                 }
                 // immediate 内
@@ -131,12 +152,20 @@ export class YamlCrossValidator {
                         }
                     }
                 }
-                // continuous 内（turns を除く）
+                // continuous 内（turns / resist を除く）
                 if (spec.continuous && typeof spec.continuous === 'object') {
                     for (const [k, v] of Object.entries(spec.continuous)) {
-                        if (k === 'turns') continue;
+                        if (k === 'turns' || k === 'resist') continue;
                         if (typeof v === 'number' && !stats.getStat(k)) {
                             errors.push(`items.yml "${item.name}": continuous.${k} が stats.yml に存在しません`);
+                        }
+                    }
+                    if (Array.isArray(spec.continuous.resist)) {
+                        for (let i = 0; i < spec.continuous.resist.length; i++) {
+                            const name = spec.continuous.resist[i];
+                            if (typeof name === 'string' && !effects.hasEffect(name)) {
+                                errors.push(`items.yml "${item.name}": continuous.resist[${i}] "${name}" が effects.yml に存在しません`);
+                            }
                         }
                     }
                 }

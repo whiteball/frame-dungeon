@@ -18,17 +18,20 @@ export interface ImmediateEffect {
 
 export interface ContinuousEffect {
     turns: number;
-    [statName: string]: number;
+    resist?: string[];
+    [statName: string]: number | string[] | undefined;
 }
 
 /**
  * 単一の効果スペック（即座・持続を含む）
  * 装備系の能力値ボーナス（power, defense 等）はトップレベルの数値として記述
+ * resist は effect 名の配列で、装備中はその状態異常の付与を阻止する
  */
 export interface ItemEffectSpec {
     immediate?: ImmediateEffect;
     continuous?: ContinuousEffect;
-    [statName: string]: number | ImmediateEffect | ContinuousEffect | undefined;
+    resist?: string[];
+    [statName: string]: number | string[] | ImmediateEffect | ContinuousEffect | undefined;
 }
 
 /**
@@ -102,6 +105,16 @@ export class ItemsLoader {
             }
             if (spec.continuous !== undefined && (typeof spec.continuous !== 'object' || spec.continuous === null || Array.isArray(spec.continuous))) {
                 throw new Error(`Invalid item '${item.name}': effect[${i}].continuous must be an object`);
+            }
+            if (spec.resist !== undefined) {
+                if (!Array.isArray(spec.resist) || spec.resist.some((r: unknown) => typeof r !== 'string')) {
+                    throw new Error(`Invalid item '${item.name}': effect[${i}].resist must be an array of strings`);
+                }
+            }
+            if (spec.continuous && spec.continuous.resist !== undefined) {
+                if (!Array.isArray(spec.continuous.resist) || spec.continuous.resist.some((r: unknown) => typeof r !== 'string')) {
+                    throw new Error(`Invalid item '${item.name}': effect[${i}].continuous.resist must be an array of strings`);
+                }
             }
         }
         if (!item.description || typeof item.description !== 'string') {

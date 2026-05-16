@@ -52,13 +52,17 @@ export interface EnemyDefinition {
      */
     walk?: 'random' | 'none' | 'default';
     /**
+     * この敵が新規付与を阻止する effect 名の配列
+     */
+    resist?: string[];
+    /**
      * ステータス値（stats.ymlのnameをキーとする）
      * 例: { life: 20, power: 5, defense: 2 }
      */
-    [statName: string]: string | number | EnemyAbility[] | undefined;
+    [statName: string]: string | number | string[] | EnemyAbility[] | undefined;
 }
 
-const NON_RANK_FIELDS = new Set(['name', 'label', 'description', 'walk', 'color', 'ability']);
+const NON_RANK_FIELDS = new Set(['name', 'label', 'description', 'walk', 'color', 'ability', 'resist']);
 
 export class EnemyLoader {
     private static instance: EnemyLoader;
@@ -149,6 +153,12 @@ export class EnemyLoader {
         if (enemy.walk !== undefined) {
             if (!['random', 'none', 'default'].includes(enemy.walk)) {
                 throw new Error(`Invalid enemy '${enemy.name}': 'walk' must be 'random', 'none', or 'default'`);
+            }
+        }
+
+        if (enemy.resist !== undefined) {
+            if (!Array.isArray(enemy.resist) || enemy.resist.some((r: unknown) => typeof r !== 'string')) {
+                throw new Error(`Invalid enemy '${enemy.name}': 'resist' must be an array of strings`);
             }
         }
     }

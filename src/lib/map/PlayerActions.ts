@@ -136,6 +136,10 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
         const label = effectsLoader.getEffect(effName)?.label ?? effName;
         parts.push(`${label}状態になった`);
       }
+      for (const effName of result.resistedEffects) {
+        const label = effectsLoader.getEffect(effName)?.label ?? effName;
+        parts.push(`${label}を耐性で防いだ`);
+      }
       for (const effName of result.clearedEffects) {
         const label = effectsLoader.getEffect(effName)?.label ?? effName;
         parts.push(`${label}状態が消えた`);
@@ -155,6 +159,12 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
       const parts: string[] = [];
       for (const [stat, value] of applied) {
         parts.push(`${stat}が${value > 0 ? '+' : ''}${value}`);
+      }
+      if (Array.isArray(spec.continuous.resist)) {
+        for (const effName of spec.continuous.resist) {
+          const label = effectsLoader.getEffect(effName)?.label ?? effName;
+          parts.push(`${label}に耐性`);
+        }
       }
       if (parts.length) messageParts.push(`${spec.continuous.turns}ターンの間 ${parts.join('、')}`);
     }

@@ -15,12 +15,15 @@ interface ActiveContinuousEffect {
     effects: Map<string, number>;
     remainingTurns: number;
     sourceLabel: string;
+    resists: string[];
 }
 
 interface ActiveStatusEffect {
     name: string;
     count: number;
 }
+
+export type ApplyStatusEffectResult = 'applied' | 'resisted' | 'unknown';
 
 export interface StatusEffectTickResult {
     applied: Array<{ label: string; statName: string; delta: number }>;
@@ -184,19 +187,23 @@ export class Player {
     applyImmediateEffect(effect: ImmediateEffect): {
         stats: Map<string, number>;
         appliedEffects: string[];
+        resistedEffects: string[];
         clearedEffects: string[];
         learnedSkills: string[];
         alreadyLearnedSkills: string[];
     } {
         const stats = new Map<string, number>();
         const appliedEffects: string[] = [];
+        const resistedEffects: string[] = [];
         const clearedEffects: string[] = [];
         const learnedSkills: string[] = [];
         const alreadyLearnedSkills: string[] = [];
         for (const [key, value] of Object.entries(effect)) {
             if (key === 'applyEffect') {
-                if (typeof value === 'string' && this.applyStatusEffect(value)) {
-                    appliedEffects.push(value);
+                if (typeof value === 'string') {
+                    const r = this.applyStatusEffect(value);
+                    if (r === 'applied') appliedEffects.push(value);
+                    else if (r === 'resisted') resistedEffects.push(value);
                 }
             } else if (key === 'clearEffect') {
                 if (typeof value === 'string' && this.clearStatusEffect(value)) {
@@ -218,7 +225,7 @@ export class Player {
                 stats.set(key, this.getStat(key) - before);
             }
         }
-        return { stats, appliedEffects, clearedEffects, learnedSkills, alreadyLearnedSkills };
+        return { stats, appliedEffects, resistedEffects, clearedEffects, learnedSkills, alreadyLearnedSkills };
     }
 
     /**
@@ -242,16 +249,18 @@ export class Player {
     applyContinuousEffect(effect: ContinuousEffect, sourceLabel: string): Map<string, number> {
         const effects = new Map<string, number>();
         for (const [statName, value] of Object.entries(effect)) {
-            if (statName === 'turns') continue;
+            if (statName === 'turns' || statName === 'resist') continue;
             if (typeof value !== 'number') continue;
             effects.set(statName, value);
         }
-        if (effects.size === 0 || effect.turns <= 0) return effects;
+        const resists = Array.isArray(effect.resist) ? [...effect.resist] : [];
+        if ((effects.size === 0 && resists.length === 0) || effect.turns <= 0) return effects;
 
         this.activeContinuousEffects.push({
             effects,
             remainingTurns: effect.turns,
             sourceLabel,
+            resists,
         });
         return effects;
     }
@@ -260,13 +269,13 @@ export class Player {
      * 持続効果を1ターン経過させる。残ターン数が0以下になったエントリは自動削除。
      * @returns 期限切れになったエントリの { sourceLabel, effects } 配列
      */
-    tickContinuousEffects(): Array<{ sourceLabel: string; effects: Map<string, number> }> {
-        const expired: Array<{ sourceLabel: string; effects: Map<string, number> }> = [];
+    tickContinuousEffects(): Array<{ sourceLabel: string; effects: Map<string, number>; resists: string[] }> {
+        const expired: Array<{ sourceLabel: string; effects: Map<string, number>; resists: string[] }> = [];
         const remaining: ActiveContinuousEffect[] = [];
         for (const entry of this.activeContinuousEffects) {
             entry.remainingTurns--;
             if (entry.remainingTurns <= 0) {
-                expired.push({ sourceLabel: entry.sourceLabel, effects: entry.effects });
+                expired.push({ sourceLabel: entry.sourceLabel, effects: entry.effects, resists: entry.resists });
             } else {
                 remaining.push(entry);
             }
@@ -338,18 +347,48 @@ export class Player {
     }
 
     /**
+     * 装備・持続効果・付与中 status effect の resist を集約し、
+     * 「現在新規付与を阻止する effect 名」の集合を返す
+     */
+    getEffectiveResists(): Set<string> {
+        const resists = new Set<string>();
+        // 装備中アイテム
+        for (const item of this.getAllEquippedItems()) {
+            if (!item) continue;
+            for (const r of item.getEquipmentResists()) resists.add(r);
+        }
+        // 持続効果
+        for (const entry of this.activeContinuousEffects) {
+            for (const r of entry.resists) resists.add(r);
+        }
+        // 付与中 status effect 自身の resist 付随効果
+        if (Player.effectsLoader) {
+            for (const entry of this.activeStatusEffects) {
+                for (const r of Player.effectsLoader.getResistsOf(entry.name)) resists.add(r);
+            }
+        }
+        return resists;
+    }
+
+    /**
      * 状態異常/強化効果を付与する
      * 同名効果が既にあれば count を 0 にリセット（重複は 1 エントリのみ）
-     * @returns 付与に成功した場合 true。effects.yml に未定義の name を渡された場合 false
+     * @returns
+     *  - 'applied'  付与に成功した
+     *  - 'resisted' 耐性により付与を阻止した
+     *  - 'unknown'  effects.yml に未定義の name だった（旧 false 相当）
      */
-    applyStatusEffect(name: string): boolean {
+    applyStatusEffect(name: string): ApplyStatusEffectResult {
         if (!Player.effectsLoader) {
             console.warn('EffectsLoader not initialized');
-            return false;
+            return 'unknown';
         }
         if (!Player.effectsLoader.hasEffect(name)) {
             console.warn(`Status effect not found: ${name}`);
-            return false;
+            return 'unknown';
+        }
+        if (this.getEffectiveResists().has(name)) {
+            return 'resisted';
         }
         const existing = this.activeStatusEffects.find(e => e.name === name);
         if (existing) {
@@ -357,7 +396,7 @@ export class Player {
         } else {
             this.activeStatusEffects.push({ name, count: 0 });
         }
-        return true;
+        return 'applied';
     }
 
     /**
@@ -493,6 +532,7 @@ export class Player {
             effects: new Map(e.effects),
             remainingTurns: e.remainingTurns,
             sourceLabel: e.sourceLabel,
+            resists: [...e.resists],
         }));
     }
 
@@ -820,6 +860,7 @@ export class Player {
                 effects: Object.fromEntries(e.effects),
                 remainingTurns: e.remainingTurns,
                 sourceLabel: e.sourceLabel,
+                resists: [...e.resists],
             })),
             activeStatusEffects: this.activeStatusEffects.map(e => ({
                 name: e.name,
@@ -859,6 +900,7 @@ export class Player {
             effects: new Map(Object.entries(e.effects)),
             remainingTurns: e.remainingTurns,
             sourceLabel: e.sourceLabel,
+            resists: Array.isArray(e.resists) ? [...e.resists] : [],
         }));
 
         // 状態異常復元

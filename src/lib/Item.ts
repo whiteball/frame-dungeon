@@ -75,11 +75,20 @@ export class Item {
         if (Array.isArray(effect)) return {};
         const effects: { [statName: string]: number } = {};
         for (const [key, value] of Object.entries(effect)) {
-            if (key !== 'immediate' && key !== 'continuous' && typeof value === 'number') {
+            if (key !== 'immediate' && key !== 'continuous' && key !== 'resist' && typeof value === 'number') {
                 effects[key] = value;
             }
         }
         return effects;
+    }
+
+    /**
+     * 装備中に有効な resist 配列を取得。配列形式の効果（消耗品想定）は対象外
+     */
+    getEquipmentResists(): string[] {
+        const effect = this.definition.effect;
+        if (Array.isArray(effect)) return [];
+        return Array.isArray(effect.resist) ? [...effect.resist] : [];
     }
 
     // アイテム種別チェック

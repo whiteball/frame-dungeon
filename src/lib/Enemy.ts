@@ -163,10 +163,15 @@ export class Enemy extends MapObject {
             for (const ab of abilities) {
                 if (ab.effectAttack) {
                     const { name, rate } = ab.effectAttack;
-                    if (Math.random() < rate && player.applyStatusEffect(name)) {
+                    if (Math.random() < rate) {
+                        const result = player.applyStatusEffect(name);
                         const effDef = EffectsLoader.getInstance().getEffect(name);
                         const effLabel = effDef?.label ?? name;
-                        EventBus.emit('message-log', `${this.getLabel()}の攻撃で${effLabel}状態になった！`, dungeon.getTurnCount());
+                        if (result === 'applied') {
+                            EventBus.emit('message-log', `${this.getLabel()}の攻撃で${effLabel}状態になった！`, dungeon.getTurnCount());
+                        } else if (result === 'resisted') {
+                            EventBus.emit('message-log', `${this.getLabel()}の${effLabel}を耐性で防いだ！`, dungeon.getTurnCount());
+                        }
                     }
                 }
             }
@@ -204,6 +209,14 @@ export class Enemy extends MapObject {
 
     getDefinition(): EnemyDefinition {
         return this.definition;
+    }
+
+    /**
+     * この敵が指定 effect への耐性を持つかを返す。
+     * 現時点で敵は状態異常になる経路を持たないため判定メソッドのみ提供する
+     */
+    hasResist(effectName: string): boolean {
+        return this.definition.resist?.includes(effectName) ?? false;
     }
 
     // ステータス操作

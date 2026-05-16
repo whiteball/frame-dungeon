@@ -14,6 +14,7 @@ export interface ContinuousEffectSaveData {
     effects: Record<string, number>;
     remainingTurns: number;
     sourceLabel: string;
+    resists?: string[];
 }
 
 export interface StatusEffectSaveData {

@@ -37,6 +37,10 @@ export interface EffectDefinition {
         permanent?: EffectTargetSpec | EffectTargetSpec[];
     };
     clear: EffectClearSpec;
+    /**
+     * この effect が付与されている間、新規に付与されることを阻止する effect 名の配列
+     */
+    resist?: string[];
 }
 
 export type EffectTiming = 'onPlayerAction' | 'onTurnEnd' | 'permanent';
@@ -57,6 +61,7 @@ interface CompiledEffect {
     permanent: CompiledTargetSpec[];
     clearFormula: Expression | null;
     clearOnDamage: boolean;
+    resist: string[];
 }
 
 export class EffectsLoader {
@@ -125,7 +130,15 @@ export class EffectsLoader {
             permanent: compileSpecs(EffectsLoader.normalizeSpecs(def.timing?.permanent)),
             clearFormula,
             clearOnDamage: def.clear?.onDamage === true,
+            resist: Array.isArray(def.resist) ? [...def.resist] : [],
         };
+    }
+
+    /**
+     * 指定 effect が付与中に阻止する resist 名一覧を返す
+     */
+    getResistsOf(name: string): string[] {
+        return this.compiledByName.get(name)?.resist ?? [];
     }
 
     getEffects(): EffectDefinition[] {

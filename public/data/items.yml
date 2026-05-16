@@ -69,3 +69,18 @@
       learnSkill: self_heal
       life: 10
   description: 唱えるとスキル「自己治癒」を習得し、わずかに体力も回復する
+- name: anti-poison ring
+  label: 解毒の指輪
+  type: sub_armor
+  effect:
+    defense: 2
+    resist: [poison]
+  description: 装備中は毒状態にならない指輪
+- name: stun guard potion
+  label: 麻痺除けの薬
+  type: consumable
+  effect:
+    continuous:
+      turns: 10
+      resist: [stun]
+  description: しばらくの間、麻痺状態にならなくなる薬

@@ -22,7 +22,8 @@
   defense: 6
   exp: 30
   color: 0xCCCCCC
-  description: 骨だけの不死者。防御力が高い
+  description: 骨だけの不死者。防御力が高く、毒が効かない
+  resist: [poison]
 - name: orc
   label: オーク
   life: 60

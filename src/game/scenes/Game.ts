@@ -443,13 +443,17 @@ export class Game extends Scene {
         EventBus.emit('current-scene-ready', this);
 
         // デバッグ用: コンソールから window.applyStatusEffect('poison') 等で状態異常を付与可能
-        (window as unknown as { applyStatusEffect: (name: string) => boolean }).applyStatusEffect = (name: string) => {
-            const ok = this.player.applyStatusEffect(name);
-            if (ok) {
+        (window as unknown as { applyStatusEffect: (name: string) => string }).applyStatusEffect = (name: string) => {
+            const result = this.player.applyStatusEffect(name);
+            if (result === 'applied') {
                 EventBus.emit('message-log', `（debug）${name} を付与`, this.dungeon.getTurnCount());
                 this.render();
+            } else if (result === 'resisted') {
+                EventBus.emit('message-log', `（debug）${name} を耐性で防いだ`, this.dungeon.getTurnCount());
+            } else {
+                EventBus.emit('message-log', `（debug）${name} は未定義 effect`, this.dungeon.getTurnCount());
             }
-            return ok;
+            return result;
         };
 
         // デバッグ用: コンソールから window.learnSkill('double_attack') 等でスキル習得
@@ -603,10 +607,13 @@ export class Game extends Scene {
                 }
             } else if (effect.type === 'addEffect' && typeof effect.value === 'string') {
                 const effName = effect.value;
-                if (this.player.applyStatusEffect(effName)) {
-                    const def = EffectsLoader.getInstance().getEffect(effName);
-                    const label = def?.label ?? effName;
+                const result = this.player.applyStatusEffect(effName);
+                const def = EffectsLoader.getInstance().getEffect(effName);
+                const label = def?.label ?? effName;
+                if (result === 'applied') {
                     EventBus.emit('message-log', `${label}状態になった！`, turn);
+                } else if (result === 'resisted') {
+                    EventBus.emit('message-log', `${label}を耐性で防いだ！`, turn);
                 }
             } else if (effect.type === 'unequip') {
                 const slots: Array<'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2'> =

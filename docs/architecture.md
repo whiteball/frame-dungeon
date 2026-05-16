@@ -13,7 +13,7 @@
 - **MiniMapView**（`src/lib/MiniMapView.ts`）: 探索済みエリアを含む俯瞰ミニマップを表示。`render(dun, showAllEnemies)` の第2引数が `false`（デフォルト）の場合、敵は現在の視界内のみ描画し、探索済みだが視界外のマスには半透明の白マスクを重ねる。`true` の場合は従来通り全敵を描画しマスクも適用しない
 - **InfoView**（`src/lib/InfoView.ts`）: プレイヤーステータスとフロア情報のUIオーバーレイを管理
 - **EquipmentView**（`src/lib/EquipmentView.ts`）: 装備中のスロット（武器・主防具・副防具1/2）をPhaserグラフィックスで描画
-- **Player**（`src/lib/Player.ts`）: プレイヤーのステータス、インベントリ、装備、持続効果、状態異常を管理。`getEffectiveFormulaVars()` で base / 装備 / 持続効果 / `permanent` 状態異常を合算した変数辞書を返し、`BaseLoader` の formula 評価に渡される
+- **Player**（`src/lib/Player.ts`）: プレイヤーのステータス、インベントリ、装備、持続効果、状態異常を管理。`getEffectiveFormulaVars()` で base / 装備 / 持続効果 / `permanent` 状態異常を合算した変数辞書を返し、`BaseLoader` の formula 評価に渡される。`getEffectiveResists()` で装備 / 持続効果 / 付与中 status effect の `resist` を集約した「現在新規付与を阻止する effect 名」集合を返す
 - **Enemy**（`src/lib/Enemy.ts`）: `MapObject`を継承した敵クラス。ステータス、戦闘ロジック、ターゲット記憶を保持。ダメージ計算は `BaseLoader` の formula に委譲
 - **Item**（`src/lib/Item.ts`）: アイテムの効果と情報を管理
 - **Inventory**（`src/lib/Inventory.ts`）: プレイヤーのアイテム所持を管理
@@ -379,9 +379,20 @@ autoSpawner:
 | キー | 内容 |
 | --- | --- |
 | `<stat>: number` | 能力値変動（`addStat` 経由、fluctuation クランプ） |
-| `applyEffect: <effectName>` | 状態異常を付与（`effects.yml` 参照） |
+| `applyEffect: <effectName>` | 状態異常を付与（`effects.yml` 参照）。`Player.getEffectiveResists()` に含まれる場合は付与せず `resistedEffects` に記録 |
 | `clearEffect: <effectName>` | 状態異常を解除 |
 | `learnSkill: <skillName>` | スキルを習得（`skills.yml` 参照、既習得時はログ「習得済み」のみだがアイテムは消費。同 `ImmediateEffect` 内で他効果と併記可） |
+
+### 装備・消耗品・effect に持たせる resist
+
+派生パラメータ `resist`（effect 名の文字列配列）を以下の経路で動的に獲得できる：
+
+- 装備系アイテム：`effect.resist: [<effectName>...]`（トップレベル、装備中のみ有効）
+- 消耗品の持続効果：`effect.continuous.resist: [<effectName>...]`（持続ターン中のみ有効）
+- status effect 自身：`effects.yml` のトップレベル `resist: [<effectName>...]`（その状態が付与されている間のみ有効）
+- 敵：`enemies.yml` トップレベル `resist: [<effectName>...]`（敵が状態異常付与を受け付けない／敵が状態異常になる経路は未実装で、判定のみ準備）
+
+`Player.applyStatusEffect(name)` の戻り値は `'applied' | 'resisted' | 'unknown'` の union。`'resisted'` のときは message-log に「○○を耐性で防いだ！」を出力する（呼び出し側で対応）。新規付与の阻止のみを行い、既に付与されている同名異常を解除する効果は持たない。
 
 ### 持続効果のターン進行
 
@@ -428,7 +439,8 @@ autoSpawner:
 
 ### 主要 API（Player）
 
-- `applyStatusEffect(name)`：効果を付与。同名効果が既にあれば `count` を 0 にリセット（重複は 1 エントリのみ）
+- `applyStatusEffect(name)`：効果を付与。同名効果が既にあれば `count` を 0 にリセット（重複は 1 エントリのみ）。戻り値は `'applied' | 'resisted' | 'unknown'`（`getEffectiveResists()` に含まれる effect は `'resisted'` を返して付与しない）
+- `getEffectiveResists()`：装備 + 持続効果 + 付与中 status effect の `resist` を集約した `Set<string>`
 - `getPlayerActionDirective()`：`_action: skip` などのディレクティブを返す
 - `tickStatusEffects()`：onTurnEnd 効果適用 → `count++` → clear 判定。`MapObjectStore.dispatchEvent` から呼ばれる
 - `notifyDamageTaken()`：被弾時に `clear.onDamage: true` のエントリを即座に解除。`Enemy` の around-1 攻撃ハンドラから呼ばれる
@@ -733,6 +745,7 @@ Phase 3 時点では `PlayerActions.useSkill` はモック実装（メッセー�
 - `base.yml` の `floors[].enemies` / `floors[].traps` 名が `enemies.yml` / `traps.yml` に存在するか
 - `traps.yml` の `effect[].type === 'addEffect'` の `value` が `effects.yml` に存在するか
 - `items.yml` の `effect.immediate.learnSkill` が `skills.yml` に存在するか
+- `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` 要素が `effects.yml` に存在するか
 - `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
 
 `{ errors: string[], infos: string[] }` を返し、`errors.length > 0` のとき `EventBus.emit('yaml-cross-validation-errors', errors)` で `YamlErrorDialog` を表示。INFO レベルは現状コンソール出力のみ。
