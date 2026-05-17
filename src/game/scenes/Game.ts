@@ -63,7 +63,7 @@ export class Game extends Scene {
     }
     private viewRange = 3;
     private enableFog = true;
-    private showAllEnemies = false;
+    private revealAll = false;
     private swapQEandAD = false;
     private swapSandShiftS = false;
     private pendingSaveData: SaveData | null = null;
@@ -75,14 +75,14 @@ export class Game extends Scene {
     init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean; swapQEandAD?: boolean; swapSandShiftS?: boolean; saveData?: SaveData }) {
         this.viewRange = data.viewRange ?? 3;
         this.enableFog = data.enableFog ?? true;
-        this.showAllEnemies = data.showAllEnemies ?? false;
+        this.revealAll = data.showAllEnemies ?? false;
         this.swapQEandAD = data.swapQEandAD ?? false;
         this.swapSandShiftS = data.swapSandShiftS ?? false;
         this.pendingSaveData = data.saveData ?? null;
     }
 
     render() {
-        this.miniMapView.render(this.dungeon, this.showAllEnemies);
+        this.miniMapView.render(this.dungeon, this.revealAll);
         this.mainView.render(this.dungeon);
         this.params = this.getDisplayParams();
         this.infoView.render(this.floor, this.params);
@@ -996,7 +996,7 @@ export class Game extends Scene {
     private toggleMiniMapMode(): void {
         const isFullMap = this.miniMapView.toggleMapMode();
         localStorage.setItem('frame_dungeon_minimap_full', String(isFullMap));
-        this.miniMapView.render(this.dungeon, this.showAllEnemies);
+        this.miniMapView.render(this.dungeon, this.revealAll);
     }
 
     /**

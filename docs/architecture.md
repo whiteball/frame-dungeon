@@ -82,7 +82,7 @@ src/components/dialogs/
 | イベント名 | 方向 | payload | 用途 |
 | --- | --- | --- | --- |
 | `open-settings` | Phaser→Vue | `{ viewRange, enableFog, showAllEnemies }` | 設定ダイアログを開く |
-| `settings-confirmed` | Vue→Phaser | `{ viewRange, enableFog, showAllEnemies }` | 設定を確定してゲームに反映 |
+| `settings-confirmed` | Vue→Phaser | `{ viewRange, enableFog, showAllEnemies }` | 設定を確定してゲームに反映（`Game.ts` 内部では `revealAll` フィールドに格納） |
 | `open-status` | Phaser→Vue | `string` | ステータスダイアログを開く |
 | `open-save-dialog` | Phaser→Vue | なし | セーブダイアログを開く |
 | `save-to-slot` | Vue→Phaser | `{ slot: number, memo: string }` | セーブ実行 |

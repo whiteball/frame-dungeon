@@ -39,12 +39,12 @@ export class MiniMapView {
    * 探索済みエリア、壁、扉、オブジェクト、プレイヤーの位置を表示する
    * @param dun レンダリングするダンジョンマップ
    */
-  render(dun: DungeonMap, showAllEnemies = false) {
+  render(dun: DungeonMap, revealAll = false) {
     const graph = this.graph;
     graph.clear();
 
     graph.lineStyle(2, 0xDDDDDD);
-    graph.fillStyle(0xDDDDDD);
+    graph.fillStyle(0x787878);
     const around = this.fullMapMode ? 0 : dun.getViewRange() + 1;
     const WIDTH = this.width, HEIGHT = this.height;
     const rect = new Phaser.Geom.Rectangle(0, 0, WIDTH, HEIGHT);
@@ -62,12 +62,8 @@ export class MiniMapView {
       if (origin[0] === undefined) origin[0] = block.x;
       if (origin[1] === undefined) origin[1] = block.y;
       const baseX = (block.x - origin[0]) * blockWidth, baseY = (block.y - origin[1]) * blockHeight;
-      graph.lineStyle(2, 0xDDDDDD);
 
       if (!block.enter || block.fog === 1) {
-        graph.fillStyle(0x787878);
-        // 枠を描画しないので他のマスより若干大きく見えるが、実用上問題ないので一旦気にしないことにする
-        graph.fillRect(baseX, baseY, blockWidth, blockHeight);
         continue;
       }
 
@@ -79,6 +75,7 @@ export class MiniMapView {
         graph.fillRect(baseX, baseY, blockWidth, blockHeight);
       }
 
+      graph.lineStyle(2, 0xDDDDDD);
       if (block.wallState.wall[MapDirection.EAST]) {
         graph.lineBetween(baseX + blockWidth, baseY, baseX + blockWidth, baseY + blockHeight)
       }
@@ -114,7 +111,7 @@ export class MiniMapView {
         if (!object.visible) {
           continue;
         }
-        if (!showAllEnemies && enemySet.has(object) && block.inView === 0) {
+        if (!revealAll && enemySet.has(object) && block.inView === 0) {
           continue;
         }
 
@@ -187,7 +184,7 @@ export class MiniMapView {
         }
       }
 
-      if (!showAllEnemies && block.fog === 0 && block.inView === 0) {
+      if (!revealAll && block.fog === 0 && block.inView === 0) {
         graph.fillStyle(0xFFFFFF, 0.2);
         graph.fillRect(baseX, baseY, blockWidth, blockHeight);
       }
