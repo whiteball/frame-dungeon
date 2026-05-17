@@ -253,7 +253,7 @@ export class MainView {
     graph.fillStyle(0x3F3F3F);
     graph.fillRectShape(floor);
     // ブロックベース
-    graph.lineStyle(1, 0x0);
+    graph.lineStyle(1, 0x0, 1);
     graph.fillStyle(0xFFFFFF);
 
     const drawSphere = (circle: Phaser.Geom.Circle, alpha: number) => {
@@ -276,6 +276,49 @@ export class MainView {
         .closePath().fill();
     }
 
+    const DOOR_COLOR = 0xA0522D;
+    const VP_X = this.width / 2, VP_Y = this.height / 2;
+    const drawDoor = (pol: Phaser.Geom.Polygon) => {
+      const pts = pol.points;
+      // 半透明ベース（全面）
+      graph.fillStyle(DOOR_COLOR, 0.5);
+      graph.fillPoints(pts, true);
+      const sorted = [...pts].sort((a, b) => a.y - b.y);
+      const [tl, tr] = sorted.slice(0, 2).sort((a, b) => a.x - b.x);
+      const [bl, br] = sorted.slice(2).sort((a, b) => a.x - b.x);
+      const bp = (u: number, v: number) => ({
+        x: (1 - u) * (1 - v) * bl.x + u * (1 - v) * br.x + (1 - u) * v * tl.x + u * v * tr.x,
+        y: (1 - u) * (1 - v) * bl.y + u * (1 - v) * br.y + (1 - u) * v * tl.y + u * v * tr.y,
+      });
+      const isLateralWall = Math.abs(tl.y - tr.y) > 0.1;
+      // 透視図の正確な補間：側壁では調和平均ベースの式を使う
+      const perspOff = (u: number, A: number, B: number) => A * B / ((1 - u) * B + u * A);
+      const bpPersp = (u: number, v: number) => {
+        if (!isLateralWall) return bp(u, v);
+        const xOff = perspOff(u, tl.x - VP_X, tr.x - VP_X);
+        const ytOff = perspOff(u, tl.y - VP_Y, tr.y - VP_Y);
+        const ybOff = perspOff(u, bl.y - VP_Y, br.y - VP_Y);
+        return { x: VP_X + xOff, y: VP_Y + (1 - v) * ybOff + v * ytOff };
+      };
+      const wl = 0.15, wr = 0.85, wb = 0.5, wt = 0.78;
+      // 不透明フレームで半透明ベースを上書き（のぞき窓以外）
+      graph.fillStyle(DOOR_COLOR, 1.0);
+      graph.fillPoints([bpPersp(0, 0), bpPersp(1, 0), bpPersp(1, wb), bpPersp(0, wb)], true);
+      graph.fillPoints([bpPersp(0, wt), bpPersp(1, wt), bpPersp(1, 1), bpPersp(0, 1)], true);
+      graph.fillPoints([bpPersp(0, wb), bpPersp(wl, wb), bpPersp(wl, wt), bpPersp(0, wt)], true);
+      graph.fillPoints([bpPersp(wr, wb), bpPersp(1, wb), bpPersp(1, wt), bpPersp(wr, wt)], true);
+      // 窓の輪郭線
+      graph.lineStyle(1, 0x888888, 1.0);
+      graph.strokePoints([bpPersp(wl, wb), bpPersp(wr, wb), bpPersp(wr, wt), bpPersp(wl, wt)], true);
+      // 中央垂直仕切り線（観音開き）—— 透視図ベースの正確な中点
+      const botPt = bpPersp(0.5, 0), topPt = bpPersp(0.5, 1);
+      graph.beginPath().moveTo(botPt.x, botPt.y).lineTo(topPt.x, topPt.y).strokePath();
+      // 取っ手（仕切り線の両側・窓の下）
+      graph.fillStyle(0x202020, 1.0);
+      graph.fillPoints([bpPersp(0.36, 0.34), bpPersp(0.47, 0.34), bpPersp(0.47, 0.42), bpPersp(0.36, 0.42)], true);
+      graph.fillPoints([bpPersp(0.53, 0.34), bpPersp(0.64, 0.34), bpPersp(0.64, 0.42), bpPersp(0.53, 0.42)], true);
+    };
+
     for (let i = 0; i < blockList.length; i++) {
       // デバッグ用描画距離によって枠線を色分け
       // graph.lineStyle(2, [0x0000FF,0x00FFFF,0x00FF00,0xFFFF00,0xFF0000,0xFF00FF][i%6]);
@@ -288,11 +331,11 @@ export class MainView {
           if (pol) {
             graph.strokePoints(pol.points, true)
             if (blockList[i][order][0] & (8 << 4)) {
-              graph.fillStyle(0xFFFFFF, 0.5);
+              drawDoor(pol);
             } else {
               graph.fillStyle(0xFFFFFF);
+              graph.fillPoints(pol.points, true);
             }
-            graph.fillPoints(pol.points, true)
           }
         }
         if ((blockList[i][order][0] & 1) && this.polygonList[RANGE - i][order][1]) {
@@ -300,11 +343,11 @@ export class MainView {
           if (pol) {
             graph.strokePoints(pol.points, true)
             if (blockList[i][order][0] & (1 << 4)) {
-              graph.fillStyle(0xFFFFFF, 0.5);
+              drawDoor(pol);
             } else {
               graph.fillStyle(0xFFFFFF);
+              graph.fillPoints(pol.points, true);
             }
-            graph.fillPoints(pol.points, true)
           }
         }
         for (const object of dun.getObject(blockList[i][order][1], blockList[i][order][2])) {
@@ -318,7 +361,7 @@ export class MainView {
             graph.strokePoints(pol.points, true);
             graph.strokePoints([pol.points[0], pol.points[2]], true);
             graph.strokePoints([pol.points[1], pol.points[3]], true);
-            graph.lineStyle(1, 0x0);
+            graph.lineStyle(1, 0x0, 1);
             graph.fillStyle(object.color, 0.3);
             graph.fillPoints(pol.points, true);
             const inner1 = this.floorInner1List[RANGE - i][order];
@@ -344,11 +387,11 @@ export class MainView {
           if (pol) {
             graph.strokePoints(pol.points, true)
             if (blockList[i][order + 1][0] & (8 << 4)) {
-              graph.fillStyle(0xFFFFFF, 0.5);
+              drawDoor(pol);
             } else {
               graph.fillStyle(0xFFFFFF);
+              graph.fillPoints(pol.points, true);
             }
-            graph.fillPoints(pol.points, true)
           }
         }
         if ((blockList[i][order + 1][0] & 4) && this.polygonList[RANGE - i][order + 1][1]) {
@@ -356,11 +399,11 @@ export class MainView {
           if (pol) {
             graph.strokePoints(pol.points, true)
             if (blockList[i][order + 1][0] & (4 << 4)) {
-              graph.fillStyle(0xFFFFFF, 0.5);
+              drawDoor(pol);
             } else {
               graph.fillStyle(0xFFFFFF);
+              graph.fillPoints(pol.points, true);
             }
-            graph.fillPoints(pol.points, true)
           }
         }
         for (const object of dun.getObject(blockList[i][order + 1][1], blockList[i][order + 1][2])) {
@@ -374,7 +417,7 @@ export class MainView {
             graph.strokePoints(pol.points, true);
             graph.strokePoints([pol.points[0], pol.points[2]], true);
             graph.strokePoints([pol.points[1], pol.points[3]], true);
-            graph.lineStyle(1, 0x0);
+            graph.lineStyle(1, 0x0, 1);
             graph.fillStyle(object.color, 0.3);
             graph.fillPoints(pol.points, true);
             const inner1 = this.floorInner1List[RANGE - i][order + 1];
@@ -402,11 +445,11 @@ export class MainView {
         if (pol) {
           graph.strokePoints(pol.points, true)
           if (blockList[i][0][0] & (1 << 4)) {
-            graph.fillStyle(0xFFFFFF, 0.5);
+            drawDoor(pol);
           } else {
             graph.fillStyle(0xFFFFFF);
+            graph.fillPoints(pol.points, true);
           }
-          graph.fillPoints(pol.points, true)
         }
       }
       if ((blockList[i][0][0] & 4) && this.polygonList[RANGE - i][0][1]) {
@@ -414,11 +457,11 @@ export class MainView {
         if (pol) {
           graph.strokePoints(pol.points, true)
           if (blockList[i][0][0] & (4 << 4)) {
-            graph.fillStyle(0xFFFFFF, 0.5);
+            drawDoor(pol);
           } else {
             graph.fillStyle(0xFFFFFF);
+            graph.fillPoints(pol.points, true);
           }
-          graph.fillPoints(pol.points, true)
         }
       }
       if ((blockList[i][0][0] & 8) && this.polygonList[RANGE - i][0][3]) {
@@ -426,11 +469,11 @@ export class MainView {
         if (pol) {
           graph.strokePoints(pol.points, true)
           if (blockList[i][0][0] & (8 << 4)) {
-            graph.fillStyle(0xFFFFFF, 0.5);
+            drawDoor(pol);
           } else {
             graph.fillStyle(0xFFFFFF);
+            graph.fillPoints(pol.points, true);
           }
-          graph.fillPoints(pol.points, true)
         }
       }
       for (const object of dun.getObject(blockList[i][0][1], blockList[i][0][2])) {
@@ -444,7 +487,7 @@ export class MainView {
           graph.strokePoints(pol.points, true);
           graph.strokePoints([pol.points[0], pol.points[2]], true);
           graph.strokePoints([pol.points[1], pol.points[3]], true);
-          graph.lineStyle(1, 0x0);
+          graph.lineStyle(1, 0x0, 1);
           graph.fillStyle(object.color, 0.3);
           graph.fillPoints(pol.points, true);
           const inner1 = this.floorInner1List[RANGE - i][0];
@@ -473,9 +516,9 @@ export class MainView {
     }
 
     // 枠線の描画
-    graph.lineStyle(4, 0);
+    graph.lineStyle(4, 0, 1);
     graph.strokeRectShape(frame);
-    graph.lineStyle(2, 0xFFFFFF);
+    graph.lineStyle(2, 0xFFFFFF, 1);
     graph.strokeRectShape(frame);
   }
 }
