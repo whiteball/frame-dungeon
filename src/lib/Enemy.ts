@@ -24,6 +24,10 @@ export class Enemy extends MapObject {
     private target: { x: integer; y: integer } | null = null;
     // 状態異常/強化効果スロット（Player と同形式、同名効果は 1 エントリ）
     private activeStatusEffects: ActiveStatusEffect[] = [];
+    // 最後に扉を越えた出発セル。getDoorTargetsInZone で折り返しを防ぐために使用
+    private lastEnteredFrom: { x: integer; y: integer } | null = null;
+    // 有効な扉目標がなくランダムウォークした連続ターン数
+    private randomWalkCount: integer = 0;
 
     constructor(definition: EnemyDefinition, x: integer, y: integer, instanceId?: string) {
         super();
@@ -111,19 +115,41 @@ export class Enemy extends MapObject {
         }
 
         if (this.target === null) {
-            const doorTargets = dungeon.getDoorTargetsInZone(this.x, this.y);
+            let doorTargets = dungeon.getDoorTargetsInZone(this.x, this.y);
+            // 直前に越えた扉への逆行を防ぐ（ランダム移動で入口から離れた後も有効）
+            if (this.lastEnteredFrom !== null) {
+                const lfx = this.lastEnteredFrom.x, lfy = this.lastEnteredFrom.y;
+                doorTargets = doorTargets.filter(([tx, ty]) => !(tx === lfx && ty === lfy));
+            }
             if (doorTargets.length > 0) {
                 const [tx, ty] = doorTargets[getRandomInt(0, doorTargets.length)];
                 this.target = { x: tx, y: ty };
+                this.randomWalkCount = 0;
             }
         }
 
         if (this.target === null) {
+            // 有効な扉目標が見つからずランダムウォーク継続中
+            this.randomWalkCount++;
+            if (this.randomWalkCount >= 10) {
+                // 行き止まりで膠着しているので lastEnteredFrom をリセットして再探索を許可
+                this.lastEnteredFrom = null;
+                this.randomWalkCount = 0;
+            }
             const dir = getRandomInt(-1, 4);
-            if (dir !== -1) dungeon.tryMoveEnemy(this, dir as MapDirection);
+            if (dir !== -1) {
+                const prevX = this.x, prevY = this.y;
+                if (dungeon.tryMoveEnemy(this, dir as MapDirection)) {
+                    if (dungeon.getAt(prevX, prevY) & (16 << dir)) {
+                        this.lastEnteredFrom = { x: prevX, y: prevY };
+                        this.randomWalkCount = 0;
+                    }
+                }
+            }
             return;
         }
 
+        const prevX = this.x, prevY = this.y;
         let path: MapDirection[] | undefined = [];
         const blocked: [number, number][] = [];
         do {
@@ -132,15 +158,28 @@ export class Enemy extends MapObject {
                 const [dx, dy] = getDirectionOffset(path[0]);
                 blocked.push([this.x + dx, this.y + dy]);
             }
-            
+
             path = dungeon.findPath(this.x, this.y, this.target.x, this.target.y, { blockedPositions: blocked });
             if (path === undefined || path.length === 0) {
                 this.target = null;
                 const dir = getRandomInt(-1, 4);
-                if (dir !== -1) dungeon.tryMoveEnemy(this, dir as MapDirection);
+                if (dir !== -1) {
+                    const px2 = this.x, py2 = this.y;
+                    if (dungeon.tryMoveEnemy(this, dir as MapDirection)) {
+                        if (dungeon.getAt(px2, py2) & (16 << dir)) {
+                            this.lastEnteredFrom = { x: px2, y: py2 };
+                        }
+                    }
+                }
                 return;
             }
         } while (!dungeon.tryMoveEnemy(this, path[0]));
+
+        // 扉を越えた場合は出発セルを記録し、ランダムウォークカウンタをリセット
+        if (dungeon.getAt(prevX, prevY) & (16 << path[0])) {
+            this.lastEnteredFrom = { x: prevX, y: prevY };
+            this.randomWalkCount = 0;
+        }
 
         // 目標地点に到達したなら、それを解除する
         if (this.x === this.target.x && this.y === this.target.y) {
@@ -524,6 +563,8 @@ export class Enemy extends MapObject {
         }
         clone.isDead = this.isDead;
         clone.target = this.target ? { ...this.target } : null;
+        clone.lastEnteredFrom = this.lastEnteredFrom ? { ...this.lastEnteredFrom } : null;
+        clone.randomWalkCount = this.randomWalkCount;
         clone.activeStatusEffects = this.activeStatusEffects.map(e => ({ name: e.name, count: e.count }));
         return clone;
     }
