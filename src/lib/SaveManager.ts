@@ -106,7 +106,7 @@ export class SaveManager {
             YAML_KEYS.map(async (key) => {
                 const custom = CustomDataStore.get(key);
                 if (custom !== undefined) return custom;
-                const res = await fetch(`/data/${key}.yml`);
+                const res = await fetch(`${import.meta.env.BASE_URL}data/${key}.yml`);
                 return res.text();
             })
         );

@@ -68,7 +68,7 @@ export class BaseLoader {
     async load(customText?: string): Promise<void> {
         if (this.loaded) return;
 
-        const filePath = '/data/base.yml';
+        const filePath = `${import.meta.env.BASE_URL}data/base.yml`;
         let yamlText: string;
 
         if (customText !== undefined) {

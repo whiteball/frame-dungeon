@@ -19,7 +19,7 @@ const phasermsg = () => {
 }
 
 export default defineConfig({
-    base: './',
+    base: '/frame-dungeon/',
     plugins: [
         vue(),
         phasermsg()

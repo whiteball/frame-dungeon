@@ -66,7 +66,7 @@ export class SkillsLoader {
     async loadSkills(): Promise<void> {
         this.compiledByName.clear();
         const customText = CustomDataStore.get('skills');
-        await this.store.load('/data/skills.yml', 'スキル', s => this.validateSkill(s), { customText });
+        await this.store.load(`${import.meta.env.BASE_URL}data/skills.yml`, 'スキル', s => this.validateSkill(s), { customText });
         for (const skill of this.store.getAll()) {
             this.compiledByName.set(skill.name, this.compile(skill));
         }

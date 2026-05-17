@@ -82,7 +82,7 @@ export class EffectsLoader {
     async loadEffects(): Promise<void> {
         this.compiledByName.clear();
         const customText = CustomDataStore.get('effects');
-        await this.store.load('/data/effects.yml', '状態異常', () => {}, { customText });
+        await this.store.load(`${import.meta.env.BASE_URL}data/effects.yml`, '状態異常', () => {}, { customText });
         for (const effect of this.store.getAll()) {
             this.compiledByName.set(effect.name, this.compile(effect));
         }

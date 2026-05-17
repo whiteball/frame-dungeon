@@ -77,7 +77,7 @@ export class ItemsLoader {
 
     async loadItems(): Promise<void> {
         const customText = CustomDataStore.get('items');
-        await this.store.load('/data/items.yml', 'アイテム', item => this.validateItemDefinition(item), { customText });
+        await this.store.load(`${import.meta.env.BASE_URL}data/items.yml`, 'アイテム', item => this.validateItemDefinition(item), { customText });
     }
 
     private validateItemDefinition(item: any): void {

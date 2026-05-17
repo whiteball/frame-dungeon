@@ -76,7 +76,7 @@ export class EnemyLoader {
 
     async loadEnemies(): Promise<void> {
         const customText = CustomDataStore.get('enemies');
-        await this.store.load('/data/enemies.yml', '敵', enemy => this.validateEnemyDefinition(enemy), { customText });
+        await this.store.load(`${import.meta.env.BASE_URL}data/enemies.yml`, '敵', enemy => this.validateEnemyDefinition(enemy), { customText });
 
         const allEnemies = this.store.getAll();
         for (const enemy of allEnemies) {

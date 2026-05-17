@@ -39,7 +39,7 @@ export class StatsLoader {
 
     async loadStats(): Promise<void> {
         const customText = CustomDataStore.get('stats');
-        await this.store.load('/data/stats.yml', 'ゲーム', () => {}, { required: true, customText });
+        await this.store.load(`${import.meta.env.BASE_URL}data/stats.yml`, 'ゲーム', () => {}, { required: true, customText });
     }
 
     getStats(): StatDefinition[] {

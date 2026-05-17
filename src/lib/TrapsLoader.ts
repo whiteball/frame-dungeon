@@ -42,7 +42,7 @@ export class TrapsLoader {
 
     async loadTraps(): Promise<void> {
         const customText = CustomDataStore.get('traps');
-        await this.store.load('/data/traps.yml', 'トラップ', trap => this.validateTrapDefinition(trap), { customText });
+        await this.store.load(`${import.meta.env.BASE_URL}data/traps.yml`, 'トラップ', trap => this.validateTrapDefinition(trap), { customText });
     }
 
     private validateTrapDefinition(trap: any): void {
