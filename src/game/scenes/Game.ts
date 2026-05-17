@@ -161,6 +161,7 @@ export class Game extends Scene {
             const floorConfig = BaseLoader.getInstance().getFloorConfig(this.floor);
             dungeon.resize(floorConfig.width, floorConfig.height);
             dungeon.build();
+            dungeon.resetFloorTurnCount();
             // dungeon.dump();
 
             // 敵をクリア
@@ -718,6 +719,8 @@ export class Game extends Scene {
         const lines: string[] = [];
 
         lines.push(`現在の階層：${this.floor}`);
+        lines.push(`総経過ターン数：${this.dungeon.getTurnCount()}`);
+        lines.push(`現在の階層のターン数：${this.dungeon.getFloorTurnCount()}`);
         lines.push(`レベル：${this.player.level}`);
         lines.push(`次のレベルまでの経験値：${this.player.expToNextLevel() - this.player.exp}`);
         lines.push('');

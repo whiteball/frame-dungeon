@@ -68,6 +68,7 @@ export interface DungeonSaveData {
     playerY: number;
     playerDirection: number;
     turnCount: number;
+    floorStartTurnCount?: number;
     rooms: RectData[];
     roomsWithCorridors: { room: RectData; corridors: RectData[] }[];
     objects: MapObjectSaveData[];

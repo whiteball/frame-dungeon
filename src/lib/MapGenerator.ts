@@ -67,6 +67,7 @@ export class DungeonMap {
   private _objectStore: MapObjectStore = new MapObjectStore();
   private _playerInstance: Player | null = null;
   private _turnCount: number = 0;
+  private _floorStartTurnCount: number = 0;
 
   constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
     this.resize(width, height);
@@ -955,6 +956,14 @@ export class DungeonMap {
     return this._turnCount;
   }
 
+  public getFloorTurnCount(): number {
+    return this._turnCount - this._floorStartTurnCount;
+  }
+
+  public resetFloorTurnCount(): void {
+    this._floorStartTurnCount = this._turnCount;
+  }
+
   /**
    * 2点が同じゾーン（部屋または通路ゾーン）に属するか判定する
    */
@@ -1091,6 +1100,7 @@ export class DungeonMap {
       playerY: this._player.y,
       playerDirection: this._player.direction,
       turnCount: this._turnCount,
+      floorStartTurnCount: this._floorStartTurnCount,
       rooms: this._rooms.map(r => ({ x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 })),
       roomsWithCorridors: this._roomsWithCorridors.map(rwc => ({
         room: { x1: rwc.room.x1, y1: rwc.room.y1, x2: rwc.room.x2, y2: rwc.room.y2 },
@@ -1109,6 +1119,7 @@ export class DungeonMap {
     this._mapWalked = [...data.mapWalked];
     this._mapCurrentView = new Array(this._width * this._height).fill(0);
     this._turnCount = data.turnCount;
+    this._floorStartTurnCount = data.floorStartTurnCount ?? data.turnCount;
     this._player = {
       x: data.playerX,
       y: data.playerY,
