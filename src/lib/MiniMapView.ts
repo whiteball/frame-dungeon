@@ -8,10 +8,7 @@ export class MiniMapView {
   private width: integer;
   private height: integer;
 
-  /**
-   * ミニマップの表示領域を全体かプレイヤー周囲にするかを切り替える
-   */
-  private fullMapMode: boolean = false;
+  private fullMapMode: boolean;
 
   /**
    * ミニマップビューを初期化する
@@ -20,8 +17,10 @@ export class MiniMapView {
    * @param y 描画開始Y座標
    * @param width ミニマップの幅
    * @param height ミニマップの高さ
+   * @param initialFullMapMode 初期表示モード（省略時はプレイヤー周囲のみ）
    */
-  constructor(factory: Phaser.GameObjects.GameObjectFactory, x: integer, y: integer, width: integer, height: integer) {
+  constructor(factory: Phaser.GameObjects.GameObjectFactory, x: integer, y: integer, width: integer, height: integer, initialFullMapMode: boolean = false) {
+    this.fullMapMode = initialFullMapMode;
     const mask = factory.graphics({ fillStyle: { color: 0xffffff, alpha: 0 } });
     mask.fillRect(x - 1, y - 1, width + 2, height + 2);
 
@@ -226,5 +225,9 @@ export class MiniMapView {
 
   public toggleMapMode() {
     return this.fullMapMode = !this.fullMapMode;
+  }
+
+  public getFullMapMode(): boolean {
+    return this.fullMapMode;
   }
 }

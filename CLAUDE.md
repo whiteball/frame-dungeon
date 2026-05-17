@@ -35,7 +35,7 @@
 - **モーダルモード**: `isModalMode`（`currentSceneActions !== defaultSceneActions`）が真のとき全キー入力をブロック。攻撃方向選択・階段確認・トラップ確認・アイテム使用一覧・装備変更などがこれを使用
 - **データ駆動 (`base.yml` 中心)**: `public/data/*.yml` を対応する Loader クラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`）が読み込む。**`base.yml` がゲーム全体の中核設定**で、ダメージ計算式・経験値必要量・レベルアップボーナス・フロア別構成（マップサイズ・敵プール・トラップ数）を formula 文字列として保持する（`expr-eval-fork` で評価）。ハードコードされた戦闘式やレベル式は存在しない
 - **カスタムデータ**: ローカル ZIP から YAML 群を差し込む機構（`CustomDataStore` + `PhaserGame.vue` の ZIP UI）。タイトルから「カスタムデータで開始」を選んだ場合 `public/data/` の代わりにこのストアの内容を使用
-- **キー操作**: W=前進、A=左回転、S=後退（180°回転）、D=右回転、スペース=正面の敵を攻撃、M=ミニマップ切替、C=ステータス表示、1〜0=画面下シーンアクションボタンのショートカット（左から順に割当）。デフォルトのシーンアクションは `[1:スキル, 2:アイテム使用, 3:装備変更, 4:ステータス, 5:足下, 6:セーブ]` の 6 個。E/Q キーは現在未実装（`Game.ts` でコメントアウト）
+- **キー操作**: W=前進、A=左回転、S=後退（180°回転）、D=右回転、スペース=正面の敵を攻撃、M=ミニマップ切替（ミニマップクリックでも同様にトグル）、C=ステータス表示、1〜0=画面下シーンアクションボタンのショートカット（左から順に割当）。デフォルトのシーンアクションは `[1:スキル, 2:アイテム使用, 3:装備変更, 4:ステータス, 5:足下, 6:セーブ]` の 6 個。E/Q キーは現在未実装（`Game.ts` でコメントアウト）
 - **メッセージログ**: `EventBus.emit('message-log', text, turnCount?)` で発行 → `PhaserGame.vue` の `<textarea>` に最新50件を表示。戦闘・アイテム・フロア移動・状態異常など全イベントをこのチャンネルに流すこと
 - **セーブ/ロード**: `SaveManager` が LocalStorage にスロット単位で保存（`SaveDialog` / `LoadDialog` 経由）。`yamlDigest` でデータ互換性を確認する
 - **スキルシステム**: `skills.yml` で定義したスキルをレベルアップ抽選（mastery）またはアイテム使用（`learnSkill` 効果）で習得し、`src/lib/skills/SkillExecutor.ts` 経由でコスト評価・target 解決・action 実行（`attack` / `damage` / `heal` / `reveal_trap`）を行う。スタン中（`_action: skip`）は発動不可。詳細は [docs/architecture.md](docs/architecture.md) のスキルシステム節を参照

@@ -237,7 +237,16 @@ export class Game extends Scene {
         }
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
-        this.miniMapView = new MiniMapView(this.add, this.game.canvas.width - 10 - 200, 10, 200, 200);
+        const miniMapX = this.game.canvas.width - 10 - 200;
+        const miniMapY = 10;
+        const miniMapSize = 200;
+        const savedMinimapMode = localStorage.getItem('frame_dungeon_minimap_full') === 'true';
+        this.miniMapView = new MiniMapView(this.add, miniMapX, miniMapY, miniMapSize, miniMapSize, savedMinimapMode);
+        const miniMapZone = this.add.zone(miniMapX + miniMapSize / 2, miniMapY + miniMapSize / 2, miniMapSize, miniMapSize).setInteractive();
+        miniMapZone.on('pointerdown', () => {
+            if (this.isModalMode) return;
+            this.toggleMiniMapMode();
+        });
         this.infoView = new InfoView(this.add, this.game.canvas.width - 10 - 200, 220, 200, 180);
         this.equipmentView = new EquipmentView(this.add, this.game.canvas.width - 10 - 200, 405, 200, 130);
 
@@ -287,8 +296,7 @@ export class Game extends Scene {
         // })
         this.keys.keyM?.on('down', () => {
             if (this.isModalMode) return;
-            this.miniMapView.toggleMapMode();
-            this.miniMapView.render(this.dungeon, this.showAllEnemies);
+            this.toggleMiniMapMode();
         })
 
         this.keys.keyC?.on('down', () => {
@@ -955,6 +963,12 @@ export class Game extends Scene {
     private setSceneActions(actions: SceneAction[]): void {
         this.currentSceneActions = actions;
         EventBus.emit('scene-actions', actions);
+    }
+
+    private toggleMiniMapMode(): void {
+        const isFullMap = this.miniMapView.toggleMapMode();
+        localStorage.setItem('frame_dungeon_minimap_full', String(isFullMap));
+        this.miniMapView.render(this.dungeon, this.showAllEnemies);
     }
 
     /**
