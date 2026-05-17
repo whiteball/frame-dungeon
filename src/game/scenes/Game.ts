@@ -10,7 +10,6 @@ import { Player } from '../../lib/Player';
 import type { Enemy } from '../../lib/Enemy';
 import type { Item } from '../../lib/Item';
 import { ItemsLoader } from '../../lib/ItemsLoader';
-import type { ItemDefinition } from '../../lib/ItemsLoader';
 import { TrapsLoader } from '../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { EffectsLoader } from '../../lib/EffectsLoader';
@@ -55,7 +54,7 @@ export class Game extends Scene {
     player: Player;
 
     private listMode: 'item' | 'equip' | 'drop' | 'skill' | null = null;
-    private pendingPickup: { mapObject: MapObject, itemDef: ItemDefinition } | null = null;
+    private pendingPickup: { mapObject: MapObject, item: Item } | null = null;
     private defaultSceneActions: SceneAction[] = [];
     private currentSceneActions: SceneAction[] = [];
     private get isModalMode(): boolean {
@@ -208,7 +207,9 @@ export class Game extends Scene {
                 });
                 for (const pos of itemPositions) {
                     const itemDef = itemDefs[Phaser.Math.Between(0, itemDefs.length - 1)];
-                    const itemObj = new ItemObject(itemDef);
+                    const item = Player.createItem(itemDef.name);
+                    if (!item) continue;
+                    const itemObj = new ItemObject(item);
                     itemObj.x = pos[0];
                     itemObj.y = pos[1];
                     this.dungeon.placeObject(itemObj);
@@ -413,7 +414,7 @@ export class Game extends Scene {
             this.closeList();
         });
 
-        EventBus.on('open-drop-list-for-pickup', (payload: { mapObject: MapObject, itemDef: ItemDefinition }) => {
+        EventBus.on('open-drop-list-for-pickup', (payload: { mapObject: MapObject, item: Item }) => {
             this.pendingPickup = payload;
             this.openDropList();
         });
@@ -422,23 +423,20 @@ export class Game extends Scene {
             const inventory = this.player.getInventory();
             const droppedItem = inventory.getItemById(payload.instanceId);
             if (!droppedItem) return;
-            const droppedDef = droppedItem.getDefinition();
             const pos = this.dungeon.getPlayerPos();
             inventory.removeItemById(payload.instanceId);
             const pending = this.pendingPickup;
             if (pending) {
-                const pickedItem = Player.createItem(pending.itemDef.name);
-                if (pickedItem) {
-                    inventory.addItem(pickedItem);
-                    EventBus.emit('message-log', `${pending.itemDef.label}を入手した`, this.dungeon.getTurnCount());
+                if (inventory.addItem(pending.item)) {
+                    EventBus.emit('message-log', `${pending.item.getLabel()}を入手した`, this.dungeon.getTurnCount());
                 }
                 this.dungeon.removeMapObject(pending.mapObject);
             }
-            const droppedObj = new ItemObject(droppedDef);
+            const droppedObj = new ItemObject(droppedItem);
             droppedObj.x = pos.x;
             droppedObj.y = pos.y;
             this.dungeon.placeObject(droppedObj);
-            EventBus.emit('message-log', `${droppedDef.label}を置いた`, this.dungeon.getTurnCount());
+            EventBus.emit('message-log', `${droppedItem.getLabel()}を置いた`, this.dungeon.getTurnCount());
             this.closeList();
             // 置く/入れ換えはターン非消費（dispatchObjectEvent を呼ばない）。
             // 呼んでしまうと置いた直後の around-0 で自動拾得が走り、置いたアイテムを即回収してしまう

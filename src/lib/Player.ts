@@ -9,6 +9,7 @@ import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { TrapsLoader } from './TrapsLoader';
 import { BaseLoader } from './BaseLoader';
 import { SkillsLoader } from './SkillsLoader';
+import { ItemModifiersLoader } from './ItemModifiersLoader';
 import type { PlayerSaveData } from './SaveManager';
 
 interface ActiveContinuousEffect {
@@ -40,6 +41,7 @@ export class Player {
     private static effectsLoader: EffectsLoader;
     private static trapsLoader: TrapsLoader;
     private static skillsLoader: SkillsLoader;
+    private static itemModifiersLoader: ItemModifiersLoader;
 
     level: number = 1;
     exp: number = 0;
@@ -100,6 +102,11 @@ export class Player {
         await this.skillsLoader.loadSkills();
     }
 
+    static async initializeItemModifiersSystem(): Promise<void> {
+        this.itemModifiersLoader = ItemModifiersLoader.getInstance();
+        await this.itemModifiersLoader.load();
+    }
+
     static async initializeAllSystems(): Promise<void> {
         await this.initializeStatsSystem();
         await this.initializeItemsSystem();
@@ -108,6 +115,7 @@ export class Player {
         await this.initializeTrapsSystem();
         await this.initializeBaseSystem();
         await this.initializeSkillsSystem();
+        await this.initializeItemModifiersSystem();
     }
 
     private initializeStats(): void {

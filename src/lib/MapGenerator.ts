@@ -14,6 +14,7 @@ import { findPath, findContainingZone, isInZone, hasLineOfSight, type FindPathOp
 import { BaseLoader } from './BaseLoader';
 import { StairsObject, TrapObject, ItemObject } from './map/MapObjects';
 import { ItemsLoader } from './ItemsLoader';
+import { Item } from './Item';
 import { TrapsLoader } from './TrapsLoader';
 import { EnemyLoader } from './EnemyLoader';
 import { StatsLoader } from './StatsLoader';
@@ -1086,7 +1087,7 @@ export class DungeonMap {
       } else if (obj instanceof TrapObject) {
         objects.push({ type: 'trap', x: obj.x, y: obj.y, trapName: obj.trapDef.name, visible: obj.visible });
       } else if (obj instanceof ItemObject) {
-        objects.push({ type: 'item', x: obj.x, y: obj.y, itemName: obj.itemDef.name });
+        objects.push({ type: 'item', x: obj.x, y: obj.y, item: obj.item.serialize() });
       }
     }
 
@@ -1167,9 +1168,17 @@ export class DungeonMap {
         obj.visible = objData.visible;
         this._objectStore.add(obj);
       } else if (objData.type === 'item') {
-        const itemDef = itemsLoader.getItem(objData.itemName);
-        if (!itemDef) continue;
-        const obj = new ItemObject(itemDef);
+        // 新形式（item: ItemSaveData）優先、旧形式（itemName のみ）は legacy フォールバック
+        let item: Item | null = null;
+        if (objData.item) {
+          const def = itemsLoader.getItem(objData.item.name);
+          if (def) item = Item.deserialize(objData.item, def);
+        } else if (objData.itemName) {
+          const def = itemsLoader.getItem(objData.itemName);
+          if (def) item = new Item(def);
+        }
+        if (!item) continue;
+        const obj = new ItemObject(item);
         obj.x = objData.x;
         obj.y = objData.y;
         this._objectStore.add(obj);

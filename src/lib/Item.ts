@@ -8,11 +8,19 @@ export class Item {
     private definition: ItemDefinition;
     private instanceId: string;
     private quantity: number;
+    private modifiers: Map<string, number>;
 
-    constructor(definition: ItemDefinition, instanceId?: string, quantity: number = 1) {
+    constructor(definition: ItemDefinition, instanceId?: string, quantity: number = 1, modifiers?: Map<string, number> | Record<string, number>) {
         this.definition = definition;
         this.instanceId = instanceId || this.generateInstanceId();
         this.quantity = quantity;
+        if (modifiers instanceof Map) {
+            this.modifiers = new Map(modifiers);
+        } else if (modifiers && typeof modifiers === 'object') {
+            this.modifiers = new Map(Object.entries(modifiers));
+        } else {
+            this.modifiers = new Map();
+        }
     }
 
     private generateInstanceId(): string {
@@ -112,9 +120,25 @@ export class Item {
         return this.isWeapon() || this.isMainArmor() || this.isSubArmor();
     }
 
+    // 修飾状態（modifier）
+    /**
+     * 全 modifier のスナップショットを Map で返す（読み取り専用扱い推奨）
+     */
+    getModifiers(): Map<string, number> {
+        return new Map(this.modifiers);
+    }
+
+    hasModifier(name: string): boolean {
+        return this.modifiers.has(name);
+    }
+
+    getModifierCount(name: string): number {
+        return this.modifiers.get(name) ?? 0;
+    }
+
     // ユーティリティ
     clone(newInstanceId?: string): Item {
-        return new Item(this.definition, newInstanceId, this.quantity);
+        return new Item(this.definition, newInstanceId, this.quantity, this.modifiers);
     }
 
     equals(other: Item): boolean {
@@ -129,11 +153,26 @@ export class Item {
         return `${this.getLabel()} (${this.getName()})${this.quantity > 1 ? ` x${this.quantity}` : ''}`;
     }
 
-    serialize(): { instanceId: string; name: string; quantity: number } {
-        return {
+    serialize(): { instanceId: string; name: string; quantity: number; modifiers?: Record<string, number> } {
+        const data: { instanceId: string; name: string; quantity: number; modifiers?: Record<string, number> } = {
             instanceId: this.instanceId,
             name: this.definition.name,
             quantity: this.quantity,
         };
+        if (this.modifiers.size > 0) {
+            data.modifiers = Object.fromEntries(this.modifiers);
+        }
+        return data;
+    }
+
+    /**
+     * セーブデータから Item を復元する。
+     * modifiers フィールドが欠落していても動作する（旧セーブ互換）。
+     */
+    static deserialize(
+        data: { instanceId: string; name: string; quantity: number; modifiers?: Record<string, number> },
+        definition: ItemDefinition
+    ): Item {
+        return new Item(definition, data.instanceId, data.quantity, data.modifiers);
     }
 }

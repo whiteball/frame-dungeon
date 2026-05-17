@@ -8,6 +8,8 @@ export interface ItemSaveData {
     instanceId: string;
     name: string;
     quantity: number;
+    /** 修飾状態（modifier）。name → count。欠落時は空として扱う（旧セーブ互換） */
+    modifiers?: Record<string, number>;
 }
 
 export interface ContinuousEffectSaveData {
@@ -40,7 +42,12 @@ export interface PlayerSaveData {
 export type MapObjectSaveData =
     | { type: 'stairs'; x: number; y: number }
     | { type: 'trap'; x: number; y: number; trapName: string; visible: boolean }
-    | { type: 'item'; x: number; y: number; itemName: string };
+    /**
+     * type: 'item' は新旧フォーマットの両方を受理する。
+     * - 新形式: item に ItemSaveData を持つ（modifier 対応）
+     * - 旧形式: itemName のみ。deserialize 時にデフォルトの Item として復元
+     */
+    | { type: 'item'; x: number; y: number; itemName?: string; item?: ItemSaveData };
 
 export interface EnemySaveData {
     instanceId: string;

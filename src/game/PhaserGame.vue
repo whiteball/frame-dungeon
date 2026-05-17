@@ -166,10 +166,14 @@ async function handleZipFile(event: Event): Promise<void> {
         const zip = await JSZip.loadAsync(file);
         const missing: string[] = [];
 
+        // item_modifiers.yml は後方互換のため任意（欠落時は public/data/ のデフォルトを使用）
+        const optionalKeys: ReadonlySet<string> = new Set(['item_modifiers']);
         for (const key of YAML_KEYS) {
             const entry = zip.file(`${key}.yml`) ?? zip.file(`data/${key}.yml`);
             if (!entry) {
-                missing.push(`${key}.yml`);
+                if (!optionalKeys.has(key)) {
+                    missing.push(`${key}.yml`);
+                }
             } else {
                 CustomDataStore.set(key, await entry.async('string'));
             }

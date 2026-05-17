@@ -35,7 +35,7 @@ Phaser のシーン構成は `src/game/main.ts` で定義：`Boot` → `Preloade
 
 **ゴール到達処理:** `enterStairMode()` で `this.floor >= BaseLoader.getGoalFloor()` のとき `GameClear` シーンへ遷移。それ以外は階段確認ダイアログ→`floor++`→マップ再生成。
 
-**マップオブジェクト生成:** `src/lib/map/MapObjects.ts` が `StairsObject` / `TrapObject` / `ItemObject` の `MapObject` 派生クラスを定義し、`src/game/scenes/mapObjectFactory.ts` の `buildStairsObject` / `buildTrapObject` が `Game.ts` 側のコールバックと組み合わせてイベントハンドラを差し込む。
+**マップオブジェクト生成:** `src/lib/map/MapObjects.ts` が `StairsObject` / `TrapObject` / `ItemObject` の `MapObject` 派生クラスを定義し、`src/game/scenes/mapObjectFactory.ts` の `buildStairsObject` / `buildTrapObject` が `Game.ts` 側のコールバックと組み合わせてイベントハンドラを差し込む。`ItemObject` は `Enemy` と同様にインスタンス（`Item`）を保持する（`ItemDefinition` ではない）。床に落ちているアイテム自体が個別の状態（後続フェーズで導入される修飾状態 modifier 等）を持てるようにするため、生成時に `Player.createItem(name)` 経由で `Item` を作って `new ItemObject(item)` に渡し、拾得時はその `Item` を再生成せず直接インベントリへ追加する。
 
 ## Vue-Phaser通信
 
@@ -126,22 +126,24 @@ src/components/dialogs/
 - **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
 - **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
 - **skills.yml**（`public/data/skills.yml`）: スキル定義（コスト・ターゲット・action 列・習得条件）。詳細は後述「スキルシステム」参照
+- **item_modifiers.yml**（`public/data/item_modifiers.yml`）: アイテム修飾状態（呪い・強化・弱化など）の定義。現状はスケルトン（空配列）で、後続フェーズで効果スキーマと自動付与ロジックを追加予定。ZIP カスタムデータでは欠落許容（後方互換のため optional 扱い）
 
-各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`）によって読み込まれます。
+各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`、`ItemModifiersLoader`）によって読み込まれます。
 
 ### Loader クラスと YamlDefinitionStore
 
-`StatsLoader` / `ItemsLoader` / `EnemyLoader` / `EffectsLoader` / `TrapsLoader` / `SkillsLoader` はシングルトンパターンを持つクラスで、固有のバリデーションとドメイン固有ゲッターのみを実装します。fetch・YAMLパース・格納・基本ゲッターの共通処理は `YamlDefinitionStore<T>`（`src/lib/YamlDefinitionStore.ts`）に委譲されます（コンポジション）。
+`StatsLoader` / `ItemsLoader` / `EnemyLoader` / `EffectsLoader` / `TrapsLoader` / `SkillsLoader` / `ItemModifiersLoader` はシングルトンパターンを持つクラスで、固有のバリデーションとドメイン固有ゲッターのみを実装します。fetch・YAMLパース・格納・基本ゲッターの共通処理は `YamlDefinitionStore<T>`（`src/lib/YamlDefinitionStore.ts`）に委譲されます（コンポジション）。
 
 `BaseLoader` は単一スカラー/フォーマット混在の構造（`floors[]` 配列、複数 formula、スカラー定数）のため `YamlDefinitionStore` に乗らず独自に fetch/parse する。
 
 ```text
-StatsLoader ──────┐
-ItemsLoader ──────┤
-EnemyLoader ──────┼─── YamlDefinitionStore<T>（fetch / parse / store / getAll / getByName）
-EffectsLoader ────┤
-TrapsLoader ──────┤
-SkillsLoader ─────┘
+StatsLoader ──────────┐
+ItemsLoader ──────────┤
+EnemyLoader ──────────┼─── YamlDefinitionStore<T>（fetch / parse / store / getAll / getByName）
+EffectsLoader ────────┤
+TrapsLoader ──────────┤
+SkillsLoader ─────────┤
+ItemModifiersLoader ──┘
 
 BaseLoader ───────── 独自実装（fetch / parse / formula コンパイル）
 ```

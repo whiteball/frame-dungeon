@@ -307,10 +307,10 @@ export function searchAt(dungeon: DungeonMap, targetX: integer, targetY: integer
         }
       } else if (object instanceof ItemObject) {
         if (object.visible) {
-          EventBus.emit('message-log', `${object.itemDef.label}がある。`, turnCount);
+          EventBus.emit('message-log', `${object.item.getLabel()}がある。`, turnCount);
         } else {
           object.visible = true;
-          EventBus.emit('message-log', `${object.itemDef.label}を発見した！`, turnCount);
+          EventBus.emit('message-log', `${object.item.getLabel()}を発見した！`, turnCount);
         }
       } else if (object instanceof StairsObject) {
         EventBus.emit('message-log', `階段がある。`, turnCount);
