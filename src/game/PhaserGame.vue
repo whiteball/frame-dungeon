@@ -42,6 +42,8 @@ const settingsVisible = ref(false);
 const settingsViewRange = ref(3);
 const settingsEnableFog = ref(true);
 const settingsShowAllEnemies = ref(false);
+const settingsSwapQEandAD = ref(false);
+const settingsSwapSandShiftS = ref(false);
 
 const statusVisible = ref(false);
 const statusText = ref('');
@@ -249,10 +251,12 @@ onMounted(() => {
         selectedIndex.value = 0;
     });
 
-    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean }) => {
+    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean }) => {
         settingsViewRange.value = data.viewRange;
         settingsEnableFog.value = data.enableFog;
         settingsShowAllEnemies.value = data.showAllEnemies;
+        settingsSwapQEandAD.value = data.swapQEandAD;
+        settingsSwapSandShiftS.value = data.swapSandShiftS;
         settingsVisible.value = true;
     });
 
@@ -467,6 +471,8 @@ defineExpose({ scene, game });
             :initial-view-range="settingsViewRange"
             :initial-enable-fog="settingsEnableFog"
             :initial-show-all-enemies="settingsShowAllEnemies"
+            :initial-swap-q-e-and-a-d="settingsSwapQEandAD"
+            :initial-swap-s-and-shift-s="settingsSwapSandShiftS"
             @confirm="(p) => { EventBus.emit('settings-confirmed', p); settingsVisible = false; }"
             @cancel="settingsVisible = false"
         />

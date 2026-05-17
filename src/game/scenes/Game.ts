@@ -64,16 +64,20 @@ export class Game extends Scene {
     private viewRange = 3;
     private enableFog = true;
     private showAllEnemies = false;
+    private swapQEandAD = false;
+    private swapSandShiftS = false;
     private pendingSaveData: SaveData | null = null;
 
     constructor() {
         super('Game');
     }
 
-    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean; saveData?: SaveData }) {
+    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean; swapQEandAD?: boolean; swapSandShiftS?: boolean; saveData?: SaveData }) {
         this.viewRange = data.viewRange ?? 3;
         this.enableFog = data.enableFog ?? true;
         this.showAllEnemies = data.showAllEnemies ?? false;
+        this.swapQEandAD = data.swapQEandAD ?? false;
+        this.swapSandShiftS = data.swapSandShiftS ?? false;
         this.pendingSaveData = data.saveData ?? null;
     }
 
@@ -274,26 +278,50 @@ export class Game extends Scene {
         })
         this.keys.keyA?.on('down', () => {
             if (this.isModalMode) return;
-            this.executeAction(() => this.dungeon.turnLeftPlayer());
+            if (this.swapQEandAD) {
+                if (this.handlePlayerActionDirective()) return;
+                this.executeAction(() => this.dungeon.goLeftPlayer() > 0);
+            } else {
+                this.executeAction(() => this.dungeon.turnLeftPlayer());
+            }
         })
-        this.keys.keyS?.on('down', () => {
+        this.keys.keyS?.on('down', (event: KeyboardEvent) => {
             if (this.isModalMode) return;
-            this.executeAction(() => this.dungeon.turnBackPlayer());
+            const doStrafeBack = this.swapSandShiftS ? !event.shiftKey : event.shiftKey;
+            if (doStrafeBack) {
+                if (this.handlePlayerActionDirective()) return;
+                this.executeAction(() => this.dungeon.goBackPlayer() > 0);
+            } else {
+                this.executeAction(() => this.dungeon.turnBackPlayer());
+            }
         })
         this.keys.keyD?.on('down', () => {
             if (this.isModalMode) return;
-            this.executeAction(() => this.dungeon.turnRightPlayer());
+            if (this.swapQEandAD) {
+                if (this.handlePlayerActionDirective()) return;
+                this.executeAction(() => this.dungeon.goRightPlayer() > 0);
+            } else {
+                this.executeAction(() => this.dungeon.turnRightPlayer());
+            }
         })
-        // this.keys.keyE?.on('down', () => {
-        //     if (this.dungeon.turnRightPlayer()) {
-        //         this.render()
-        //     }
-        // })
-        // this.keys.keyQ?.on('down', () => {
-        //     if (this.dungeon.turnLeftPlayer()) {
-        //         this.render()
-        //     }
-        // })
+        this.keys.keyE?.on('down', () => {
+            if (this.isModalMode) return;
+            if (this.swapQEandAD) {
+                this.executeAction(() => this.dungeon.turnRightPlayer());
+            } else {
+                if (this.handlePlayerActionDirective()) return;
+                this.executeAction(() => this.dungeon.goRightPlayer() > 0);
+            }
+        })
+        this.keys.keyQ?.on('down', () => {
+            if (this.isModalMode) return;
+            if (this.swapQEandAD) {
+                this.executeAction(() => this.dungeon.turnLeftPlayer());
+            } else {
+                if (this.handlePlayerActionDirective()) return;
+                this.executeAction(() => this.dungeon.goLeftPlayer() > 0);
+            }
+        })
         this.keys.keyM?.on('down', () => {
             if (this.isModalMode) return;
             this.toggleMiniMapMode();

@@ -612,19 +612,45 @@ export class DungeonMap {
   }
 
   /**
-   * プレイヤーを現在の向きから右方向に移動させる
+   * プレイヤーを現在の向きから右方向に移動させる（向きは変わらない）
    * @returns 移動に成功した場合1、移動できない場合0
    */
   public goRightPlayer(): integer {
-    return this.movePlayer(rotateDirection(this._player.direction, 1))
+    const savedDirection = this._player.direction;
+    const result = this.movePlayer(rotateDirection(this._player.direction, 1));
+    if (result > 0) {
+      this._player.direction = savedDirection;
+      this.clearFogWithinPlayer();
+    }
+    return result;
   }
 
   /**
-   * プレイヤーを現在の向きから左方向に移動させる
+   * プレイヤーを現在の向きから左方向に移動させる（向きは変わらない）
    * @returns 移動に成功した場合1、移動できない場合0
    */
   public goLeftPlayer(): integer {
-    return this.movePlayer(rotateDirection(this._player.direction, 3))
+    const savedDirection = this._player.direction;
+    const result = this.movePlayer(rotateDirection(this._player.direction, 3));
+    if (result > 0) {
+      this._player.direction = savedDirection;
+      this.clearFogWithinPlayer();
+    }
+    return result;
+  }
+
+  /**
+   * プレイヤーを現在の向きから後方向に移動させる（向きは変わらない）
+   * @returns 移動に成功した場合1、移動できない場合0
+   */
+  public goBackPlayer(): integer {
+    const savedDirection = this._player.direction;
+    const result = this.movePlayer(rotateDirection(this._player.direction, 2));
+    if (result > 0) {
+      this._player.direction = savedDirection;
+      this.clearFogWithinPlayer();
+    }
+    return result;
   }
 
   /**
