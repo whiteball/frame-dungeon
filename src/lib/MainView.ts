@@ -7,6 +7,8 @@ export class MainView {
 
   private polygonList: (Phaser.Geom.Polygon | null)[][][];
   private centerList: (Phaser.Geom.Circle | null)[][];
+  private floorInner1List: (Phaser.Geom.Polygon | null)[][];
+  private floorInner2List: (Phaser.Geom.Polygon | null)[][];
   private frame: (Phaser.Geom.Rectangle | null);
   private ceil: (Phaser.Geom.Rectangle | null);
   private floor: (Phaser.Geom.Rectangle | null);
@@ -60,6 +62,9 @@ export class MainView {
   private prepareDrawPoints() {
     const polygonList: typeof this.polygonList = [];
     const centerList: typeof this.centerList = [];
+    const floorInner1List: typeof this.floorInner1List = [];
+    const floorInner2List: typeof this.floorInner2List = [];
+    const PHI_RATIO = 2 / (1 + Math.sqrt(5));
 
     const RANGE = this.range, RANGE_SIDE = this.rangeSide;
     const BLOCK_BASE_SIZE = this.blockSize, SCREEN_WIDTH = this.width, SCREEN_HEIGHT = this.height, ANGLE = this.angle / 180 * Math.PI;
@@ -119,10 +124,48 @@ export class MainView {
 
       polygonList.push(polygonListLine);
       centerList.push(centerListLine);
+
+      const computeInnerFloor = (r: number): (Phaser.Geom.Polygon | null)[] => {
+        const line: (Phaser.Geom.Polygon | null)[] = [];
+        const z_nr = targetDistanceMiddle - BLOCK_BASE_SIZE * r / 2;
+        const z_fr = targetDistanceMiddle + BLOCK_BASE_SIZE * r / 2;
+        const innerNearY = AB / z_nr;
+        const innerFarY = AB / z_fr;
+        const innerNear0 = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * r / 2) / z_nr;
+        const innerFar0 = CAMERA_SCREEN_DISTANCE * (BLOCK_BASE_SIZE * r / 2) / z_fr;
+        line[0] = new Phaser.Geom.Polygon([
+          CENTER_X + innerNear0, CENTER_Y + innerNearY,
+          CENTER_X + innerFar0, CENTER_Y + innerFarY,
+          CENTER_X - innerFar0, CENTER_Y + innerFarY,
+          CENTER_X - innerNear0, CENTER_Y + innerNearY,
+        ]);
+        for (let j = 1; j <= RANGE_SIDE; j++) {
+          const order = 2 * j - 1;
+          const x_inside = CAMERA_SCREEN_DISTANCE * BLOCK_BASE_SIZE * (j - r / 2);
+          const x_outside = CAMERA_SCREEN_DISTANCE * BLOCK_BASE_SIZE * (j + r / 2);
+          line[order] = new Phaser.Geom.Polygon([
+            CENTER_X + x_outside / z_fr, CENTER_Y + innerFarY,
+            CENTER_X + x_inside / z_fr, CENTER_Y + innerFarY,
+            CENTER_X + x_inside / z_nr, CENTER_Y + innerNearY,
+            CENTER_X + x_outside / z_nr, CENTER_Y + innerNearY,
+          ]);
+          line[order + 1] = new Phaser.Geom.Polygon([
+            CENTER_X - x_outside / z_fr, CENTER_Y + innerFarY,
+            CENTER_X - x_inside / z_fr, CENTER_Y + innerFarY,
+            CENTER_X - x_inside / z_nr, CENTER_Y + innerNearY,
+            CENTER_X - x_outside / z_nr, CENTER_Y + innerNearY,
+          ]);
+        }
+        return line;
+      };
+      floorInner1List.push(computeInnerFloor(PHI_RATIO));
+      floorInner2List.push(computeInnerFloor(PHI_RATIO * PHI_RATIO));
     }
 
     this.polygonList = polygonList;
     this.centerList = centerList;
+    this.floorInner1List = floorInner1List;
+    this.floorInner2List = floorInner2List;
     this.frame = frame;
     this.ceil = new Phaser.Geom.Rectangle(frame.left, frame.top, frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE))
     this.floor = new Phaser.Geom.Rectangle(frame.left, frame.top + frame.height / 2 + AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE), frame.width, frame.height / 2 - AB / (CAMERA_SCREEN_DISTANCE + SCREEN_DISTANCE + BLOCK_BASE_SIZE * RANGE))
@@ -271,9 +314,23 @@ export class MainView {
 
           const pol = this.polygonList[RANGE - i][order][2];
           if (pol) {
-            graph.strokePoints(pol.points, true)
-            graph.fillStyle(object.color, object.alpha);
-            graph.fillPoints(pol.points, true)
+            graph.lineStyle(1, 0x0, 0.5);
+            graph.strokePoints(pol.points, true);
+            graph.strokePoints([pol.points[0], pol.points[2]], true);
+            graph.strokePoints([pol.points[1], pol.points[3]], true);
+            graph.lineStyle(1, 0x0);
+            graph.fillStyle(object.color, 0.3);
+            graph.fillPoints(pol.points, true);
+            const inner1 = this.floorInner1List[RANGE - i][order];
+            if (inner1) {
+              graph.fillStyle(object.color, 0.6);
+              graph.fillPoints(inner1.points, true);
+            }
+            const inner2 = this.floorInner2List[RANGE - i][order];
+            if (inner2) {
+              graph.fillStyle(object.color, 1);
+              graph.fillPoints(inner2.points, true);
+            }
             const center = this.centerList[RANGE - i][order];
             if (object.sphere && center) {
               drawSphere(center, object.alpha);
@@ -313,9 +370,23 @@ export class MainView {
 
           const pol = this.polygonList[RANGE - i][order + 1][2];
           if (pol) {
-            graph.strokePoints(pol.points, true)
-            graph.fillStyle(object.color, object.alpha);
-            graph.fillPoints(pol.points, true)
+            graph.lineStyle(1, 0x0, 0.5);
+            graph.strokePoints(pol.points, true);
+            graph.strokePoints([pol.points[0], pol.points[2]], true);
+            graph.strokePoints([pol.points[1], pol.points[3]], true);
+            graph.lineStyle(1, 0x0);
+            graph.fillStyle(object.color, 0.3);
+            graph.fillPoints(pol.points, true);
+            const inner1 = this.floorInner1List[RANGE - i][order + 1];
+            if (inner1) {
+              graph.fillStyle(object.color, 0.6);
+              graph.fillPoints(inner1.points, true);
+            }
+            const inner2 = this.floorInner2List[RANGE - i][order + 1];
+            if (inner2) {
+              graph.fillStyle(object.color, 1);
+              graph.fillPoints(inner2.points, true);
+            }
             const center = this.centerList[RANGE - i][order + 1];
             if (object.sphere && center) {
               drawSphere(center, object.alpha);
@@ -369,9 +440,23 @@ export class MainView {
 
         const pol = this.polygonList[RANGE - i][0][2];
         if (pol) {
-          graph.strokePoints(pol.points, true)
-          graph.fillStyle(object.color, object.alpha);
-          graph.fillPoints(pol.points, true)
+          graph.lineStyle(1, 0x0, 0.5);
+          graph.strokePoints(pol.points, true);
+          graph.strokePoints([pol.points[0], pol.points[2]], true);
+          graph.strokePoints([pol.points[1], pol.points[3]], true);
+          graph.lineStyle(1, 0x0);
+          graph.fillStyle(object.color, 0.3);
+          graph.fillPoints(pol.points, true);
+          const inner1 = this.floorInner1List[RANGE - i][0];
+          if (inner1) {
+            graph.fillStyle(object.color, 0.6);
+            graph.fillPoints(inner1.points, true);
+          }
+          const inner2 = this.floorInner2List[RANGE - i][0];
+          if (inner2) {
+            graph.fillStyle(object.color, 1);
+            graph.fillPoints(inner2.points, true);
+          }
           const center = this.centerList[RANGE - i][0];
           if (object.sphere && center) {
             drawSphere(center, object.alpha);
