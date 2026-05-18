@@ -615,8 +615,9 @@ export class Game extends Scene {
         lines.push(`サブ防具２：${this.player.getEquippedSubArmor2()?.getLabelWithModifiers() ?? 'なし'}`);
         lines.push('');
 
-        lines.push('アイテム：');
-        const items = this.player.getInventory().getItems();
+        const inventory = this.player.getInventory();
+        lines.push(`アイテム(${inventory.getUsedCapacity()}/${inventory.getCapacity()})：`);
+        const items = inventory.getItems();
         if (items.length > 0) {
             for (const item of items) {
                 lines.push(item.getLabelWithModifiers());
