@@ -238,11 +238,6 @@ export class Game extends Scene {
         this.player = new Player();
         this.params = this.getDisplayParams();
 
-        // テスト用: 新規ゲーム時のみアイテムをプレイヤーに追加
-        if (!this.pendingSaveData) {
-            this.testItemSystem();
-        }
-
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         const miniMapX = this.game.canvas.width - 10 - 200;
         const miniMapY = 10;
@@ -480,187 +475,7 @@ export class Game extends Scene {
         }
         EventBus.emit('current-scene-ready', this);
 
-        // デバッグ用: コンソールから window.listMapItems() で現在フロアの床アイテムを一覧表示
-        // [{ x, y, name, label, modifiers }] を返し、ログにも整形出力する
-        (window as unknown as { listMapItems: () => Array<{ x: number; y: number; name: string; label: string; modifiers: Record<string, number> }> }).listMapItems = () => {
-            const turn = this.dungeon.getTurnCount();
-            const result: Array<{ x: number; y: number; name: string; label: string; modifiers: Record<string, number> }> = [];
-            for (const obj of this.dungeon.getObjects().values()) {
-                if (obj instanceof ItemObject) {
-                    const modifiers = Object.fromEntries(obj.item.getModifiers());
-                    result.push({
-                        x: obj.x,
-                        y: obj.y,
-                        name: obj.item.getName(),
-                        label: obj.item.getLabelWithModifiers(),
-                        modifiers,
-                    });
-                }
-            }
-            console.log(`[listMapItems] 床アイテム ${result.length} 個 (floor=${this.floor}):`);
-            console.table(result);
-            EventBus.emit('message-log', `（debug）床アイテム ${result.length} 個（詳細はコンソール参照）`, turn);
-            return result;
-        };
-
-        // デバッグ用: コンソールから window.addItemModifier('weapon', 'power_reinforced', 2) 等で装備中アイテムに modifier を付与
-        (window as unknown as { addItemModifier: (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string, count?: number) => boolean }).addItemModifier = (slot, name, count = 1) => {
-            const target = this.player.getItemInSlot(slot);
-            const turn = this.dungeon.getTurnCount();
-            if (!target) {
-                EventBus.emit('message-log', `（debug）${slot} に装備中のアイテムがありません`, turn);
-                return false;
-            }
-            const ok = target.setModifierCount(name, count);
-            if (ok) {
-                EventBus.emit('message-log', `（debug）${target.getLabelWithModifiers()} に ${name} を付与`, turn);
-                this.render();
-            } else {
-                EventBus.emit('message-log', `（debug）${name} は未定義 or 対象 type 不一致`, turn);
-            }
-            return ok;
-        };
-
-        // デバッグ用: コンソールから window.removeItemModifier('weapon', 'cursed') で modifier を除去
-        (window as unknown as { removeItemModifier: (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string) => boolean }).removeItemModifier = (slot, name) => {
-            const target = this.player.getItemInSlot(slot);
-            const turn = this.dungeon.getTurnCount();
-            if (!target) {
-                EventBus.emit('message-log', `（debug）${slot} に装備中のアイテムがありません`, turn);
-                return false;
-            }
-            const ok = target.removeModifier(name);
-            if (ok) {
-                EventBus.emit('message-log', `（debug）${target.getLabelWithModifiers()} から ${name} を除去`, turn);
-                this.render();
-            } else {
-                EventBus.emit('message-log', `（debug）${target.getLabel()} は ${name} を持っていません`, turn);
-            }
-            return ok;
-        };
-
-        // デバッグ用: コンソールから window.applyStatusEffect('poison') 等で状態異常を付与可能
-        (window as unknown as { applyStatusEffect: (name: string) => string }).applyStatusEffect = (name: string) => {
-            const result = this.player.applyStatusEffect(name);
-            if (result === 'applied') {
-                EventBus.emit('message-log', `（debug）${name} を付与`, this.dungeon.getTurnCount());
-                this.render();
-            } else if (result === 'resisted') {
-                EventBus.emit('message-log', `（debug）${name} を耐性で防いだ`, this.dungeon.getTurnCount());
-            } else {
-                EventBus.emit('message-log', `（debug）${name} は未定義 effect`, this.dungeon.getTurnCount());
-            }
-            return result;
-        };
-
-        // デバッグ用: コンソールから window.applyStatusEffectToEnemy('poison') 等で敵に状態異常を付与
-        // instanceId 未指定なら視界内で最も近い生存敵を選択
-        (window as unknown as { applyStatusEffectToEnemy: (name: string, instanceId?: string) => string }).applyStatusEffectToEnemy = (name: string, instanceId?: string) => {
-            const turn = this.dungeon.getTurnCount();
-            const enemies = this.dungeon.getEnemies().filter(e => e.isAlive());
-            let target: Enemy | null = (instanceId ? enemies.find(e => e.getInstanceId() === instanceId) : undefined) ?? null;
-            if (!target) {
-                const { x: px, y: py } = this.dungeon.getPlayerPos();
-                let best: Enemy | null = null;
-                let bestDist = Infinity;
-                for (const e of enemies) {
-                    if (!this.dungeon.hasLineOfSight(e.x, e.y, px, py)) continue;
-                    const d = Math.max(Math.abs(e.x - px), Math.abs(e.y - py));
-                    if (d < bestDist) { best = e; bestDist = d; }
-                }
-                target = best;
-            }
-            if (!target) {
-                EventBus.emit('message-log', `（debug）対象の敵が見つかりません`, turn);
-                return 'no-target';
-            }
-            const result = target.applyStatusEffect(name);
-            if (result === 'applied') {
-                EventBus.emit('message-log', `（debug）${target.getLabel()}に${name}を付与`, turn);
-                this.render();
-            } else if (result === 'resisted') {
-                EventBus.emit('message-log', `（debug）${target.getLabel()}は${name}を耐性で防いだ`, turn);
-            } else {
-                EventBus.emit('message-log', `（debug）${name} は未定義 effect`, turn);
-            }
-            return result;
-        };
-
-        // デバッグ用: コンソールから window.learnSkill('double_attack') 等でスキル習得
-        (window as unknown as { learnSkill: (name: string) => boolean }).learnSkill = (name: string) => {
-            const ok = this.player.learnSkill(name);
-            EventBus.emit('message-log',
-                ok ? `（debug）スキル「${name}」を習得` : `（debug）スキル「${name}」習得失敗（未定義 or 既習得）`,
-                this.dungeon.getTurnCount());
-            return ok;
-        };
-
-        // デバッグ用: コンソールから window.forgetSkill('double_attack') 等でスキル習得を取り消し
-        (window as unknown as { forgetSkill: (name: string) => boolean }).forgetSkill = (name: string) => {
-            const ok = this.player.forgetSkill(name);
-            EventBus.emit('message-log',
-                ok ? `（debug）スキル「${name}」を忘却` : `（debug）スキル「${name}」は未習得`,
-                this.dungeon.getTurnCount());
-            return ok;
-        };
-
-        // デバッグ用: コンソールから window.listSkills() で習得済みスキル一覧を取得
-        (window as unknown as { listSkills: () => string[] }).listSkills = () => {
-            return this.player.getLearnedSkillNames();
-        };
-
-        // デバッグ用: コンソールから window.addExp(50) で経験値を加算しレベルアップ＋mastery 抽選を発火
-        (window as unknown as { addExp: (n: number) => { levels: Array<{ level: number; learnedSkills: string[] }> } }).addExp = (n: number) => {
-            const result = this.player.addExp(n);
-            EventBus.emit('message-log', `（debug）経験値+${n}`, this.dungeon.getTurnCount());
-            const skillsLoader = SkillsLoader.getInstance();
-            for (const lv of result.levels) {
-                EventBus.emit('message-log', `レベルアップ！Lv${lv.level}`, this.dungeon.getTurnCount());
-                for (const skillName of lv.learnedSkills) {
-                    const label = skillsLoader.getSkill(skillName)?.label ?? skillName;
-                    EventBus.emit('message-log', `スキル「${label}」を習得した！`, this.dungeon.getTurnCount());
-                }
-            }
-            this.render();
-            return result;
-        };
-
-        // デバッグ用: コンソールから window.levelUpN(3) で経験値を介さず直接 n 回 levelUp を呼ぶ（mastery 抽選確認用）
-        (window as unknown as { levelUpN: (n?: number) => string[] }).levelUpN = (n: number = 1) => {
-            const allLearned: string[] = [];
-            for (let i = 0; i < n; i++) {
-                const learned = this.player.levelUp();
-                allLearned.push(...learned);
-                EventBus.emit('message-log', `（debug）レベルアップ！Lv${this.player.level}`, this.dungeon.getTurnCount());
-                for (const skillName of learned) {
-                    const label = SkillsLoader.getInstance().getSkill(skillName)?.label ?? skillName;
-                    EventBus.emit('message-log', `スキル「${label}」を習得した！`, this.dungeon.getTurnCount());
-                }
-            }
-            this.render();
-            return allLearned;
-        };
-
-        // デバッグ用: コンソールから window.window.findPath(1,1,2,7,false) 等で経路を表示
-        (window as unknown as { findPath: (
-            startX: integer,
-            startY: integer,
-            endX: integer,
-            endY: integer,
-            room: boolean,
-            blacked: [number, number][]
-        ) => any }).findPath = (
-            startX: integer,
-            startY: integer,
-            endX: integer,
-            endY: integer,
-            room: boolean,
-            blacked: [number, number][] = []
-        ) => {
-            const result = this.dungeon.findPath(startX, startY, endX, endY, {scope: room ? 'room' : 'full', blockedPositions: blacked});
-            console.debug(result);
-            return;
-        };
+        this.setupDebugCommands();
 
         this.defaultSceneActions = [
             { label: 'スキル', onClick: () => this.toggleList('skill') },
@@ -963,60 +778,224 @@ export class Game extends Scene {
     //     }
     // }
 
-    private testItemSystem(): void {
-        console.log('=== Item System Test ===');
-        
-        // アイテム作成テスト
-        const sword = Player.createItem('iron sword');
-        const shield = Player.createItem('round shield');
-        const ring = Player.createItem('silver ring');
-        const potion = Player.createItem('potion');
-        const powerPotion = Player.createItem('power potion');
-        const manaPotion = Player.createItem('mana potion');
-        
-        if (sword && shield && ring && potion && powerPotion && manaPotion) {
-            console.log('✓ アイテム作成成功');
-            console.log('- 鉄の剣:', sword.toString());
-            console.log('- 丸い盾:', shield.toString());
-            console.log('- 銀の指輪:', ring.toString());
-            console.log('- 薬:', potion.toString());
-            console.log('- 力の薬:', powerPotion.toString());
-            console.log('- 魔法の薬:', manaPotion.toString());
-            
-            // インベントリ追加テスト
-            const inventory = this.player.getInventory();
-            inventory.addItem(sword);
-            inventory.addItem(shield);
-            inventory.addItem(ring);
-            inventory.addItem(potion);
-            inventory.addItem(powerPotion);
-            inventory.addItem(manaPotion);
-            
-            console.log('✓ インベントリ追加成功');
-            console.log(`インベントリ使用量: ${inventory.getUsedCapacity()}/${inventory.getCapacity()}`);
-            
-            // 装備テスト
-            // const oldWeapon = this.player.equipItem(sword);
-            // const oldArmor = this.player.equipItem(shield);
-            // const oldRing = this.player.equipItem(ring);
-            
-            console.log('✓ 装備成功');
-            console.log('- 武器:', this.player.getEquippedWeapon()?.getLabel());
-            console.log('- メイン防具:', this.player.getEquippedMainArmor()?.getLabel());
-            console.log('- サブ防具1:', this.player.getEquippedSubArmor1()?.getLabel());
-            
-            // 装備ボーナス確認
-            const bonuses = this.player.getEquipmentBonuses();
-            console.log('✓ 装備ボーナス:');
-            for (const [stat, bonus] of bonuses) {
-                console.log(`- ${stat}: +${bonus}`);
+    /**
+     * DevTools コンソールから利用するデバッグ用関数を `window` に公開する。
+     * 全関数は `（debug）` プレフィックス付きでメッセージログに発行する。
+     */
+    private setupDebugCommands(): void {
+        const w = window as unknown as Record<string, unknown>;
+
+        // window.listMapItems() - 現在フロアの床アイテム一覧
+        w.listMapItems = () => {
+            const turn = this.dungeon.getTurnCount();
+            const result: Array<{ x: number; y: number; name: string; label: string; modifiers: Record<string, number> }> = [];
+            for (const obj of this.dungeon.getObjects().values()) {
+                if (obj instanceof ItemObject) {
+                    const modifiers = Object.fromEntries(obj.item.getModifiers());
+                    result.push({
+                        x: obj.x,
+                        y: obj.y,
+                        name: obj.item.getName(),
+                        label: obj.item.getLabelWithModifiers(),
+                        modifiers,
+                    });
+                }
             }
-            
-        } else {
-            console.error('✗ アイテム作成失敗');
-        }
-        
-        console.log('=== Test Complete ===');
+            console.log(`[listMapItems] 床アイテム ${result.length} 個 (floor=${this.floor}):`);
+            console.table(result);
+            EventBus.emit('message-log', `（debug）床アイテム ${result.length} 個（詳細はコンソール参照）`, turn);
+            return result;
+        };
+
+        // window.addItem('iron sword', 1) - 名前指定でアイテムをインベントリに追加（modifier 抽選なし）
+        w.addItem = (name: string, count: number = 1): number => {
+            const turn = this.dungeon.getTurnCount();
+            const inventory = this.player.getInventory();
+            let added = 0;
+            for (let i = 0; i < count; i++) {
+                const item = Player.createItem(name);
+                if (!item) {
+                    EventBus.emit('message-log', `（debug）${name} は未定義アイテム`, turn);
+                    break;
+                }
+                if (!inventory.addItem(item)) {
+                    EventBus.emit('message-log', `（debug）インベントリ満杯のため追加中断`, turn);
+                    break;
+                }
+                added++;
+            }
+            if (added > 0) {
+                EventBus.emit('message-log', `（debug）${name} を ${added} 個追加`, turn);
+                this.render();
+            }
+            return added;
+        };
+
+        // window.addTestItems() - 動作確認用の代表アイテムを一括追加
+        w.addTestItems = (): string[] => {
+            const turn = this.dungeon.getTurnCount();
+            const names = ['iron sword', 'round shield', 'silver ring', 'potion', 'power potion', 'mana potion'];
+            const inventory = this.player.getInventory();
+            const added: string[] = [];
+            for (const name of names) {
+                const item = Player.createItem(name);
+                if (!item) continue;
+                if (!inventory.addItem(item)) break;
+                added.push(name);
+            }
+            EventBus.emit('message-log', `（debug）テストアイテム ${added.length} 個を追加`, turn);
+            this.render();
+            return added;
+        };
+
+        // window.addItemModifier('weapon', 'power_reinforced', 2) - 装備中アイテムに modifier 付与
+        w.addItemModifier = (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string, count: number = 1): boolean => {
+            const target = this.player.getItemInSlot(slot);
+            const turn = this.dungeon.getTurnCount();
+            if (!target) {
+                EventBus.emit('message-log', `（debug）${slot} に装備中のアイテムがありません`, turn);
+                return false;
+            }
+            const ok = target.setModifierCount(name, count);
+            if (ok) {
+                EventBus.emit('message-log', `（debug）${target.getLabelWithModifiers()} に ${name} を付与`, turn);
+                this.render();
+            } else {
+                EventBus.emit('message-log', `（debug）${name} は未定義 or 対象 type 不一致`, turn);
+            }
+            return ok;
+        };
+
+        // window.removeItemModifier('weapon', 'cursed') - modifier 除去
+        w.removeItemModifier = (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string): boolean => {
+            const target = this.player.getItemInSlot(slot);
+            const turn = this.dungeon.getTurnCount();
+            if (!target) {
+                EventBus.emit('message-log', `（debug）${slot} に装備中のアイテムがありません`, turn);
+                return false;
+            }
+            const ok = target.removeModifier(name);
+            if (ok) {
+                EventBus.emit('message-log', `（debug）${target.getLabelWithModifiers()} から ${name} を除去`, turn);
+                this.render();
+            } else {
+                EventBus.emit('message-log', `（debug）${target.getLabel()} は ${name} を持っていません`, turn);
+            }
+            return ok;
+        };
+
+        // window.applyStatusEffect('poison') - プレイヤーに状態異常を付与
+        w.applyStatusEffect = (name: string): string => {
+            const result = this.player.applyStatusEffect(name);
+            if (result === 'applied') {
+                EventBus.emit('message-log', `（debug）${name} を付与`, this.dungeon.getTurnCount());
+                this.render();
+            } else if (result === 'resisted') {
+                EventBus.emit('message-log', `（debug）${name} を耐性で防いだ`, this.dungeon.getTurnCount());
+            } else {
+                EventBus.emit('message-log', `（debug）${name} は未定義 effect`, this.dungeon.getTurnCount());
+            }
+            return result;
+        };
+
+        // window.applyStatusEffectToEnemy('poison') - 敵に状態異常付与
+        // instanceId 未指定なら視界内で最も近い生存敵を選択
+        w.applyStatusEffectToEnemy = (name: string, instanceId?: string): string => {
+            const turn = this.dungeon.getTurnCount();
+            const enemies = this.dungeon.getEnemies().filter(e => e.isAlive());
+            let target: Enemy | null = (instanceId ? enemies.find(e => e.getInstanceId() === instanceId) : undefined) ?? null;
+            if (!target) {
+                const { x: px, y: py } = this.dungeon.getPlayerPos();
+                let best: Enemy | null = null;
+                let bestDist = Infinity;
+                for (const e of enemies) {
+                    if (!this.dungeon.hasLineOfSight(e.x, e.y, px, py)) continue;
+                    const d = Math.max(Math.abs(e.x - px), Math.abs(e.y - py));
+                    if (d < bestDist) { best = e; bestDist = d; }
+                }
+                target = best;
+            }
+            if (!target) {
+                EventBus.emit('message-log', `（debug）対象の敵が見つかりません`, turn);
+                return 'no-target';
+            }
+            const result = target.applyStatusEffect(name);
+            if (result === 'applied') {
+                EventBus.emit('message-log', `（debug）${target.getLabel()}に${name}を付与`, turn);
+                this.render();
+            } else if (result === 'resisted') {
+                EventBus.emit('message-log', `（debug）${target.getLabel()}は${name}を耐性で防いだ`, turn);
+            } else {
+                EventBus.emit('message-log', `（debug）${name} は未定義 effect`, turn);
+            }
+            return result;
+        };
+
+        // window.learnSkill('double_attack') - スキル習得
+        w.learnSkill = (name: string): boolean => {
+            const ok = this.player.learnSkill(name);
+            EventBus.emit('message-log',
+                ok ? `（debug）スキル「${name}」を習得` : `（debug）スキル「${name}」習得失敗（未定義 or 既習得）`,
+                this.dungeon.getTurnCount());
+            return ok;
+        };
+
+        // window.forgetSkill('double_attack') - スキル習得取り消し
+        w.forgetSkill = (name: string): boolean => {
+            const ok = this.player.forgetSkill(name);
+            EventBus.emit('message-log',
+                ok ? `（debug）スキル「${name}」を忘却` : `（debug）スキル「${name}」は未習得`,
+                this.dungeon.getTurnCount());
+            return ok;
+        };
+
+        // window.listSkills() - 習得済みスキル一覧
+        w.listSkills = (): string[] => this.player.getLearnedSkillNames();
+
+        // window.addExp(50) - 経験値加算（mastery 抽選含む）
+        w.addExp = (n: number) => {
+            const result = this.player.addExp(n);
+            EventBus.emit('message-log', `（debug）経験値+${n}`, this.dungeon.getTurnCount());
+            const skillsLoader = SkillsLoader.getInstance();
+            for (const lv of result.levels) {
+                EventBus.emit('message-log', `レベルアップ！Lv${lv.level}`, this.dungeon.getTurnCount());
+                for (const skillName of lv.learnedSkills) {
+                    const label = skillsLoader.getSkill(skillName)?.label ?? skillName;
+                    EventBus.emit('message-log', `スキル「${label}」を習得した！`, this.dungeon.getTurnCount());
+                }
+            }
+            this.render();
+            return result;
+        };
+
+        // window.levelUpN(3) - 経験値を介さず直接 n 回 levelUp（mastery 抽選確認用）
+        w.levelUpN = (n: number = 1): string[] => {
+            const allLearned: string[] = [];
+            for (let i = 0; i < n; i++) {
+                const learned = this.player.levelUp();
+                allLearned.push(...learned);
+                EventBus.emit('message-log', `（debug）レベルアップ！Lv${this.player.level}`, this.dungeon.getTurnCount());
+                for (const skillName of learned) {
+                    const label = SkillsLoader.getInstance().getSkill(skillName)?.label ?? skillName;
+                    EventBus.emit('message-log', `スキル「${label}」を習得した！`, this.dungeon.getTurnCount());
+                }
+            }
+            this.render();
+            return allLearned;
+        };
+
+        // window.findPath(1,1,2,7,false) - 経路探索結果をコンソール出力
+        w.findPath = (
+            startX: integer,
+            startY: integer,
+            endX: integer,
+            endY: integer,
+            room: boolean,
+            blacked: [number, number][] = []
+        ) => {
+            const result = this.dungeon.findPath(startX, startY, endX, endY, {scope: room ? 'room' : 'full', blockedPositions: blacked});
+            console.debug(result);
+        };
     }
 
     private spawnEnemies(dungeon: DungeonMap, config: ResolvedFloorConfig, excludePositions: integer[][] = []): void {
