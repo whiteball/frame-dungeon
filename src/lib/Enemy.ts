@@ -28,6 +28,8 @@ export class Enemy extends MapObject {
     private lastEnteredFrom: { x: integer; y: integer } | null = null;
     // 有効な扉目標がなくランダムウォークした連続ターン数
     private randomWalkCount: integer = 0;
+    // target がプレイヤー視認由来か（false=ウェイポイント）。else if の扉リダイレクトはプレイヤー追跡時のみ有効
+    private targetIsPlayerPos: boolean = false;
 
     constructor(definition: EnemyDefinition, x: integer, y: integer, instanceId?: string) {
         super();
@@ -92,12 +94,14 @@ export class Enemy extends MapObject {
         if (this.target !== null && this.x === this.target.x && this.y === this.target.y) {
             // すでに目標地点にいるなら、新たな目標を探す
             this.target = null;
+            this.targetIsPlayerPos = false;
         }
 
         if (dungeon.hasLineOfSight(this.x, this.y, px, py)) {
             this.target = { x: px, y: py };
-        } else if (this.target !== null && dungeon.hasLineOfSight(this.x, this.y, this.target.x, this.target.y)) {
-            // 目標地点が部屋内で、プレイヤーが部屋内にいない場合
+            this.targetIsPlayerPos = true;
+        } else if (this.targetIsPlayerPos && this.target !== null && dungeon.hasLineOfSight(this.x, this.y, this.target.x, this.target.y)) {
+            // プレイヤー追跡中のみ: 目標地点に扉があれば、その先を新たな目標にする
             const outsides = [];
             const val = dungeon.getAt(this.target.x, this.target.y);
             for (let d = 0; d < 4; d++) {
@@ -108,7 +112,7 @@ export class Enemy extends MapObject {
                 }
             }
             if (outsides.length > 0) {
-                // 目標地点の隣の部屋の外を、新たな目標地点にする
+                // 目標地点の隣の部屋の外を、新たな目標地点にする（targetIsPlayerPos は true のまま）
                 const newTarget = outsides[getRandomInt(0, outsides.length)];
                 this.target = { x: newTarget[0], y: newTarget[1] };
             }
@@ -124,6 +128,7 @@ export class Enemy extends MapObject {
             if (doorTargets.length > 0) {
                 const [tx, ty] = doorTargets[getRandomInt(0, doorTargets.length)];
                 this.target = { x: tx, y: ty };
+                this.targetIsPlayerPos = false;
                 this.randomWalkCount = 0;
             }
         }
@@ -162,6 +167,7 @@ export class Enemy extends MapObject {
             path = dungeon.findPath(this.x, this.y, this.target.x, this.target.y, { blockedPositions: blocked });
             if (path === undefined || path.length === 0) {
                 this.target = null;
+                this.targetIsPlayerPos = false;
                 const dir = getRandomInt(-1, 4);
                 if (dir !== -1) {
                     const px2 = this.x, py2 = this.y;
@@ -184,6 +190,7 @@ export class Enemy extends MapObject {
         // 目標地点に到達したなら、それを解除する
         if (this.x === this.target.x && this.y === this.target.y) {
             this.target = null;
+            this.targetIsPlayerPos = false;
         }
     }
 
@@ -563,6 +570,7 @@ export class Enemy extends MapObject {
         }
         clone.isDead = this.isDead;
         clone.target = this.target ? { ...this.target } : null;
+        clone.targetIsPlayerPos = this.targetIsPlayerPos;
         clone.lastEnteredFrom = this.lastEnteredFrom ? { ...this.lastEnteredFrom } : null;
         clone.randomWalkCount = this.randomWalkCount;
         clone.activeStatusEffects = this.activeStatusEffects.map(e => ({ name: e.name, count: e.count }));
