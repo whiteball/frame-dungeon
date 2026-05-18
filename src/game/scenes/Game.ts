@@ -158,6 +158,7 @@ export class Game extends Scene {
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
             // フロア設定を取得してマップをリサイズ
             const floorConfig = BaseLoader.getInstance().getFloorConfig(this.floor);
+            dungeon.setCurrentFloor(this.floor);
             dungeon.resize(floorConfig.width, floorConfig.height);
             dungeon.build();
             dungeon.resetFloorTurnCount();
@@ -470,6 +471,7 @@ export class Game extends Scene {
             this.floor = sd.floor;
             this.player.deserialize(sd.player);
             this.dungeon.deserialize(sd.dungeon, this.buildDungeonRestoreCallbacks());
+            this.dungeon.setCurrentFloor(this.floor);
             this.dungeon.setPlayerInstance(this.player);
             EventBus.emit('update-view');
             this.pendingSaveData = null;

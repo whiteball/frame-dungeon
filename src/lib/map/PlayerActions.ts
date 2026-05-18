@@ -9,6 +9,7 @@ import { resolveTarget, type TargetCell } from '../skills/TargetResolver';
 import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
 import { StairsObject, TrapObject, ItemObject } from './MapObjects';
+import { tryEnemyDrop } from './EnemyDropResolver';
 
 /**
  * プレイヤーのターン消費アクション群
@@ -76,6 +77,7 @@ export function attackEnemyAt(dungeon: DungeonMap, targetX: integer, targetY: in
 
   if (!enemy.isAlive()) {
     dungeon.removeEnemy(targetX, targetY);
+    tryEnemyDrop(dungeon, enemy, dungeon.getCurrentFloor());
     const result = player.addExp(enemy.getExp());
     EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`, dungeon.getTurnCount());
     const skillsLoader = SkillsLoader.getInstance();

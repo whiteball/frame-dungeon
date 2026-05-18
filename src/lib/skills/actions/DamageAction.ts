@@ -4,6 +4,7 @@ import { Enemy } from '../../Enemy';
 import { EventBus } from '../../../game/EventBus';
 import { SkillsLoader } from '../../SkillsLoader';
 import { BaseLoader } from '../../BaseLoader';
+import { tryEnemyDrop } from '../../map/EnemyDropResolver';
 import type { DungeonMap } from '../../MapGenerator';
 import type { TargetCell } from '../TargetResolver';
 
@@ -85,6 +86,7 @@ export function executeDamageAction(
 
         if (!enemy.isAlive()) {
             dungeon.removeEnemy(enemy.x, enemy.y);
+            tryEnemyDrop(dungeon, enemy, dungeon.getCurrentFloor());
             const result = caster.addExp(enemy.getExp());
             EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`, turn);
             for (const lv of result.levels) {

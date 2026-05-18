@@ -1058,8 +1058,9 @@ export class Player {
     /**
      * @param options.rollModifiers true なら floor 設定に従って modifier を抽選付与
      * @param options.floor 抽選に使うフロア番号（rollModifiers=true 必須）
+     * @param options.modifierChanceOverride 抽選確率を上書き（敵ドロップ等で個別調整用）
      */
-    static createItem(itemName: string, options?: { rollModifiers?: boolean; floor?: number }): Item | null {
+    static createItem(itemName: string, options?: { rollModifiers?: boolean; floor?: number; modifierChanceOverride?: number }): Item | null {
         if (!this.itemsLoader) {
             console.error('ItemsLoader not initialized');
             return null;
@@ -1073,7 +1074,7 @@ export class Player {
 
         const item = new Item(definition);
         if (options?.rollModifiers && typeof options.floor === 'number') {
-            Player.rollFloorModifierFor(item, options.floor);
+            Player.rollFloorModifierFor(item, options.floor, options.modifierChanceOverride);
         }
         return item;
     }
@@ -1081,10 +1082,11 @@ export class Player {
     /**
      * 指定 floor の itemModifierChance/Pool に従って 1 回 modifier 抽選を行い、
      * 当選した場合に Item へ initial 抽選範囲の count で付与する。
+     * @param chanceOverride 確率を上書き（例: 敵ドロップ別設定）
      */
-    private static rollFloorModifierFor(item: Item, floor: number): void {
+    private static rollFloorModifierFor(item: Item, floor: number, chanceOverride?: number): void {
         const floorConfig = BaseLoader.getInstance().getFloorConfig(floor);
-        const chance = floorConfig.itemModifierChance;
+        const chance = chanceOverride ?? floorConfig.itemModifierChance;
         if (chance <= 0) return;
         if (Math.random() >= chance) return;
 

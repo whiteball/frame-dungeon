@@ -14,6 +14,22 @@ export interface EnemySkillEntry {
     rate: number;
 }
 
+/**
+ * 敵を倒したときのドロップ1エントリ。
+ * base.yml floor の enemyDropPool と enemies.yml の drop[] は additive に評価される。
+ */
+export interface EnemyDropEntry {
+    /** items.yml のアイテム名 */
+    item: string;
+    /** ドロップ確率 (0–1) */
+    rate: number;
+    /**
+     * このドロップに対する modifier 付与確率の上書き (0–1)。
+     * 未指定の場合は floor 設定の itemModifierChance を使用。
+     */
+    modifierChance?: number;
+}
+
 export interface EnemyDefinition {
     /**
      * 敵内部ID（英語）
@@ -51,13 +67,18 @@ export interface EnemyDefinition {
      */
     skills?: EnemySkillEntry[];
     /**
+     * 敵を倒したときの追加ドロップ。base.yml floor の enemyDropPool と additive に合成される。
+     * 各エントリは独立に rate で判定される。
+     */
+    drop?: EnemyDropEntry[];
+    /**
      * ステータス値（stats.ymlのnameをキーとする）
      * 例: { life: 20, power: 5, defense: 2 }
      */
-    [statName: string]: string | number | string[] | EnemySkillEntry[] | undefined;
+    [statName: string]: string | number | string[] | EnemySkillEntry[] | EnemyDropEntry[] | undefined;
 }
 
-const NON_RANK_FIELDS = new Set(['name', 'label', 'description', 'walk', 'color', 'resist', 'skills']);
+const NON_RANK_FIELDS = new Set(['name', 'label', 'description', 'walk', 'color', 'resist', 'skills', 'drop']);
 
 export class EnemyLoader {
     private static instance: EnemyLoader;
@@ -144,6 +165,28 @@ export class EnemyLoader {
         if (enemy.resist !== undefined) {
             if (!Array.isArray(enemy.resist) || enemy.resist.some((r: unknown) => typeof r !== 'string')) {
                 throw new Error(`Invalid enemy '${enemy.name}': 'resist' must be an array of strings`);
+            }
+        }
+
+        if (enemy.drop !== undefined) {
+            if (!Array.isArray(enemy.drop)) {
+                throw new Error(`Invalid enemy '${enemy.name}': 'drop' must be an array`);
+            }
+            for (let i = 0; i < enemy.drop.length; i++) {
+                const d = enemy.drop[i];
+                if (!d || typeof d !== 'object') {
+                    throw new Error(`Invalid enemy '${enemy.name}': drop[${i}] must be an object`);
+                }
+                if (typeof d.item !== 'string' || !d.item) {
+                    throw new Error(`Invalid enemy '${enemy.name}': drop[${i}].item must be a non-empty string`);
+                }
+                if (typeof d.rate !== 'number' || d.rate < 0 || d.rate > 1) {
+                    throw new Error(`Invalid enemy '${enemy.name}': drop[${i}].rate must be a number between 0 and 1`);
+                }
+                if (d.modifierChance !== undefined
+                    && (typeof d.modifierChance !== 'number' || d.modifierChance < 0 || d.modifierChance > 1)) {
+                    throw new Error(`Invalid enemy '${enemy.name}': drop[${i}].modifierChance must be a number between 0 and 1`);
+                }
             }
         }
     }

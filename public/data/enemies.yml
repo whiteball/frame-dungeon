@@ -7,6 +7,9 @@
   color: 0x00FF00
   description: 最も弱い魔物。ぷよぷよしている
   walk: random
+  drop:
+    - item: potion
+      rate: 0.3
 - name: goblin
   label: ゴブリン
   life: 35
@@ -77,6 +80,11 @@
   skills:
     - name: stun_strike
       rate: 0.2
+  # オーガは強化済みの武器を落とすことがある
+  drop:
+    - item: iron sword
+      rate: 0.15
+      modifierChance: 0.8
 - name: dragon
   label: ドラゴン
   life: 150

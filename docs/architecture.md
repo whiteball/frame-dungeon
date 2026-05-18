@@ -245,6 +245,10 @@ floors:
       itemModifierPool:         # 任意。modifier 名 → 追加重み（item_modifiers.yml の weight と乗算）
         power_reinforced: 3
         cursed: 1
+      enemyDropPool:            # 任意。フロア共通の敵ドロップ追加プール
+        - item: potion          # items.yml のアイテム名
+          rate: 0.05            # ドロップ確率 (0..1) 独立判定
+          modifierChance: 0.5   # 任意。当該ドロップの modifier 付与確率上書き
 ```
 
 `enemies` 内で `enemies.yml` に存在しない名前は warn + スキップ。`traps` も同様。`trapCount > 0` で `traps` が空の場合は warn のみ。
@@ -390,6 +394,8 @@ autoSpawner:
 - フロア床配置時の抽選フロー: `Game.ts` 床配置 → `Player.createItem(name, { rollModifiers: true, floor })` → `BaseLoader.getFloorConfig(floor).itemModifierChance` で確率判定 → 当選時 `ItemModifiersLoader.pickRandomFor(itemType, itemModifierPool)` で名前抽選 → `rollInitialCount(name)` で count 決定 → `Item.setModifierCount(name, count)`
 - 装備変更フロー：`PlayerActions.changeEquipment` は装備中アイテムの `canUnequip()` を判定し、`cannot_unequip` の場合は装備解除も置き換え装備もブロックしてメッセージ出力（ターン非消費）。一方、装備解除トラップ（`unequip` effect）は **ローグライク慣例に倣い `cannot_unequip` を無視して強制的に外す**
 - 巻物による付与/解除：`items.yml` の消耗品 `immediate.add_modifier` で装備中アイテムへ自動付与、`immediate.remove_modifier_kind: { kind, target }` で kind タグ一致の modifier を一括除去（解呪など）。サンプル: 攻撃強化の巻物 (`add_modifier: power_reinforced`) / 攻撃弱化の巻物 (`add_modifier: power_weakened`) / 解呪の巻物 (`remove_modifier_kind: { kind: curse, target: all_equipped }`)
+- 敵ドロップ経由の付与：`enemies.yml` の `drop: [{ item, rate, modifierChance? }]` と `base.yml` floor の `enemyDropPool` は additive。`src/lib/map/EnemyDropResolver.ts` の `tryEnemyDrop(dungeon, enemy, floor)` が両プールを連結して各エントリの rate で独立判定し、当選アイテムを敵が居たマスに `ItemObject` として配置。`modifierChance` が指定されているドロップは floor の `itemModifierChance` を上書きできる（敵ドロップだけ高確率にするなど）。`PlayerActions.attackEnemyAt` と `skills/actions/DamageAction.executeDamageAction` の両方の敵死亡経路から呼ばれる。フロア番号は `DungeonMap.getCurrentFloor()` から取得（go-to-next-floor とセーブロード時に `setCurrentFloor` で設定）
+- ドロップ配置の空きセル探索：敵死亡セルに既に `ItemObject` または生存敵が居る場合、`findDropTarget` がマンハッタン距離 2 以内かつ壁を越えずに 2 歩で到達可能な空きセルを 4 方向 BFS で探索（`Pathfinding.canPass` を使用して壁・扉判定）。プレイヤーセルは候補から除外する（直後の `dispatchObjectEvent` で即時拾得されてしまうのを防ぎ、床に一旦置かれることを保証するため。ただし BFS の中継点としては通過可能）。候補セルが見つからない場合はドロップを破棄し「床に余裕がなかった」ログを残す。同一マスに ItemObject が重複しないため、満杯インベントリで足元拾得時の `pendingPickup` 上書き問題を回避できる
 - UI 表示：装備変更ダイアログ・ステータスダイアログ・インベントリ・メッセージログは全て `Item.getLabelWithModifiers()` 経由で suffix 表示
 - セーブ：`ItemSaveData.modifiers?: Record<string,number>`（旧セーブでは省略、deserialize 時に空 Map）。未知 modifier 名はロード時にスキップ（警告ログ）
 

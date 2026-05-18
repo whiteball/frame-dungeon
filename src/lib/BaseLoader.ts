@@ -1,6 +1,6 @@
 import yaml from 'js-yaml';
 import { Parser, type Expression } from 'expr-eval-fork';
-import { EnemyLoader } from './EnemyLoader';
+import { EnemyLoader, type EnemyDropEntry } from './EnemyLoader';
 import { TrapsLoader } from './TrapsLoader';
 
 interface RawLevelUpBonusSpec {
@@ -25,6 +25,11 @@ export interface FloorConfigRaw {
     itemModifierChance?: number;
     /** 出現可能 modifier 名 → 追加重み。未指定なら item_modifiers.yml の weight のみで全 modifier から抽選 */
     itemModifierPool?: Record<string, number>;
+    /**
+     * フロア共通の敵ドロップ追加プール。
+     * enemies.yml の drop[] と additive に合成され、各エントリは独立に rate で判定される。
+     */
+    enemyDropPool?: EnemyDropEntry[];
 }
 
 export interface ResolvedFloorConfig {
@@ -38,6 +43,7 @@ export interface ResolvedFloorConfig {
     trapPool: string[];
     itemModifierChance: number;
     itemModifierPool?: Record<string, number>;
+    enemyDropPool: EnemyDropEntry[];
 }
 
 export class BaseLoader {
@@ -379,6 +385,22 @@ export class BaseLoader {
             }
         }
 
+        const enemyDropPool: EnemyDropEntry[] = [];
+        if (Array.isArray(raw.enemyDropPool)) {
+            for (const entry of raw.enemyDropPool) {
+                if (!entry || typeof entry !== 'object') continue;
+                if (typeof entry.item !== 'string' || typeof entry.rate !== 'number') continue;
+                if (entry.rate <= 0) continue;
+                enemyDropPool.push({
+                    item: entry.item,
+                    rate: Math.max(0, Math.min(1, entry.rate)),
+                    modifierChance: typeof entry.modifierChance === 'number'
+                        ? Math.max(0, Math.min(1, entry.modifierChance))
+                        : undefined,
+                });
+            }
+        }
+
         return {
             width, height,
             enemyCount: raw.enemyCount ?? 0,
@@ -386,6 +408,7 @@ export class BaseLoader {
             trapMin, trapMax, trapPool,
             itemModifierChance,
             itemModifierPool,
+            enemyDropPool,
         };
     }
 }

@@ -69,6 +69,7 @@ export class DungeonMap {
   private _playerInstance: Player | null = null;
   private _turnCount: number = 0;
   private _floorStartTurnCount: number = 0;
+  private _currentFloor: number = 1;
 
   constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
     this.resize(width, height);
@@ -963,6 +964,14 @@ export class DungeonMap {
 
   public resetFloorTurnCount(): void {
     this._floorStartTurnCount = this._turnCount;
+  }
+
+  public getCurrentFloor(): integer {
+    return this._currentFloor;
+  }
+
+  public setCurrentFloor(floor: integer): void {
+    this._currentFloor = floor;
   }
 
   /**

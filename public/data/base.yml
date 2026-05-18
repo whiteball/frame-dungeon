@@ -81,6 +81,12 @@ floors:
       traps:
         - spike
       itemModifierChance: 0.25
+      # フロア共通の敵ドロップ。enemies.yml の drop に additive
+      enemyDropPool:
+        - item: potion
+          rate: 0.05
+        - item: mana potion
+          rate: 0.05
   - 7:
       size:
         w: 20
@@ -105,6 +111,13 @@ floors:
         power_weakened: 1
         defense_weakened: 1
         cursed: 2
+      enemyDropPool:
+        - item: potion
+          rate: 0.08
+        - item: power scroll
+          rate: 0.05
+        - item: uncurse scroll
+          rate: 0.03
   - 10:
       size: 30
       enemyCount: 12

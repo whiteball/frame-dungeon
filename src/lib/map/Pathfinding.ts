@@ -83,7 +83,7 @@ function isOneStepOutsideDoor(
 }
 
 /** 現在地 (x, y) から方向 dir へ移動できるか（壁・扉・進入不可マスを考慮） */
-function canPass(dungeon: DungeonMap, x: integer, y: integer, dir: MapDirection): boolean {
+export function canPass(dungeon: DungeonMap, x: integer, y: integer, dir: MapDirection): boolean {
   const value = dungeon.getAt(x, y);
   if (value === -1) return false;
   const wallBit = 1 << dir;

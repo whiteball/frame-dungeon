@@ -83,6 +83,41 @@ export class YamlCrossValidator {
                     }
                 }
             }
+            if (rawConfig.enemyDropPool !== undefined) {
+                if (!Array.isArray(rawConfig.enemyDropPool)) {
+                    errors.push(`base.yml floors[${floorKey}]: enemyDropPool は配列である必要があります`);
+                } else {
+                    for (let i = 0; i < rawConfig.enemyDropPool.length; i++) {
+                        const d = rawConfig.enemyDropPool[i];
+                        if (!d || typeof d !== 'object') {
+                            errors.push(`base.yml floors[${floorKey}]: enemyDropPool[${i}] はオブジェクトである必要があります`);
+                            continue;
+                        }
+                        if (typeof d.item !== 'string' || !items.getItem(d.item)) {
+                            errors.push(`base.yml floors[${floorKey}]: enemyDropPool[${i}].item "${d.item}" が items.yml に存在しません`);
+                        }
+                        if (typeof d.rate !== 'number' || d.rate < 0 || d.rate > 1) {
+                            errors.push(`base.yml floors[${floorKey}]: enemyDropPool[${i}].rate は 0..1 の数値である必要があります`);
+                        }
+                        if (d.modifierChance !== undefined
+                            && (typeof d.modifierChance !== 'number' || d.modifierChance < 0 || d.modifierChance > 1)) {
+                            errors.push(`base.yml floors[${floorKey}]: enemyDropPool[${i}].modifierChance は 0..1 の数値である必要があります`);
+                        }
+                    }
+                }
+            }
+        }
+
+        // enemies.yml drop[] → items.yml
+        for (const enemy of enemies.getEnemies()) {
+            const dropList = enemy.drop;
+            if (!dropList) continue;
+            for (let i = 0; i < dropList.length; i++) {
+                const d = dropList[i];
+                if (!items.getItem(d.item)) {
+                    errors.push(`enemies.yml "${enemy.name}": drop[${i}].item "${d.item}" が items.yml に存在しません`);
+                }
+            }
         }
 
         // enemies.yml skills[].name → skills.yml（on_attack trigger 必須）
