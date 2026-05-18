@@ -35,7 +35,7 @@ Phaser のシーン構成は `src/game/main.ts` で定義：`Boot` → `Preloade
 
 **ゴール到達処理:** `enterStairMode()` で `this.floor >= BaseLoader.getGoalFloor()` のとき `GameClear` シーンへ遷移。それ以外は階段確認ダイアログ→`floor++`→マップ再生成。
 
-**マップオブジェクト生成:** `src/lib/map/MapObjects.ts` が `StairsObject` / `TrapObject` / `ItemObject` の `MapObject` 派生クラスを定義し、`src/game/scenes/mapObjectFactory.ts` の `buildStairsObject` / `buildTrapObject` が `Game.ts` 側のコールバックと組み合わせてイベントハンドラを差し込む。`ItemObject` は `Enemy` と同様にインスタンス（`Item`）を保持する（`ItemDefinition` ではない）。床に落ちているアイテム自体が個別の状態（後続フェーズで導入される修飾状態 modifier 等）を持てるようにするため、生成時に `Player.createItem(name)` 経由で `Item` を作って `new ItemObject(item)` に渡し、拾得時はその `Item` を再生成せず直接インベントリへ追加する。
+**マップオブジェクト生成:** `src/lib/map/MapObjects.ts` が `StairsObject` / `TrapObject` / `ItemObject` の `MapObject` 派生クラスを定義し、`src/game/scenes/mapObjectFactory.ts` の `buildStairsObject` / `buildTrapObject` が `Game.ts` 側のコールバックと組み合わせてイベントハンドラを差し込む。`ItemObject` は `Enemy` と同様にインスタンス（`Item`）を保持する（`ItemDefinition` ではない）。床に落ちているアイテム自体が個別の状態（修飾状態 modifier 等）を持てるようにするため、生成時に `Player.createItem(name, options?)` 経由で `Item` を作って `new ItemObject(item)` に渡し、拾得時はその `Item` を再生成せず直接インベントリへ追加する。
 
 ## Vue-Phaser通信
 
@@ -126,7 +126,7 @@ src/components/dialogs/
 - **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
 - **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
 - **skills.yml**（`public/data/skills.yml`）: スキル定義（コスト・ターゲット・action 列・習得条件）。詳細は後述「スキルシステム」参照
-- **item_modifiers.yml**（`public/data/item_modifiers.yml`）: アイテム修飾状態（呪い・強化・弱化など）の定義。`effect[].name` は `add_stats`（formula 評価結果を target stat に加算）/ `cannot_unequip`（装備解除ブロック）のいずれかをオブジェクト形式で記述。`target: [weapon|main_armor|sub_armor|consumable]` で適用可能 type を指定、`countable: true` の modifier は `max` と `initial.{min,max}` を伴い重ねがけ可能。`kind` タグで解呪等の一括除去対象を分類、`weight` はフロア床配置時の抽選重み（後続フェーズで使用）。ZIP カスタムデータでは欠落許容（後方互換のため optional 扱い）
+- **item_modifiers.yml**（`public/data/item_modifiers.yml`）: アイテム修飾状態（呪い・強化・弱化など）の定義。`effect[].name` は `add_stats`（formula 評価結果を target stat に加算）/ `cannot_unequip`（装備解除ブロック）のいずれかをオブジェクト形式で記述。`target: [weapon|main_armor|sub_armor|consumable]` で適用可能 type を指定、`countable: true` の modifier は `max` と `initial.{min,max}` を伴い重ねがけ可能。`kind` タグで解呪等の一括除去対象を分類、`weight` はフロア床配置・敵ドロップ時の抽選重み。詳細は後述「アイテム修飾状態（modifier）」節を参照。ZIP カスタムデータでは欠落許容（後方互換のため optional 扱い）
 
 各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`、`ItemModifiersLoader`）によって読み込まれます。
 
@@ -294,6 +294,8 @@ autoSpawner:
 - **Game Scene**: フロアごとに敵を自動生成・配置（フロア数に応じて難易度調整）
 
 敵は3Dビュー上で球体（ダイアモンド形マーク）として表示され、各敵は`enemies.yml`で定義された色で描画されます。
+
+敵を倒したときのアイテムドロップは `enemies.yml` の `drop: [{ item, rate, modifierChance? }]` と `base.yml` floor の `enemyDropPool` を additive に合成した結果に基づき、`src/lib/map/EnemyDropResolver.tryEnemyDrop` が処理する。詳細は後述「アイテム修飾状態（modifier）」節を参照。
 
 ### 敵の移動パターン（`walk` フィールド）
 

@@ -42,6 +42,7 @@
   - [x] マップ上のアイテム配置
   - [x] アイテム取得処理
   - [x] アイテム取得UI/フィードバック（`message-log` + 拾えないとき `open-drop-list-for-pickup` フロー）
+  - [x] 敵を倒した時のドロップ（`enemies.yml.drop` + `base.yml.enemyDropPool` の additive、`EnemyDropResolver`）
 
 ### UIの改善
 
@@ -74,7 +75,12 @@
 - [ ] 追加武器・防具
   - [ ] アイテム投擲と遠距離武器
   - [ ] レアリティシステム
-  - [ ] ランダム生成アイテム（接頭辞・接尾辞）
+  - [x] ランダム生成アイテム（接頭辞・接尾辞）
+    - [x] 修飾状態（modifier）システム: `item_modifiers.yml` + `ItemModifiersLoader`。`add_stats` / `cannot_unequip` 効果を装備中のみ発動
+    - [x] suffix 形式の表示ラベル（例: `鉄の剣 [攻+2/呪]`、`ItemLabelFormatter` 経由）
+    - [x] フロア床配置時の自動抽選（`base.yml` の `itemModifierChance` / `itemModifierPool` + modifier 側 `weight`）
+    - [x] 巻物による付与/解除（`add_modifier` / `remove_modifier_kind` immediate 効果）
+    - [x] 敵ドロップ時の付与（`base.yml.enemyDropPool` + `enemies.yml.drop` の additive 合成、空きセル探索付き）
   - [ ] セット装備ボーナス
 
 - [ ] 特殊アイテム
