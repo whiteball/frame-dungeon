@@ -241,9 +241,20 @@ floors:
         - { name: ogre, count: 1 }
       trapCount: 0              # number か { min, max }
       traps: [spike, swamp]     # トラップ候補プール（空可）
+      itemModifierChance: 0.15  # 任意。床配置アイテムに modifier を付与する確率 (0..1)
+      itemModifierPool:         # 任意。modifier 名 → 追加重み（item_modifiers.yml の weight と乗算）
+        power_reinforced: 3
+        cursed: 1
 ```
 
 `enemies` 内で `enemies.yml` に存在しない名前は warn + スキップ。`traps` も同様。`trapCount > 0` で `traps` が空の場合は warn のみ。
+
+**`itemModifierChance` / `itemModifierPool`:**
+
+- `itemModifierChance` (0..1) はフロア床配置時の modifier 付与確率。未指定または 0 なら付与なし。`Player.createItem(name, { rollModifiers: true, floor })` 経由で生成された Item にのみ適用される
+- `itemModifierPool` を指定すると **列挙された modifier 名のみが候補** となり、抽選重みは `item_modifiers.yml` の `weight` × pool の値で決まる（積算）
+- `itemModifierPool` を省略すると `item_modifiers.yml` の全 modifier が候補となり、各 `weight` のみで抽選される
+- `itemModifierPool` 内に存在しない modifier 名や負の重みがあれば `YamlCrossValidator` がエラーを返す
 
 ### 敵自動湧き判定 (`autoSpawner`)
 
@@ -375,7 +386,8 @@ autoSpawner:
 | `cannot_unequip` | 装備解除をブロック（呪い用） | （なし） |
 
 - `Item.modifiers: Map<string, number>` でアイテムごとに `name → count` を保持
-- `countable: true` の modifier は `max` でクランプ、`initial.{min,max}` で抽選範囲を定義（Phase 3 床配置時に使用）
+- `countable: true` の modifier は `max` でクランプ、`initial.{min,max}` の範囲で count を一様抽選（床配置時、`ItemModifiersLoader.rollInitialCount(name)`）
+- フロア床配置時の抽選フロー: `Game.ts` 床配置 → `Player.createItem(name, { rollModifiers: true, floor })` → `BaseLoader.getFloorConfig(floor).itemModifierChance` で確率判定 → 当選時 `ItemModifiersLoader.pickRandomFor(itemType, itemModifierPool)` で名前抽選 → `rollInitialCount(name)` で count 決定 → `Item.setModifierCount(name, count)`
 - 装備変更フロー：`PlayerActions.changeEquipment` は装備中アイテムの `canUnequip()` を判定し、`cannot_unequip` の場合は装備解除も置き換え装備もブロックしてメッセージ出力（ターン非消費）。一方、装備解除トラップ（`unequip` effect）は **ローグライク慣例に倣い `cannot_unequip` を無視して強制的に外す**
 - UI 表示：装備変更ダイアログ・ステータスダイアログ・インベントリ・メッセージログは全て `Item.getLabelWithModifiers()` 経由で suffix 表示
 - セーブ：`ItemSaveData.modifiers?: Record<string,number>`（旧セーブでは省略、deserialize 時に空 Map）。未知 modifier 名はロード時にスキップ（警告ログ）

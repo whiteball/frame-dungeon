@@ -66,6 +66,8 @@ floors:
         - goblin
       trapCount: 0
       traps:
+      # アイテム床配置時に 15% の確率で modifier を付与（item_modifiers.yml の weight で抽選）
+      itemModifierChance: 0.15
   - 4:
       size:
         w: 15
@@ -78,6 +80,7 @@ floors:
       trapCount: 4
       traps:
         - spike
+      itemModifierChance: 0.25
   - 7:
       size:
         w: 20
@@ -94,6 +97,14 @@ floors:
       traps:
         - spike
         - swamp
+      # 強化系を出やすくし、弱化系を出にくくするサンプル設定
+      itemModifierChance: 0.4
+      itemModifierPool:
+        power_reinforced: 3
+        defense_reinforced: 3
+        power_weakened: 1
+        defense_weakened: 1
+        cursed: 2
   - 10:
       size: 30
       enemyCount: 12
@@ -110,3 +121,4 @@ floors:
         - spike
         - swamp
         - strip
+      itemModifierChance: 0.5

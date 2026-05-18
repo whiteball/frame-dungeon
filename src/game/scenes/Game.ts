@@ -207,7 +207,7 @@ export class Game extends Scene {
                 });
                 for (const pos of itemPositions) {
                     const itemDef = itemDefs[Phaser.Math.Between(0, itemDefs.length - 1)];
-                    const item = Player.createItem(itemDef.name);
+                    const item = Player.createItem(itemDef.name, { rollModifiers: true, floor: this.floor });
                     if (!item) continue;
                     const itemObj = new ItemObject(item);
                     itemObj.x = pos[0];
@@ -477,6 +477,29 @@ export class Game extends Scene {
             EventBus.emit('go-to-next-floor', this.dungeon);
         }
         EventBus.emit('current-scene-ready', this);
+
+        // デバッグ用: コンソールから window.listMapItems() で現在フロアの床アイテムを一覧表示
+        // [{ x, y, name, label, modifiers }] を返し、ログにも整形出力する
+        (window as unknown as { listMapItems: () => Array<{ x: number; y: number; name: string; label: string; modifiers: Record<string, number> }> }).listMapItems = () => {
+            const turn = this.dungeon.getTurnCount();
+            const result: Array<{ x: number; y: number; name: string; label: string; modifiers: Record<string, number> }> = [];
+            for (const obj of this.dungeon.getObjects().values()) {
+                if (obj instanceof ItemObject) {
+                    const modifiers = Object.fromEntries(obj.item.getModifiers());
+                    result.push({
+                        x: obj.x,
+                        y: obj.y,
+                        name: obj.item.getName(),
+                        label: obj.item.getLabelWithModifiers(),
+                        modifiers,
+                    });
+                }
+            }
+            console.log(`[listMapItems] 床アイテム ${result.length} 個 (floor=${this.floor}):`);
+            console.table(result);
+            EventBus.emit('message-log', `（debug）床アイテム ${result.length} 個（詳細はコンソール参照）`, turn);
+            return result;
+        };
 
         // デバッグ用: コンソールから window.addItemModifier('weapon', 'power_reinforced', 2) 等で装備中アイテムに modifier を付与
         (window as unknown as { addItemModifier: (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string, count?: number) => boolean }).addItemModifier = (slot, name, count = 1) => {

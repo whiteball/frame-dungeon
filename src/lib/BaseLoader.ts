@@ -21,6 +21,10 @@ export interface FloorConfigRaw {
     enemies: (string | { name: string; count: number })[] | null;
     trapCount: number | { min: number; max: number };
     traps: string[] | null;
+    /** フロア床アイテムに modifier を付与する確率（0..1）。未指定/0 なら付与なし */
+    itemModifierChance?: number;
+    /** 出現可能 modifier 名 → 追加重み。未指定なら item_modifiers.yml の weight のみで全 modifier から抽選 */
+    itemModifierPool?: Record<string, number>;
 }
 
 export interface ResolvedFloorConfig {
@@ -32,6 +36,8 @@ export interface ResolvedFloorConfig {
     trapMin: number;
     trapMax: number;
     trapPool: string[];
+    itemModifierChance: number;
+    itemModifierPool?: Record<string, number>;
 }
 
 export class BaseLoader {
@@ -356,6 +362,30 @@ export class BaseLoader {
             console.warn(`base.yml floors[${key}]: trapCount=${trapMin} ですが traps リストが空です。トラップは配置されません`);
         }
 
-        return { width, height, enemyCount: raw.enemyCount ?? 0, fixedEnemies, randomEnemyPool, trapMin, trapMax, trapPool };
+        let itemModifierChance = 0;
+        if (typeof raw.itemModifierChance === 'number') {
+            itemModifierChance = Math.max(0, Math.min(1, raw.itemModifierChance));
+        }
+        let itemModifierPool: Record<string, number> | undefined;
+        if (raw.itemModifierPool && typeof raw.itemModifierPool === 'object' && !Array.isArray(raw.itemModifierPool)) {
+            const pool: Record<string, number> = {};
+            for (const [name, weight] of Object.entries(raw.itemModifierPool)) {
+                if (typeof weight === 'number' && weight > 0) {
+                    pool[name] = weight;
+                }
+            }
+            if (Object.keys(pool).length > 0) {
+                itemModifierPool = pool;
+            }
+        }
+
+        return {
+            width, height,
+            enemyCount: raw.enemyCount ?? 0,
+            fixedEnemies, randomEnemyPool,
+            trapMin, trapMax, trapPool,
+            itemModifierChance,
+            itemModifierPool,
+        };
     }
 }

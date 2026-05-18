@@ -49,7 +49,7 @@ export class YamlCrossValidator {
 
         // ─── ERRORレベル: クロスYAML参照 ──────────────────────────────────────────
 
-        // base.yml floors → enemies.yml / traps.yml
+        // base.yml floors → enemies.yml / traps.yml / item_modifiers.yml
         for (const [floorKey, rawConfig] of base.getRawFloorConfigs()) {
             for (const entry of rawConfig.enemies ?? []) {
                 const name = typeof entry === 'string' ? entry : entry.name;
@@ -60,6 +60,27 @@ export class YamlCrossValidator {
             for (const trapName of rawConfig.traps ?? []) {
                 if (!traps.getTrap(trapName)) {
                     errors.push(`base.yml floors[${floorKey}]: トラップ "${trapName}" が traps.yml に存在しません`);
+                }
+            }
+            if (rawConfig.itemModifierChance !== undefined) {
+                if (typeof rawConfig.itemModifierChance !== 'number'
+                    || rawConfig.itemModifierChance < 0
+                    || rawConfig.itemModifierChance > 1) {
+                    errors.push(`base.yml floors[${floorKey}]: itemModifierChance は 0..1 の数値である必要があります`);
+                }
+            }
+            if (rawConfig.itemModifierPool !== undefined) {
+                if (typeof rawConfig.itemModifierPool !== 'object' || Array.isArray(rawConfig.itemModifierPool)) {
+                    errors.push(`base.yml floors[${floorKey}]: itemModifierPool はオブジェクト（modifier 名 → 重み）である必要があります`);
+                } else {
+                    for (const [modName, weight] of Object.entries(rawConfig.itemModifierPool)) {
+                        if (!itemModifiers.has(modName)) {
+                            errors.push(`base.yml floors[${floorKey}]: itemModifierPool の modifier "${modName}" が item_modifiers.yml に存在しません`);
+                        }
+                        if (typeof weight !== 'number' || weight < 0) {
+                            errors.push(`base.yml floors[${floorKey}]: itemModifierPool["${modName}"] は 0 以上の数値である必要があります`);
+                        }
+                    }
                 }
             }
         }

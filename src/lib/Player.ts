@@ -972,7 +972,11 @@ export class Player {
     }
 
     // アイテム作成ヘルパー
-    static createItem(itemName: string): Item | null {
+    /**
+     * @param options.rollModifiers true なら floor 設定に従って modifier を抽選付与
+     * @param options.floor 抽選に使うフロア番号（rollModifiers=true 必須）
+     */
+    static createItem(itemName: string, options?: { rollModifiers?: boolean; floor?: number }): Item | null {
         if (!this.itemsLoader) {
             console.error('ItemsLoader not initialized');
             return null;
@@ -984,7 +988,28 @@ export class Player {
             return null;
         }
 
-        return new Item(definition);
+        const item = new Item(definition);
+        if (options?.rollModifiers && typeof options.floor === 'number') {
+            Player.rollFloorModifierFor(item, options.floor);
+        }
+        return item;
+    }
+
+    /**
+     * 指定 floor の itemModifierChance/Pool に従って 1 回 modifier 抽選を行い、
+     * 当選した場合に Item へ initial 抽選範囲の count で付与する。
+     */
+    private static rollFloorModifierFor(item: Item, floor: number): void {
+        const floorConfig = BaseLoader.getInstance().getFloorConfig(floor);
+        const chance = floorConfig.itemModifierChance;
+        if (chance <= 0) return;
+        if (Math.random() >= chance) return;
+
+        if (!this.itemModifiersLoader) return;
+        const name = this.itemModifiersLoader.pickRandomFor(item.getType(), floorConfig.itemModifierPool);
+        if (!name) return;
+        const count = this.itemModifiersLoader.rollInitialCount(name);
+        item.setModifierCount(name, count);
     }
 
     // 敵作成ヘルパー

@@ -52,7 +52,7 @@
 - Viteの設定は `vite/config.dev.mjs` と `vite/config.prod.mjs` に分離
 - 開発サーバーはポート8081で実行
 - UI要素に日本語フォントを使用
-- デバッグ用に `window.applyStatusEffect(name)` / `window.findPath(...)` / `window.learnSkill(name)` / `window.forgetSkill(name)` / `window.listSkills()` / `window.addExp(n)` / `window.levelUpN(n?)` / `window.addItemModifier(slot, name, count?)` / `window.removeItemModifier(slot, name)` を `Game.create()` でグローバル公開（DevTools コンソールから利用）
+- デバッグ用に `window.applyStatusEffect(name)` / `window.findPath(...)` / `window.learnSkill(name)` / `window.forgetSkill(name)` / `window.listSkills()` / `window.addExp(n)` / `window.levelUpN(n?)` / `window.addItemModifier(slot, name, count?)` / `window.removeItemModifier(slot, name)` / `window.listMapItems()` を `Game.create()` でグローバル公開（DevTools コンソールから利用）
 
 ### ドキュメント更新ルール
 
