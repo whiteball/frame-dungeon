@@ -4,16 +4,32 @@ import { CustomDataStore } from './CustomDataStore';
 export type ItemType = 'weapon' | 'main_armor' | 'sub_armor' | 'consumable';
 
 /**
+ * remove_modifier_kind の対象スロット指定
+ * - 'all_equipped': 装備中すべて
+ * - 'weapon' / 'main_armor' / 'sub_armor': 該当タイプの装備中スロット（sub_armor は 1/2 両方）
+ */
+export type RemoveModifierTarget = 'all_equipped' | 'weapon' | 'main_armor' | 'sub_armor';
+
+export interface RemoveModifierKindSpec {
+    kind: string;
+    target: RemoveModifierTarget;
+}
+
+/**
  * 即座効果。能力値変動（statName: number）に加え、特殊キーを持つ
  * - applyEffect: <effectName> — 状態異常を付与
  * - clearEffect: <effectName> — 状態異常を解除
  * - learnSkill: <skillName> — スキルを習得（既習得ならログのみ・アイテムは消費）
+ * - add_modifier: <modifierName> — 装備中の対象 type 全アイテムに modifier を付与（countable は +1 でスタック、未付与なら count=1）
+ * - remove_modifier_kind: { kind, target } — 指定スロットの装備から該当 kind の modifier を全て除去
  */
 export interface ImmediateEffect {
     applyEffect?: string;
     clearEffect?: string;
     learnSkill?: string;
-    [statName: string]: number | string | undefined;
+    add_modifier?: string;
+    remove_modifier_kind?: RemoveModifierKindSpec;
+    [statName: string]: number | string | RemoveModifierKindSpec | undefined;
 }
 
 export interface ContinuousEffect {
@@ -102,6 +118,23 @@ export class ItemsLoader {
             }
             if (spec.immediate !== undefined && (typeof spec.immediate !== 'object' || spec.immediate === null || Array.isArray(spec.immediate))) {
                 throw new Error(`Invalid item '${item.name}': effect[${i}].immediate must be an object`);
+            }
+            if (spec.immediate && typeof spec.immediate === 'object') {
+                if (spec.immediate.add_modifier !== undefined && typeof spec.immediate.add_modifier !== 'string') {
+                    throw new Error(`Invalid item '${item.name}': effect[${i}].immediate.add_modifier must be a string (modifier name)`);
+                }
+                if (spec.immediate.remove_modifier_kind !== undefined) {
+                    const r = spec.immediate.remove_modifier_kind;
+                    if (!r || typeof r !== 'object' || Array.isArray(r)) {
+                        throw new Error(`Invalid item '${item.name}': effect[${i}].immediate.remove_modifier_kind must be an object`);
+                    }
+                    if (typeof r.kind !== 'string' || !r.kind) {
+                        throw new Error(`Invalid item '${item.name}': effect[${i}].immediate.remove_modifier_kind.kind must be a non-empty string`);
+                    }
+                    if (!['all_equipped', 'weapon', 'main_armor', 'sub_armor'].includes(r.target)) {
+                        throw new Error(`Invalid item '${item.name}': effect[${i}].immediate.remove_modifier_kind.target must be one of all_equipped/weapon/main_armor/sub_armor`);
+                    }
+                }
             }
             if (spec.continuous !== undefined && (typeof spec.continuous !== 'object' || spec.continuous === null || Array.isArray(spec.continuous))) {
                 throw new Error(`Invalid item '${item.name}': effect[${i}].continuous must be an object`);

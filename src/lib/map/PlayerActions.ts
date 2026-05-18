@@ -119,7 +119,7 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
   const hasAnyEffect = specs.some(s => s.immediate || s.continuous);
 
   if (!hasAnyEffect) {
-    EventBus.emit('message-log', `${item.getLabel()}は何の効果も無い`, dungeon.getTurnCount());
+    EventBus.emit('message-log', `${item.getLabelWithModifiers()}は何の効果も無い`, dungeon.getTurnCount());
     return false;
   }
 
@@ -155,6 +155,19 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
         const label = skillsLoader.getSkill(skillName)?.label ?? skillName;
         parts.push(`スキル「${label}」は習得済み`);
       }
+      for (const m of result.addedModifiers) {
+        if (m.countable) {
+          parts.push(`${m.itemLabel}に「${m.modifierLabel}」が付与（count=${m.newCount}）`);
+        } else {
+          parts.push(`${m.itemLabel}に「${m.modifierLabel}」が付与`);
+        }
+      }
+      for (const r of result.removedModifiers) {
+        parts.push(`${r.itemLabel}から ${r.modifierNames.length} 個の修飾状態を解除`);
+      }
+      if (result.modifierNoTarget && result.addedModifiers.length === 0 && result.removedModifiers.length === 0) {
+        parts.push(`しかし何も起こらなかった`);
+      }
       if (parts.length) messageParts.push(parts.join('、'));
     }
     if (spec.continuous) {
@@ -174,7 +187,7 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
   }
 
   inventory.removeItemById(instanceId);
-  EventBus.emit('message-log', `${item.getLabel()}を使った！${messageParts.length ? '（' + messageParts.join('、') + '）' : ''}`, dungeon.getTurnCount());
+  EventBus.emit('message-log', `${item.getLabelWithModifiers()}を使った！${messageParts.length ? '（' + messageParts.join('、') + '）' : ''}`, dungeon.getTurnCount());
 
   dungeon.dispatchObjectEvent();
   return true;

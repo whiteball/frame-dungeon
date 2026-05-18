@@ -173,6 +173,19 @@ export class YamlCrossValidator {
                             if (typeof v === 'string' && !skills.hasSkill(v)) {
                                 errors.push(`items.yml "${item.name}": immediate.learnSkill "${v}" が skills.yml に存在しません`);
                             }
+                        } else if (k === 'add_modifier') {
+                            if (typeof v === 'string' && !itemModifiers.has(v)) {
+                                errors.push(`items.yml "${item.name}": immediate.add_modifier "${v}" が item_modifiers.yml に存在しません`);
+                            }
+                        } else if (k === 'remove_modifier_kind') {
+                            if (v && typeof v === 'object' && !Array.isArray(v)) {
+                                const r = v as { kind?: unknown };
+                                if (typeof r.kind === 'string') {
+                                    if (itemModifiers.getNamesByKind(r.kind).length === 0) {
+                                        infos.push(`items.yml "${item.name}": immediate.remove_modifier_kind.kind "${r.kind}" を持つ modifier が item_modifiers.yml に存在しません（解除対象なし）`);
+                                    }
+                                }
+                            }
                         } else if (typeof v === 'number' && !stats.getStat(k)) {
                             errors.push(`items.yml "${item.name}": immediate.${k} が stats.yml に存在しません`);
                         }

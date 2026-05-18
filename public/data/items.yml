@@ -84,3 +84,26 @@
       turns: 10
       resist: [stun]
   description: しばらくの間、麻痺状態にならなくなる薬
+- name: power scroll
+  label: 攻撃強化の巻物
+  type: consumable
+  effect:
+    immediate:
+      add_modifier: power_reinforced
+  description: 装備中の武器に「攻撃強化」を付与する巻物
+- name: weakness scroll
+  label: 攻撃弱化の巻物
+  type: consumable
+  effect:
+    immediate:
+      add_modifier: power_weakened
+  description: 装備中の武器に「攻撃弱化」を付与してしまう怪しい巻物
+- name: uncurse scroll
+  label: 解呪の巻物
+  type: consumable
+  effect:
+    immediate:
+      remove_modifier_kind:
+        kind: curse
+        target: all_equipped
+  description: 装備中の全アイテムから呪いを解く巻物

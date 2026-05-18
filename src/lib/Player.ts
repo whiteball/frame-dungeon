@@ -2,7 +2,7 @@
 import { StatsLoader } from './StatsLoader';
 import { Inventory } from './Inventory';
 import { Item } from './Item';
-import { ItemsLoader, type ImmediateEffect, type ContinuousEffect } from './ItemsLoader';
+import { ItemsLoader, type ImmediateEffect, type ContinuousEffect, type RemoveModifierKindSpec } from './ItemsLoader';
 import { Enemy } from './Enemy';
 import { EnemyLoader } from './EnemyLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
@@ -199,6 +199,9 @@ export class Player {
         clearedEffects: string[];
         learnedSkills: string[];
         alreadyLearnedSkills: string[];
+        addedModifiers: Array<{ itemLabel: string; modifierName: string; newCount: number; modifierLabel: string; countable: boolean }>;
+        removedModifiers: Array<{ itemLabel: string; modifierNames: string[] }>;
+        modifierNoTarget: boolean;
     } {
         const stats = new Map<string, number>();
         const appliedEffects: string[] = [];
@@ -206,6 +209,9 @@ export class Player {
         const clearedEffects: string[] = [];
         const learnedSkills: string[] = [];
         const alreadyLearnedSkills: string[] = [];
+        const addedModifiers: Array<{ itemLabel: string; modifierName: string; newCount: number; modifierLabel: string; countable: boolean }> = [];
+        const removedModifiers: Array<{ itemLabel: string; modifierNames: string[] }> = [];
+        let modifierNoTarget = false;
         for (const [key, value] of Object.entries(effect)) {
             if (key === 'applyEffect') {
                 if (typeof value === 'string') {
@@ -227,13 +233,90 @@ export class Player {
                         alreadyLearnedSkills.push(value);
                     }
                 }
+            } else if (key === 'add_modifier') {
+                if (typeof value !== 'string') continue;
+                const result = this.applyAddModifierEffect(value);
+                if (result.applied.length === 0) {
+                    modifierNoTarget = true;
+                } else {
+                    addedModifiers.push(...result.applied);
+                }
+            } else if (key === 'remove_modifier_kind') {
+                if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+                const spec = value as RemoveModifierKindSpec;
+                const result = this.applyRemoveModifierKindEffect(spec);
+                if (result.totalRemoved === 0) {
+                    modifierNoTarget = true;
+                } else {
+                    removedModifiers.push(...result.removed);
+                }
             } else if (typeof value === 'number') {
                 const before = this.getStat(key);
                 this.addStat(key, value);
                 stats.set(key, this.getStat(key) - before);
             }
         }
-        return { stats, appliedEffects, resistedEffects, clearedEffects, learnedSkills, alreadyLearnedSkills };
+        return { stats, appliedEffects, resistedEffects, clearedEffects, learnedSkills, alreadyLearnedSkills, addedModifiers, removedModifiers, modifierNoTarget };
+    }
+
+    /**
+     * add_modifier 効果: 装備中で modifier の target type に一致する全アイテムに付与（delta +1）
+     */
+    private applyAddModifierEffect(modifierName: string): {
+        applied: Array<{ itemLabel: string; modifierName: string; newCount: number; modifierLabel: string; countable: boolean }>;
+    } {
+        const applied: Array<{ itemLabel: string; modifierName: string; newCount: number; modifierLabel: string; countable: boolean }> = [];
+        if (!Player.itemModifiersLoader) return { applied };
+        const def = Player.itemModifiersLoader.getDefinition(modifierName);
+        if (!def) return { applied };
+
+        for (const item of this.getAllEquippedItems()) {
+            if (!item) continue;
+            if (!def.target.includes(item.getType())) continue;
+            const r = item.addModifier(modifierName, 1);
+            if (r.added) {
+                applied.push({
+                    itemLabel: item.getLabelWithModifiers(),
+                    modifierName,
+                    newCount: r.newCount,
+                    modifierLabel: def.label,
+                    countable: def.countable === true,
+                });
+            }
+        }
+        return { applied };
+    }
+
+    /**
+     * remove_modifier_kind 効果: 指定スロットの装備から kind 一致 modifier を一括除去
+     */
+    private applyRemoveModifierKindEffect(spec: RemoveModifierKindSpec): {
+        removed: Array<{ itemLabel: string; modifierNames: string[] }>;
+        totalRemoved: number;
+    } {
+        const removed: Array<{ itemLabel: string; modifierNames: string[] }> = [];
+        let totalRemoved = 0;
+
+        const items: Item[] = [];
+        if (spec.target === 'all_equipped') {
+            for (const it of this.getAllEquippedItems()) if (it) items.push(it);
+        } else if (spec.target === 'weapon') {
+            if (this.equippedWeapon) items.push(this.equippedWeapon);
+        } else if (spec.target === 'main_armor') {
+            if (this.equippedMainArmor) items.push(this.equippedMainArmor);
+        } else if (spec.target === 'sub_armor') {
+            if (this.equippedSubArmor1) items.push(this.equippedSubArmor1);
+            if (this.equippedSubArmor2) items.push(this.equippedSubArmor2);
+        }
+
+        for (const item of items) {
+            const names = item.removeModifiersByKind(spec.kind);
+            if (names.length > 0) {
+                removed.push({ itemLabel: item.getLabelWithModifiers(), modifierNames: names });
+                totalRemoved += names.length;
+            }
+        }
+        return { removed, totalRemoved };
     }
 
     /**

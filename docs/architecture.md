@@ -389,6 +389,7 @@ autoSpawner:
 - `countable: true` の modifier は `max` でクランプ、`initial.{min,max}` の範囲で count を一様抽選（床配置時、`ItemModifiersLoader.rollInitialCount(name)`）
 - フロア床配置時の抽選フロー: `Game.ts` 床配置 → `Player.createItem(name, { rollModifiers: true, floor })` → `BaseLoader.getFloorConfig(floor).itemModifierChance` で確率判定 → 当選時 `ItemModifiersLoader.pickRandomFor(itemType, itemModifierPool)` で名前抽選 → `rollInitialCount(name)` で count 決定 → `Item.setModifierCount(name, count)`
 - 装備変更フロー：`PlayerActions.changeEquipment` は装備中アイテムの `canUnequip()` を判定し、`cannot_unequip` の場合は装備解除も置き換え装備もブロックしてメッセージ出力（ターン非消費）。一方、装備解除トラップ（`unequip` effect）は **ローグライク慣例に倣い `cannot_unequip` を無視して強制的に外す**
+- 巻物による付与/解除：`items.yml` の消耗品 `immediate.add_modifier` で装備中アイテムへ自動付与、`immediate.remove_modifier_kind: { kind, target }` で kind タグ一致の modifier を一括除去（解呪など）。サンプル: 攻撃強化の巻物 (`add_modifier: power_reinforced`) / 攻撃弱化の巻物 (`add_modifier: power_weakened`) / 解呪の巻物 (`remove_modifier_kind: { kind: curse, target: all_equipped }`)
 - UI 表示：装備変更ダイアログ・ステータスダイアログ・インベントリ・メッセージログは全て `Item.getLabelWithModifiers()` 経由で suffix 表示
 - セーブ：`ItemSaveData.modifiers?: Record<string,number>`（旧セーブでは省略、deserialize 時に空 Map）。未知 modifier 名はロード時にスキップ（警告ログ）
 
@@ -430,6 +431,8 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 | `applyEffect: <effectName>` | 状態異常を付与（`effects.yml` 参照）。`Player.getEffectiveResists()` に含まれる場合は付与せず `resistedEffects` に記録 |
 | `clearEffect: <effectName>` | 状態異常を解除 |
 | `learnSkill: <skillName>` | スキルを習得（`skills.yml` 参照、既習得時はログ「習得済み」のみだがアイテムは消費。同 `ImmediateEffect` 内で他効果と併記可） |
+| `add_modifier: <modifierName>` | 装備中で modifier の `target` type に一致する全アイテムに modifier を付与（countable は +1 でスタック、max クランプ。未付与なら count=1）。対象不在時はログ「しかし何も起こらなかった」 |
+| `remove_modifier_kind: { kind, target }` | `target` で指定したスロット（`all_equipped`/`weapon`/`main_armor`/`sub_armor`）の装備から `kind` タグ一致の modifier を一括除去。対象不在/該当 modifier なしで `modifierNoTarget` フラグが立つ |
 
 ### 装備・消耗品・effect に持たせる resist
 
