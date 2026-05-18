@@ -306,13 +306,31 @@ export class Player {
     }
 
     /**
-     * 基本能力値 + 装備ボーナス + 持続効果ボーナス + permanent 状態効果の合算
-     * permanent 効果は base+装備+持続 の値に formula(x) を順次適用する
+     * 基本能力値 + 装備生ボーナス + 装備 modifier の add_stats + 持続効果ボーナス + permanent 状態効果の合算。
+     * 適用順序:
+     *   1. base stat
+     *   2. + 装備の生ボーナス（getEquipmentBonuses；modifier は含まない）
+     *   3. + 装備 modifier の add_stats（formula 評価。formula の元 stat 値はステップ2 までの累積値）
+     *   4. + 持続効果ボーナス
+     *   5. + permanent 状態効果（formula(x)）
      */
     getEffectiveStat(key: string): number {
-        let value = this.getStat(key)
-            + (this.getEquipmentBonuses().get(key) ?? 0)
-            + (this.getContinuousBonuses().get(key) ?? 0);
+        const preModValue = this.getStat(key) + (this.getEquipmentBonuses().get(key) ?? 0);
+        let value = preModValue;
+
+        // 装備中アイテムの modifier add_stats を合算（元 stat 値は preModValue 固定で渡す）
+        const equipped = this.getAllEquippedItems();
+        if (equipped.some(it => it !== null)) {
+            const formulaVars = this.getFormulaVars();
+            formulaVars[key] = preModValue;
+            for (const item of equipped) {
+                if (!item) continue;
+                const bonuses = item.getModifierStatBonuses(formulaVars);
+                value += (bonuses.get(key) ?? 0);
+            }
+        }
+
+        value += (this.getContinuousBonuses().get(key) ?? 0);
 
         if (Player.effectsLoader) {
             for (const entry of this.activeStatusEffects) {
@@ -620,6 +638,31 @@ export class Player {
     }
 
     /**
+     * 指定アイテムを equipItem したときに使われるスロット名を予測する。
+     * 既存装備が外せない（cursed 等）かを呼び出し前に検査するために使用。
+     */
+    predictEquipSlot(item: Item): 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2' | null {
+        if (item.isWeapon()) return 'weapon';
+        if (item.isMainArmor()) return 'main_armor';
+        if (item.isSubArmor()) {
+            if (!this.equippedSubArmor1) return 'sub_armor1';
+            if (!this.equippedSubArmor2) return 'sub_armor2';
+            return 'sub_armor1';
+        }
+        return null;
+    }
+
+    getItemInSlot(slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2'): Item | null {
+        switch (slot) {
+            case 'weapon': return this.equippedWeapon;
+            case 'main_armor': return this.equippedMainArmor;
+            case 'sub_armor1': return this.equippedSubArmor1;
+            case 'sub_armor2': return this.equippedSubArmor2;
+            default: return null;
+        }
+    }
+
+    /**
      * 指定アイテムが装備されているスロットを返す（instanceId 一致で判定）
      * @returns 装備されている場合はスロット名、未装備なら null
      */
@@ -889,7 +932,7 @@ export class Player {
         for (const itemData of data.inventory) {
             const def = Player.itemsLoader?.getItem(itemData.name);
             if (def) {
-                this.inventory.addItem(new Item(def, itemData.instanceId, itemData.quantity));
+                this.inventory.addItem(Item.deserialize(itemData, def));
             }
         }
 

@@ -5,6 +5,7 @@ import { EffectsLoader } from './EffectsLoader';
 import { StatsLoader } from './StatsLoader';
 import { ItemsLoader } from './ItemsLoader';
 import { SkillsLoader } from './SkillsLoader';
+import { ItemModifiersLoader } from './ItemModifiersLoader';
 
 export interface ValidationResult {
     errors: string[];
@@ -23,6 +24,7 @@ export class YamlCrossValidator {
         const stats = StatsLoader.getInstance();
         const items = ItemsLoader.getInstance();
         const skills = SkillsLoader.getInstance();
+        const itemModifiers = ItemModifiersLoader.getInstance();
 
         // ─── INFOレベル: base.yml のオプションフィールド ──────────────────────────
 
@@ -170,6 +172,18 @@ export class YamlCrossValidator {
                                 errors.push(`items.yml "${item.name}": continuous.resist[${i}] "${name}" が effects.yml に存在しません`);
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // item_modifiers.yml: effect.add_stats.target → stats.yml
+        for (const mod of itemModifiers.getAll()) {
+            for (let i = 0; i < mod.effect.length; i++) {
+                const e = mod.effect[i];
+                if (e.name === 'add_stats') {
+                    if (e.target && !stats.getStat(e.target)) {
+                        errors.push(`item_modifiers.yml "${mod.name}": effect[${i}].target "${e.target}" が stats.yml に存在しません`);
                     }
                 }
             }

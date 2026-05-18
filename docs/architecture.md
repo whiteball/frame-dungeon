@@ -126,7 +126,7 @@ src/components/dialogs/
 - **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
 - **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
 - **skills.yml**（`public/data/skills.yml`）: スキル定義（コスト・ターゲット・action 列・習得条件）。詳細は後述「スキルシステム」参照
-- **item_modifiers.yml**（`public/data/item_modifiers.yml`）: アイテム修飾状態（呪い・強化・弱化など）の定義。現状はスケルトン（空配列）で、後続フェーズで効果スキーマと自動付与ロジックを追加予定。ZIP カスタムデータでは欠落許容（後方互換のため optional 扱い）
+- **item_modifiers.yml**（`public/data/item_modifiers.yml`）: アイテム修飾状態（呪い・強化・弱化など）の定義。`effect[].name` は `add_stats`（formula 評価結果を target stat に加算）/ `cannot_unequip`（装備解除ブロック）のいずれかをオブジェクト形式で記述。`target: [weapon|main_armor|sub_armor|consumable]` で適用可能 type を指定、`countable: true` の modifier は `max` と `initial.{min,max}` を伴い重ねがけ可能。`kind` タグで解呪等の一括除去対象を分類、`weight` はフロア床配置時の抽選重み（後続フェーズで使用）。ZIP カスタムデータでは欠落許容（後方互換のため optional 扱い）
 
 各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`、`ItemModifiersLoader`）によって読み込まれます。
 
@@ -352,9 +352,11 @@ autoSpawner:
 アイテムシステムの構成：
 
 - **ItemsLoader**: `items.yml`からアイテムデータを読み込み
-- **Item**: 個別のアイテムインスタンスを管理
+- **ItemModifiersLoader**: `item_modifiers.yml` から修飾状態の定義を読み込み、formula を事前パース。`getCompiled(name)` で実行用 `CompiledItemModifier`（effect 配列 + パース済み `Expression`）を返す。`getNamesByKind(kind)` で kind タグ別 modifier 名を取得（解呪用）
+- **Item**: 個別のアイテムインスタンスを管理。`modifiers: Map<string,number>`（name → count）を保持し、`addModifier`/`setModifierCount`/`removeModifier`/`removeModifiersByKind` で操作。`canUnequip()` は `cannot_unequip` 効果の有無で判定。`getModifierStatBonuses(vars)` は装備中の add_stats を formula 評価して `{stat → delta}` を返す（vars に `count` を自動マージ）。`getLabelWithModifiers()` で suffix 形式の表示ラベルを生成
+- **ItemLabelFormatter**（`src/lib/ItemLabelFormatter.ts`）: `formatItemLabelWithModifiers(baseLabel, modifiers)` で `"鉄の剣 [攻+2/呪]"` のような suffix 形式ラベルを組み立てる。`countable` の modifier は `shortLabel + count`、それ以外は `shortLabel` のみ。`shortLabel` 未定義時は `label` を使用
 - **Inventory**: プレイヤーのアイテム所持を管理（容量制限あり）
-- **Player**: 装備スロット管理と装備ボーナス計算。`applyImmediateEffect()` で消耗品の即座効果を能力値へ反映（`addStat` の fluctuation クランプを経由）。`applyContinuousEffect()`/`tickContinuousEffects()` で持続効果を独立エントリ管理。`getEffectiveStat(key)` は基本値+装備ボーナス+持続効果ボーナスの合算を返し、戦闘・表示の両方で使用
+- **Player**: 装備スロット管理と装備ボーナス計算。`applyImmediateEffect()` で消耗品の即座効果を能力値へ反映（`addStat` の fluctuation クランプを経由）。`applyContinuousEffect()`/`tickContinuousEffects()` で持続効果を独立エントリ管理。`getEffectiveStat(key)` は **base → 装備raw → 装備 modifier の add_stats（formula 評価；元 stat 値は base+装備raw を渡す）→ 持続効果 → permanent status effect** の順で合算した実効値を返す。`predictEquipSlot(item)` / `getItemInSlot(slot)` で装備変更前の置き換え対象を予測（`cannot_unequip` 検査のために `PlayerActions.changeEquipment` が使用）
 
 アイテムタイプ：
 
@@ -362,6 +364,37 @@ autoSpawner:
 - `main_armor`: メイン防具（防御力ボーナス）
 - `sub_armor`: サブ防具（指輪など、2スロット）
 - `consumable`: 消耗品（即座効果・持続効果）
+
+### アイテム修飾状態（modifier）
+
+装備中のアイテムに重ねて適用される個体差システム。`item_modifiers.yml` で定義し、装備中のみ全 effect が発動する（インベントリ内・床落ち状態では無効）。
+
+| effect.name | 用途 | 必須パラメータ |
+| --- | --- | --- |
+| `add_stats` | target stat に formula 評価値を加算（装備中） | `target`（stat 名）、`formula`（変数: `count`、元 stat 値、player 各 stat） |
+| `cannot_unequip` | 装備解除をブロック（呪い用） | （なし） |
+
+- `Item.modifiers: Map<string, number>` でアイテムごとに `name → count` を保持
+- `countable: true` の modifier は `max` でクランプ、`initial.{min,max}` で抽選範囲を定義（Phase 3 床配置時に使用）
+- 装備変更フロー：`PlayerActions.changeEquipment` は装備中アイテムの `canUnequip()` を判定し、`cannot_unequip` の場合は装備解除も置き換え装備もブロックしてメッセージ出力（ターン非消費）。一方、装備解除トラップ（`unequip` effect）は **ローグライク慣例に倣い `cannot_unequip` を無視して強制的に外す**
+- UI 表示：装備変更ダイアログ・ステータスダイアログ・インベントリ・メッセージログは全て `Item.getLabelWithModifiers()` 経由で suffix 表示
+- セーブ：`ItemSaveData.modifiers?: Record<string,number>`（旧セーブでは省略、deserialize 時に空 Map）。未知 modifier 名はロード時にスキップ（警告ログ）
+
+### Player.getEffectiveStat の適用順序
+
+`getEquipmentBonuses()` は装備の生ボーナス（modifier 含まず）を返す。`getEffectiveStat(key)` 内では:
+
+```text
+1. base stat（this.stats.get(key)）
+2. + 装備 raw ボーナス（getEquipmentBonuses().get(key)）
+3. + 装備 modifier の add_stats を合算（各装備中 Item.getModifierStatBonuses(vars) を呼び出し。
+     vars は getFormulaVars() に key=preModValue（1+2 の和）を上書きしたもの。
+     count 変数は Item 側で modifier ごとにマージされる）
+4. + 持続効果ボーナス（getContinuousBonuses().get(key)）
+5. + permanent status effect（formula(x, count) を順次適用）
+```
+
+modifier formula 内の `power` 等の名前は元値（preModValue）を参照し、複数の同種 modifier が重ねがけされても各々が同じ基準値を見るため過剰な乗算は起きない。
 
 ### 消耗品の使用フロー
 

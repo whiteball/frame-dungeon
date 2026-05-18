@@ -79,7 +79,7 @@ export class EquipmentView {
       if (!this.textValueList[cur]) {
         this.textValueList[cur] = this.factory.text(this.graph.x, this.graph.y + y, '').setFontFamily(this.fontFamily).setDepth(10);
       }
-      const valueText = item ? this.truncateLabel(item.getLabel()) : '-';
+      const valueText = item ? this.truncateLabel(item.getLabelWithModifiers()) : '-';
       this.textValueList[cur]
         .setText(valueText)
         .setY(this.graph.y + y)

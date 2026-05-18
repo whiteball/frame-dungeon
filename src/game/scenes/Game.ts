@@ -428,7 +428,7 @@ export class Game extends Scene {
             const pending = this.pendingPickup;
             if (pending) {
                 if (inventory.addItem(pending.item)) {
-                    EventBus.emit('message-log', `${pending.item.getLabel()}を入手した`, this.dungeon.getTurnCount());
+                    EventBus.emit('message-log', `${pending.item.getLabelWithModifiers()}を入手した`, this.dungeon.getTurnCount());
                 }
                 this.dungeon.removeMapObject(pending.mapObject);
             }
@@ -436,7 +436,7 @@ export class Game extends Scene {
             droppedObj.x = pos.x;
             droppedObj.y = pos.y;
             this.dungeon.placeObject(droppedObj);
-            EventBus.emit('message-log', `${droppedItem.getLabel()}を置いた`, this.dungeon.getTurnCount());
+            EventBus.emit('message-log', `${droppedItem.getLabelWithModifiers()}を置いた`, this.dungeon.getTurnCount());
             this.closeList();
             // 置く/入れ換えはターン非消費（dispatchObjectEvent を呼ばない）。
             // 呼んでしまうと置いた直後の around-0 で自動拾得が走り、置いたアイテムを即回収してしまう
@@ -477,6 +477,42 @@ export class Game extends Scene {
             EventBus.emit('go-to-next-floor', this.dungeon);
         }
         EventBus.emit('current-scene-ready', this);
+
+        // デバッグ用: コンソールから window.addItemModifier('weapon', 'power_reinforced', 2) 等で装備中アイテムに modifier を付与
+        (window as unknown as { addItemModifier: (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string, count?: number) => boolean }).addItemModifier = (slot, name, count = 1) => {
+            const target = this.player.getItemInSlot(slot);
+            const turn = this.dungeon.getTurnCount();
+            if (!target) {
+                EventBus.emit('message-log', `（debug）${slot} に装備中のアイテムがありません`, turn);
+                return false;
+            }
+            const ok = target.setModifierCount(name, count);
+            if (ok) {
+                EventBus.emit('message-log', `（debug）${target.getLabelWithModifiers()} に ${name} を付与`, turn);
+                this.render();
+            } else {
+                EventBus.emit('message-log', `（debug）${name} は未定義 or 対象 type 不一致`, turn);
+            }
+            return ok;
+        };
+
+        // デバッグ用: コンソールから window.removeItemModifier('weapon', 'cursed') で modifier を除去
+        (window as unknown as { removeItemModifier: (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string) => boolean }).removeItemModifier = (slot, name) => {
+            const target = this.player.getItemInSlot(slot);
+            const turn = this.dungeon.getTurnCount();
+            if (!target) {
+                EventBus.emit('message-log', `（debug）${slot} に装備中のアイテムがありません`, turn);
+                return false;
+            }
+            const ok = target.removeModifier(name);
+            if (ok) {
+                EventBus.emit('message-log', `（debug）${target.getLabelWithModifiers()} から ${name} を除去`, turn);
+                this.render();
+            } else {
+                EventBus.emit('message-log', `（debug）${target.getLabel()} は ${name} を持っていません`, turn);
+            }
+            return ok;
+        };
 
         // デバッグ用: コンソールから window.applyStatusEffect('poison') 等で状態異常を付与可能
         (window as unknown as { applyStatusEffect: (name: string) => string }).applyStatusEffect = (name: string) => {
@@ -685,12 +721,13 @@ export class Game extends Scene {
                     EventBus.emit('message-log', `${label}を耐性で防いだ！`, turn);
                 }
             } else if (effect.type === 'unequip') {
+                // トラップによる強制装備解除は cannot_unequip を無視する（ローグライク慣例）
                 const slots: Array<'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2'> =
                     ['weapon', 'main_armor', 'sub_armor1', 'sub_armor2'];
                 for (const slot of slots) {
                     const removed = this.player.unequipItem(slot);
                     if (removed) {
-                        EventBus.emit('message-log', `${removed.getLabel()}が外れた`, turn);
+                        EventBus.emit('message-log', `${removed.getLabelWithModifiers()}が外れた`, turn);
                     }
                 }
             }
@@ -705,7 +742,7 @@ export class Game extends Scene {
         );
         return items.map(it => ({
             id: it.getInstanceId(),
-            label: it.getLabel(),
+            label: it.getLabelWithModifiers(),
             description: it.getDescription(),
             isEquipped: equippedIds.has(it.getInstanceId()),
             type: it.getType(),
@@ -732,17 +769,17 @@ export class Game extends Scene {
         }
         lines.push('');
 
-        lines.push(`武器：${this.player.getEquippedWeapon()?.getLabel() ?? 'なし'}`);
-        lines.push(`メイン防具：${this.player.getEquippedMainArmor()?.getLabel() ?? 'なし'}`);
-        lines.push(`サブ防具１：${this.player.getEquippedSubArmor1()?.getLabel() ?? 'なし'}`);
-        lines.push(`サブ防具２：${this.player.getEquippedSubArmor2()?.getLabel() ?? 'なし'}`);
+        lines.push(`武器：${this.player.getEquippedWeapon()?.getLabelWithModifiers() ?? 'なし'}`);
+        lines.push(`メイン防具：${this.player.getEquippedMainArmor()?.getLabelWithModifiers() ?? 'なし'}`);
+        lines.push(`サブ防具１：${this.player.getEquippedSubArmor1()?.getLabelWithModifiers() ?? 'なし'}`);
+        lines.push(`サブ防具２：${this.player.getEquippedSubArmor2()?.getLabelWithModifiers() ?? 'なし'}`);
         lines.push('');
 
         lines.push('アイテム：');
         const items = this.player.getInventory().getItems();
         if (items.length > 0) {
             for (const item of items) {
-                lines.push(item.getLabel());
+                lines.push(item.getLabelWithModifiers());
             }
         } else {
             lines.push('なし');

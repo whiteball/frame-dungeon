@@ -1,3 +1,75 @@
 # アイテム修飾状態（modifier）定義
-# Phase 1 では空。Phase 2 以降でサンプル modifier を追加する。
-[]
+# - effect[].name は 'add_stats' / 'cannot_unequip' のいずれか
+# - add_stats: target ステータスに formula 評価結果を加算（formula 変数: count, 元 stat 値, player 各 stat）
+# - cannot_unequip: 装備中この modifier を持つアイテムは外せない
+# - target: 適用可能なアイテム type の配列
+# - countable: true なら count を持って重ねがけ可能。max と initial.{min,max} が必須
+# - kind: 解呪などタグ別一括除去用（後続フェーズで使用）
+# - weight: フロア床配置時の抽選重み（後続フェーズで使用、既定 1）
+
+- name: power_reinforced
+  label: 攻撃強化
+  shortLabel: 攻+
+  description: 装備中、武器の攻撃力が上昇する
+  target: [weapon]
+  countable: true
+  max: 5
+  initial: { min: 1, max: 1 }
+  weight: 10
+  effect:
+    - name: add_stats
+      target: power
+      formula: power * (0.05 * count)
+
+- name: power_weakened
+  label: 攻撃弱化
+  shortLabel: 攻-
+  description: 装備中、武器の攻撃力が低下する
+  target: [weapon]
+  countable: true
+  max: 5
+  initial: { min: 1, max: 1 }
+  weight: 5
+  effect:
+    - name: add_stats
+      target: power
+      formula: -(power * (0.05 * count))
+
+- name: defense_reinforced
+  label: 防御強化
+  shortLabel: 防+
+  description: 装備中、防具の防御力が上昇する
+  target: [main_armor, sub_armor]
+  countable: true
+  max: 5
+  initial: { min: 1, max: 1 }
+  weight: 10
+  effect:
+    - name: add_stats
+      target: defense
+      formula: defense * (0.05 * count)
+
+- name: defense_weakened
+  label: 防御弱化
+  shortLabel: 防-
+  description: 装備中、防具の防御力が低下する
+  target: [main_armor, sub_armor]
+  countable: true
+  max: 5
+  initial: { min: 1, max: 1 }
+  weight: 5
+  effect:
+    - name: add_stats
+      target: defense
+      formula: -(defense * (0.05 * count))
+
+- name: cursed
+  label: 呪い
+  shortLabel: 呪
+  description: 装備すると外せなくなる
+  target: [weapon, main_armor, sub_armor]
+  countable: false
+  kind: curse
+  weight: 3
+  effect:
+    - name: cannot_unequip

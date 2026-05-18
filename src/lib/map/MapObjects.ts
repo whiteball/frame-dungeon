@@ -29,7 +29,7 @@ export class ItemObject extends MapObject {
     this.mark = MapMark.CROSS;
     this.color = 0x00FFFF;
 
-    const label = item.getLabel();
+    const label = item.getLabelWithModifiers();
     const onPickup: ObjectEvent = (dungeon) => {
       const player = dungeon.getPlayerInstance();
       if (player?.getInventory().addItem(item)) {

@@ -195,18 +195,33 @@ export function changeEquipment(dungeon: DungeonMap, instanceId: string): Change
     return { success: false, consumedTurn: false, action: 'none' };
   }
 
+  const turnCount = dungeon.getTurnCount();
   const slot = player.getEquippedSlotOf(item);
   if (slot !== null) {
+    if (!item.canUnequip()) {
+      EventBus.emit('message-log', `${item.getLabelWithModifiers()}は呪われていて外せない！`, turnCount);
+      return { success: false, consumedTurn: false, action: 'none' };
+    }
     player.unequipItem(slot);
-    EventBus.emit('message-log', `${item.getLabel()}を外した`, dungeon.getTurnCount());
+    EventBus.emit('message-log', `${item.getLabelWithModifiers()}を外した`, turnCount);
     return { success: true, consumedTurn: false, action: 'unequipped' };
+  }
+
+  // 新規装備: 置き換え対象スロットの既存装備が外せないかを事前検査
+  const targetSlot = player.predictEquipSlot(item);
+  if (targetSlot) {
+    const blocking = player.getItemInSlot(targetSlot);
+    if (blocking && !blocking.canUnequip()) {
+      EventBus.emit('message-log', `${blocking.getLabelWithModifiers()}は呪われていて外せない！`, turnCount);
+      return { success: false, consumedTurn: false, action: 'none' };
+    }
   }
 
   const previous = player.equipItem(item);
   if (previous) {
-    EventBus.emit('message-log', `${previous.getLabel()}を外して${item.getLabel()}を装備した`, dungeon.getTurnCount());
+    EventBus.emit('message-log', `${previous.getLabelWithModifiers()}を外して${item.getLabelWithModifiers()}を装備した`, turnCount);
   } else {
-    EventBus.emit('message-log', `${item.getLabel()}を装備した`, dungeon.getTurnCount());
+    EventBus.emit('message-log', `${item.getLabelWithModifiers()}を装備した`, turnCount);
   }
 
   dungeon.dispatchObjectEvent();
@@ -307,10 +322,10 @@ export function searchAt(dungeon: DungeonMap, targetX: integer, targetY: integer
         }
       } else if (object instanceof ItemObject) {
         if (object.visible) {
-          EventBus.emit('message-log', `${object.item.getLabel()}がある。`, turnCount);
+          EventBus.emit('message-log', `${object.item.getLabelWithModifiers()}がある。`, turnCount);
         } else {
           object.visible = true;
-          EventBus.emit('message-log', `${object.item.getLabel()}を発見した！`, turnCount);
+          EventBus.emit('message-log', `${object.item.getLabelWithModifiers()}を発見した！`, turnCount);
         }
       } else if (object instanceof StairsObject) {
         EventBus.emit('message-log', `階段がある。`, turnCount);

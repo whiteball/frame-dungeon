@@ -1,4 +1,6 @@
 import type { ItemDefinition, ItemType, ItemEffectSpec } from './ItemsLoader';
+import { ItemModifiersLoader } from './ItemModifiersLoader';
+import { formatItemLabelWithModifiers } from './ItemLabelFormatter';
 
 /**
  * ゲーム内のアイテムインスタンスを表すクラス
@@ -134,6 +136,124 @@ export class Item {
 
     getModifierCount(name: string): number {
         return this.modifiers.get(name) ?? 0;
+    }
+
+    /**
+     * modifier の count を絶対値で設定する。
+     * - count <= 0 なら削除
+     * - countable=false は常に count=1 で固定
+     * - countable=true は max でクランプ
+     * @returns 適用に成功した場合 true（target 不一致や未定義なら false）
+     */
+    setModifierCount(name: string, count: number): boolean {
+        if (count <= 0) {
+            return this.modifiers.delete(name);
+        }
+        const def = ItemModifiersLoader.getInstance().getDefinition(name);
+        if (!def) return false;
+        if (!def.target.includes(this.definition.type)) return false;
+        if (def.countable) {
+            const max = def.max ?? Number.MAX_SAFE_INTEGER;
+            this.modifiers.set(name, Math.min(count, max));
+        } else {
+            this.modifiers.set(name, 1);
+        }
+        return true;
+    }
+
+    /**
+     * modifier を delta 加算する（巻物などで使用）。
+     * - 未付与なら delta（countable=false は 1）で新規付与
+     * - countable=true は max でクランプ
+     * - target 不一致や未定義は added=false
+     * @returns added: 何らかの変化があったか、newCount: 適用後の count（変化なしなら現在値）
+     */
+    addModifier(name: string, delta: number = 1): { added: boolean; newCount: number } {
+        const def = ItemModifiersLoader.getInstance().getDefinition(name);
+        if (!def) return { added: false, newCount: this.modifiers.get(name) ?? 0 };
+        if (!def.target.includes(this.definition.type)) return { added: false, newCount: this.modifiers.get(name) ?? 0 };
+
+        const current = this.modifiers.get(name) ?? 0;
+        let next: number;
+        if (def.countable) {
+            const max = def.max ?? Number.MAX_SAFE_INTEGER;
+            next = Math.min(current + delta, max);
+        } else {
+            next = 1;
+        }
+        if (next === current) return { added: false, newCount: current };
+        this.modifiers.set(name, next);
+        return { added: true, newCount: next };
+    }
+
+    removeModifier(name: string): boolean {
+        return this.modifiers.delete(name);
+    }
+
+    /**
+     * 指定 kind タグを持つ modifier を全て削除し、削除した name 配列を返す
+     */
+    removeModifiersByKind(kind: string): string[] {
+        const loader = ItemModifiersLoader.getInstance();
+        const removed: string[] = [];
+        for (const name of [...this.modifiers.keys()]) {
+            const def = loader.getDefinition(name);
+            if (def?.kind === kind) {
+                this.modifiers.delete(name);
+                removed.push(name);
+            }
+        }
+        return removed;
+    }
+
+    /**
+     * 装備解除可能か（cannot_unequip 効果を持つ modifier が一つでもあれば false）
+     */
+    canUnequip(): boolean {
+        const loader = ItemModifiersLoader.getInstance();
+        for (const name of this.modifiers.keys()) {
+            const compiled = loader.getCompiled(name);
+            if (!compiled) continue;
+            for (const e of compiled.effects) {
+                if (e.name === 'cannot_unequip') return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 装備中の modifier add_stats を formula 評価して { stat -> delta } の Map で返す。
+     * @param baseFormulaVars 元 stat 値や player 各 stat の辞書。各 modifier 評価時に `count` をマージする。
+     */
+    getModifierStatBonuses(baseFormulaVars: Record<string, number>): Map<string, number> {
+        const result = new Map<string, number>();
+        if (this.modifiers.size === 0) return result;
+        const loader = ItemModifiersLoader.getInstance();
+        for (const [name, count] of this.modifiers) {
+            const compiled = loader.getCompiled(name);
+            if (!compiled) continue;
+            const vars = { ...baseFormulaVars, count };
+            for (const e of compiled.effects) {
+                if (e.name !== 'add_stats') continue;
+                if (!e.target || !e.formula) continue;
+                try {
+                    const r = e.formula.evaluate(vars);
+                    if (typeof r === 'number' && Number.isFinite(r)) {
+                        result.set(e.target, (result.get(e.target) ?? 0) + r);
+                    }
+                } catch (err) {
+                    console.warn(`Failed to evaluate modifier "${name}" add_stats formula:`, err);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * suffix 形式で modifier を含めたラベル（例: "鉄の剣 [攻+2/呪]"）
+     */
+    getLabelWithModifiers(): string {
+        return formatItemLabelWithModifiers(this.getLabel(), this.modifiers);
     }
 
     // ユーティリティ
