@@ -45,13 +45,16 @@ export function canAttack(dungeon: DungeonMap, fromX: integer, fromY: integer, t
   if (dx === 0) {
     return !isSolidWall(fromX, fromY, dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH);
   }
-  // 斜め: 角を回る2本のL字経路のうち、少なくとも1本が通れれば攻撃可
+  // 斜め: 扉も通行不可として扱い、壁のない通路の角のみ通過可
   // 経路A: 横→縦 (fromX,fromY)→(toX,fromY)→(toX,toY)
   // 経路B: 縦→横 (fromX,fromY)→(fromX,toY)→(toX,toY)
+  const isAnyWall = (x: integer, y: integer, dir: number): boolean => {
+    return !!(dungeon.getAt(x, y) & (1 << dir));
+  };
   const hDir = dx > 0 ? MapDirection.EAST : MapDirection.WEST;
   const vDir = dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH;
-  const pathA = !isSolidWall(fromX, fromY, hDir) && !isSolidWall(toX, fromY, vDir);
-  const pathB = !isSolidWall(fromX, fromY, vDir) && !isSolidWall(fromX, toY, hDir);
+  const pathA = !isAnyWall(fromX, fromY, hDir) && !isAnyWall(toX, fromY, vDir);
+  const pathB = !isAnyWall(fromX, fromY, vDir) && !isAnyWall(fromX, toY, hDir);
   return pathA || pathB;
 }
 

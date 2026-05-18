@@ -18,7 +18,7 @@ import { evaluateCost, canPayCost, formatCostSummary } from '../../lib/skills/Sk
 import { getFrontCandidates, formatTargetSummary } from '../../lib/skills/TargetResolver';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
-import { getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
+import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
 import { ItemObject } from '../../lib/map/MapObjects';
 import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
 import { BaseLoader } from '../../lib/BaseLoader';
@@ -80,9 +80,24 @@ export class Game extends Scene {
         this.pendingSaveData = data.saveData ?? null;
     }
 
+    private getOpenDoors(): Set<string> {
+        const open = new Set<string>();
+        const pos = this.dungeon.getPlayerPos();
+        for (let dir = 0; dir < 4; dir++) {
+            const val = this.dungeon.getAt(pos.x, pos.y);
+            if (!(val & (1 << dir)) || !(val & (16 << dir))) continue;
+            const [dx, dy] = getDirectionOffset(dir as MapDirection);
+            const nx = pos.x + dx, ny = pos.y + dy;
+            if (this.dungeon.getEnemy(nx, ny)) {
+                open.add(`${pos.x},${pos.y},${dir}`);
+            }
+        }
+        return open;
+    }
+
     render() {
         this.miniMapView.render(this.dungeon, this.revealAll);
-        this.mainView.render(this.dungeon);
+        this.mainView.render(this.dungeon, this.getOpenDoors());
         this.params = this.getDisplayParams();
         this.infoView.render(this.floor, this.params);
         this.equipmentView.render({

@@ -175,8 +175,9 @@ export class MainView {
    * ダンジョンマップを3D透視投影でレンダリングする
    * プレイヤーの位置と向きに基づいて、見える範囲の壁とオブジェクトを描画する
    * @param dun レンダリングするダンジョンマップ
+   * @param openDoors 開放状態で描画する扉のセット（"x,y,dir" 形式）
    */
-  render(dun: DungeonMap) {
+  render(dun: DungeonMap, openDoors?: Set<string>) {
     const graph = this.graph;
     graph.clear();
 
@@ -276,14 +277,20 @@ export class MainView {
         .closePath().fill();
     }
 
+    // プレイヤー向き回転量: EAST=1, SOUTH=2, WEST=3, NORTH=0
+    // originalDir = (rotatedDir + shift) % 4
+    const shift = (player.direction + 1) % 4;
+    const isDoorOpen = (cellX: integer, cellY: integer, rotatedDoorDir: number): boolean => {
+      if (!openDoors) return false;
+      const originalDir = (rotatedDoorDir + shift) % 4;
+      return openDoors.has(`${cellX},${cellY},${originalDir}`);
+    };
+
     const DOOR_COLOR = 0xA0522D;
     const VP_X = this.width / 2, VP_Y = this.height / 2;
-    const drawDoor = (pol: Phaser.Geom.Polygon) => {
-      const pts = pol.points;
-      // 半透明ベース（全面）
-      graph.fillStyle(DOOR_COLOR, 0.5);
-      graph.fillPoints(pts, true);
-      const sorted = [...pts].sort((a, b) => a.y - b.y);
+    // ポリゴンの4頂点から透視補間関数を生成する（側壁は調和平均ベース）
+    const makeBpPersp = (pol: Phaser.Geom.Polygon) => {
+      const sorted = [...pol.points].sort((a, b) => a.y - b.y);
       const [tl, tr] = sorted.slice(0, 2).sort((a, b) => a.x - b.x);
       const [bl, br] = sorted.slice(2).sort((a, b) => a.x - b.x);
       const bp = (u: number, v: number) => ({
@@ -291,15 +298,21 @@ export class MainView {
         y: (1 - u) * (1 - v) * bl.y + u * (1 - v) * br.y + (1 - u) * v * tl.y + u * v * tr.y,
       });
       const isLateralWall = Math.abs(tl.y - tr.y) > 0.1;
-      // 透視図の正確な補間：側壁では調和平均ベースの式を使う
       const perspOff = (u: number, A: number, B: number) => A * B / ((1 - u) * B + u * A);
-      const bpPersp = (u: number, v: number) => {
+      return (u: number, v: number) => {
         if (!isLateralWall) return bp(u, v);
         const xOff = perspOff(u, tl.x - VP_X, tr.x - VP_X);
         const ytOff = perspOff(u, tl.y - VP_Y, tr.y - VP_Y);
         const ybOff = perspOff(u, bl.y - VP_Y, br.y - VP_Y);
         return { x: VP_X + xOff, y: VP_Y + (1 - v) * ybOff + v * ytOff };
       };
+    };
+
+    const drawDoor = (pol: Phaser.Geom.Polygon) => {
+      // 半透明ベース（全面）
+      graph.fillStyle(DOOR_COLOR, 0.5);
+      graph.fillPoints(pol.points, true);
+      const bpPersp = makeBpPersp(pol);
       const wl = 0.15, wr = 0.85, wb = 0.5, wt = 0.78;
       // 不透明フレームで半透明ベースを上書き（のぞき窓以外）
       graph.fillStyle(DOOR_COLOR, 1.0);
@@ -319,6 +332,15 @@ export class MainView {
       graph.fillPoints([bpPersp(0.53, 0.34), bpPersp(0.64, 0.34), bpPersp(0.64, 0.42), bpPersp(0.53, 0.42)], true);
     };
 
+    // 開放扉：窓領域（wl〜wr）を上下端まで透過、左右柱を DOOR_COLOR 不透明で塗る
+    const drawOpenDoor = (pol: Phaser.Geom.Polygon) => {
+      const bpPersp = makeBpPersp(pol);
+      const wl = 0.15, wr = 0.85;
+      graph.fillStyle(DOOR_COLOR, 1.0);
+      graph.fillPoints([bpPersp(0, 0), bpPersp(wl, 0), bpPersp(wl, 1), bpPersp(0, 1)], true);
+      graph.fillPoints([bpPersp(wr, 0), bpPersp(1, 0), bpPersp(1, 1), bpPersp(wr, 1)], true);
+    };
+
     for (let i = 0; i < blockList.length; i++) {
       // デバッグ用描画距離によって枠線を色分け
       // graph.lineStyle(2, [0x0000FF,0x00FFFF,0x00FF00,0xFFFF00,0xFF0000,0xFF00FF][i%6]);
@@ -329,24 +351,34 @@ export class MainView {
         if ((blockList[i][order][0] & 8) && this.polygonList[RANGE - i][order][0]) {
           const pol = this.polygonList[RANGE - i][order][0];
           if (pol) {
-            graph.strokePoints(pol.points, true)
-            if (blockList[i][order][0] & (8 << 4)) {
-              drawDoor(pol);
+            const isOpenDoor = !!(blockList[i][order][0] & (8 << 4)) && isDoorOpen(blockList[i][order][1], blockList[i][order][2], 3);
+            if (isOpenDoor) {
+              drawOpenDoor(pol);
             } else {
-              graph.fillStyle(0xFFFFFF);
-              graph.fillPoints(pol.points, true);
+              graph.strokePoints(pol.points, true)
+              if (blockList[i][order][0] & (8 << 4)) {
+                drawDoor(pol);
+              } else {
+                graph.fillStyle(0xFFFFFF);
+                graph.fillPoints(pol.points, true);
+              }
             }
           }
         }
         if ((blockList[i][order][0] & 1) && this.polygonList[RANGE - i][order][1]) {
           const pol = this.polygonList[RANGE - i][order][1];
           if (pol) {
-            graph.strokePoints(pol.points, true)
-            if (blockList[i][order][0] & (1 << 4)) {
-              drawDoor(pol);
+            const isOpenDoor = !!(blockList[i][order][0] & (1 << 4)) && isDoorOpen(blockList[i][order][1], blockList[i][order][2], 0);
+            if (isOpenDoor) {
+              drawOpenDoor(pol);
             } else {
-              graph.fillStyle(0xFFFFFF);
-              graph.fillPoints(pol.points, true);
+              graph.strokePoints(pol.points, true)
+              if (blockList[i][order][0] & (1 << 4)) {
+                drawDoor(pol);
+              } else {
+                graph.fillStyle(0xFFFFFF);
+                graph.fillPoints(pol.points, true);
+              }
             }
           }
         }
@@ -385,24 +417,34 @@ export class MainView {
         if ((blockList[i][order + 1][0] & 8) && this.polygonList[RANGE - i][order + 1][0]) {
           const pol = this.polygonList[RANGE - i][order + 1][0];
           if (pol) {
-            graph.strokePoints(pol.points, true)
-            if (blockList[i][order + 1][0] & (8 << 4)) {
-              drawDoor(pol);
+            const isOpenDoor = !!(blockList[i][order + 1][0] & (8 << 4)) && isDoorOpen(blockList[i][order + 1][1], blockList[i][order + 1][2], 3);
+            if (isOpenDoor) {
+              drawOpenDoor(pol);
             } else {
-              graph.fillStyle(0xFFFFFF);
-              graph.fillPoints(pol.points, true);
+              graph.strokePoints(pol.points, true)
+              if (blockList[i][order + 1][0] & (8 << 4)) {
+                drawDoor(pol);
+              } else {
+                graph.fillStyle(0xFFFFFF);
+                graph.fillPoints(pol.points, true);
+              }
             }
           }
         }
         if ((blockList[i][order + 1][0] & 4) && this.polygonList[RANGE - i][order + 1][1]) {
           const pol = this.polygonList[RANGE - i][order + 1][1];
           if (pol) {
-            graph.strokePoints(pol.points, true)
-            if (blockList[i][order + 1][0] & (4 << 4)) {
-              drawDoor(pol);
+            const isOpenDoor = !!(blockList[i][order + 1][0] & (4 << 4)) && isDoorOpen(blockList[i][order + 1][1], blockList[i][order + 1][2], 2);
+            if (isOpenDoor) {
+              drawOpenDoor(pol);
             } else {
-              graph.fillStyle(0xFFFFFF);
-              graph.fillPoints(pol.points, true);
+              graph.strokePoints(pol.points, true)
+              if (blockList[i][order + 1][0] & (4 << 4)) {
+                drawDoor(pol);
+              } else {
+                graph.fillStyle(0xFFFFFF);
+                graph.fillPoints(pol.points, true);
+              }
             }
           }
         }
@@ -443,36 +485,51 @@ export class MainView {
       if ((blockList[i][0][0] & 1) && this.polygonList[RANGE - i][0][0]) {
         const pol = this.polygonList[RANGE - i][0][0];
         if (pol) {
-          graph.strokePoints(pol.points, true)
-          if (blockList[i][0][0] & (1 << 4)) {
-            drawDoor(pol);
+          const isOpenDoor = !!(blockList[i][0][0] & (1 << 4)) && isDoorOpen(blockList[i][0][1], blockList[i][0][2], 0);
+          if (isOpenDoor) {
+            drawOpenDoor(pol);
           } else {
-            graph.fillStyle(0xFFFFFF);
-            graph.fillPoints(pol.points, true);
+            graph.strokePoints(pol.points, true)
+            if (blockList[i][0][0] & (1 << 4)) {
+              drawDoor(pol);
+            } else {
+              graph.fillStyle(0xFFFFFF);
+              graph.fillPoints(pol.points, true);
+            }
           }
         }
       }
       if ((blockList[i][0][0] & 4) && this.polygonList[RANGE - i][0][1]) {
         const pol = this.polygonList[RANGE - i][0][1];
         if (pol) {
-          graph.strokePoints(pol.points, true)
-          if (blockList[i][0][0] & (4 << 4)) {
-            drawDoor(pol);
+          const isOpenDoor = !!(blockList[i][0][0] & (4 << 4)) && isDoorOpen(blockList[i][0][1], blockList[i][0][2], 2);
+          if (isOpenDoor) {
+            drawOpenDoor(pol);
           } else {
-            graph.fillStyle(0xFFFFFF);
-            graph.fillPoints(pol.points, true);
+            graph.strokePoints(pol.points, true)
+            if (blockList[i][0][0] & (4 << 4)) {
+              drawDoor(pol);
+            } else {
+              graph.fillStyle(0xFFFFFF);
+              graph.fillPoints(pol.points, true);
+            }
           }
         }
       }
       if ((blockList[i][0][0] & 8) && this.polygonList[RANGE - i][0][3]) {
         const pol = this.polygonList[RANGE - i][0][3];
         if (pol) {
-          graph.strokePoints(pol.points, true)
-          if (blockList[i][0][0] & (8 << 4)) {
-            drawDoor(pol);
+          const isOpenDoor = !!(blockList[i][0][0] & (8 << 4)) && isDoorOpen(blockList[i][0][1], blockList[i][0][2], 3);
+          if (isOpenDoor) {
+            drawOpenDoor(pol);
           } else {
-            graph.fillStyle(0xFFFFFF);
-            graph.fillPoints(pol.points, true);
+            graph.strokePoints(pol.points, true)
+            if (blockList[i][0][0] & (8 << 4)) {
+              drawDoor(pol);
+            } else {
+              graph.fillStyle(0xFFFFFF);
+              graph.fillPoints(pol.points, true);
+            }
           }
         }
       }
