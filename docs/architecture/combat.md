@@ -1,0 +1,99 @@
+# マップオブジェクト / 敵 / 戦闘システム
+
+[← 索引へ戻る](../architecture.md)
+
+マップ上のオブジェクト管理、敵 AI、ターン制戦闘の流れを扱います。
+
+## マップオブジェクトシステム
+
+マップ上に配置されるオブジェクト（階段、トラップ、敵など）は`MapObject`基底クラスで統一管理されます：
+
+- **MapObject**（`src/lib/MapObject.ts`）: 全オブジェクトの基底クラス。座標、表示マーク、色、イベントハンドラなどを保持
+- **MapMark定数**: オブジェクトの表示形状を定義（`CIRCLE`, `STAR`, `DIAMOND`, `CROSS`, `X_CROSS`）
+- **MapShape定数**: `MainView` でブロック中心に重ねて描画する立体形状を排他選択（`NONE` / `SPHERE` / `CUBE` / `BOX` / `CYLINDER` / `PYRAMID`）。`MapObject.shape` に設定すると `MainView.render()` が `object.color` で陰影付き描画する。`BOX`・`CYLINDER`・`PYRAMID` は床接地型（高さ = セル高さ/4、底面一辺または直径 = セル辺長/2）で、浮遊型の `SPHERE`・`CUBE` と異なり下部が床面に接する
+- **MapObject.concentricCircle**: `MainView` の床マーカー描画形状フラグ。`true` で内側2層（`inner1` / `inner2`）を同心円（透視トラペゾイドにインスクライブした回転楕円）で描画し、X 字対角線も省略する。最外層（alpha 0.3）はセルからはみ出さないよう常に polygon。床に置かれた静的オブジェクトの表現に使う。楕円は `drawInscribedEllipse()` が多角形の対辺中点を結ぶ2本のベクトルを共役半直径 `a`, `b` として扱い、`M = [a b]` の `M·Mᵀ` の固有分解から主軸長と回転角度を計算し、`translateCanvas`+`rotateCanvas`+`fillEllipse` で描画する。平行四辺形なら4辺の中点が楕円上に厳密に乗る
+- **MapObjectStore**（`src/lib/map/MapObjectStore.ts`）: 全オブジェクトを `Map<integer, MapObject>` で一元管理。`instanceof` で型別のフィルタリングが可能。`DungeonMap` は同名の薄い委譲メソッド（`addEnemy`、`getEnemy`、`removeEnemy` など）を公開する
+
+## 敵システム
+
+敵システムの構成：
+
+- **EnemyLoader**: `enemies.yml`から敵データを読み込み、フロアに応じた敵を提供
+- **Enemy**: `MapObject`を継承した敵クラス。座標は`MapObject`のプロパティとして自身が保持するため、敵の移動時にキーの差し替えが不要。`target` フィールド（プライベート）でターゲット座標を保持し、ターン間で持続する
+- **DungeonMap / MapObjectStore**: 敵を他のオブジェクトと統一管理（`addEnemy`、`getEnemy`、`removeEnemy` などを `DungeonMap` 経由で呼び出すと `MapObjectStore` に委譲。`instanceof Enemy` によるフィルタリングを内部で実施）
+- **Game Scene**: フロアごとに敵を自動生成・配置（フロア数に応じて難易度調整）
+
+敵は3Dビュー上で球体（ダイアモンド形マーク）として表示され、各敵は`enemies.yml`で定義された色で描画されます。
+
+敵を倒したときのアイテムドロップは `enemies.yml` の `drop: [{ item, rate, modifierChance? }]` と `base.yml` floor の `enemyDropPool` を additive に合成した結果に基づき、`src/lib/map/EnemyDropResolver.tryEnemyDrop` が処理する。詳細は [items.md](./items.md) の「アイテム修飾状態（modifier）」節を参照。
+
+### 敵の移動パターン（`walk` フィールド）
+
+`enemies.yml` の各エントリに `walk` フィールドを指定することで、敵ごとに移動AIを切り替えられます（未指定時は `default`）：
+
+| 値 | 動作 |
+| --- | --- |
+| `default`（未指定） | **パターン移動**: 扉の先をターゲットに巡回。視線が通るプレイヤーがいれば追跡。A*経路探索（`DungeonMap.findPath()`）で移動 |
+| `random` | **ランダムウォーク**: 東西南北＋その場の5択をランダム選択 |
+| `none` | **移動なし**: 定位置に留まり、プレイヤーが `canAttack` 判定圏内に入ったときのみ攻撃 |
+
+`default` モードの詳細な処理順序：
+
+1. `canAttack()` が真 → 攻撃して終了
+2. すでにターゲット到達している → ターゲットをクリアして処理を継続（新たなターゲットを探索）
+3. `hasLineOfSight(敵, プレイヤー)` が真 → ターゲットをプレイヤー位置に更新（`targetIsPlayerPos = true`）
+4. `hasLineOfSight(敵, プレイヤー)` が偽で **`targetIsPlayerPos` が真**（プレイヤー追跡中）かつ現在のターゲットへの視線がある → ターゲット地点の扉の先をターゲットに更新（追跡中のみ。ウェイポイント追従時は発動しない）
+5. ターゲットなし → `getDoorTargetsInZone(敵位置)` で扉出口候補を取得し、Mooreネイバーフッド（チェビシェフ距離1）外からランダム選択。さらに `lastEnteredFrom`（直前に越えた扉の出発セル）と一致する候補を除外して逆行を防ぐ（`targetIsPlayerPos = false`）
+6. ターゲット設定不能 → ランダムウォーク（フォールバック）。`randomWalkCount` をインクリメントし、10ターン連続でランダムウォークしたら `lastEnteredFrom` をリセットして行き止まりからの脱出を許可
+7. `findPath(現在地, ターゲット)` で経路取得 → 先頭方向へ1歩移動。到達不能時はターゲットをクリアしてランダムウォーク
+8. 移動時に扉を越えた場合は `lastEnteredFrom` に出発セルを記録し `randomWalkCount` をリセット
+9. ターゲット到達 → ターゲットをクリア
+
+関連する `DungeonMap` の公開メソッド：
+
+- `hasLineOfSight(x1, y1, x2, y2)`: 2点間に壁・扉がなく視線が通るかを直線走査（DDA）で判定
+- `getDoorTargetsInZone(enemyX, enemyY)`: 敵位置から壁・扉のない境界を BFS で展開し、視覚的に繋がった開放空間内の全扉から1マス外側の座標リストを返す
+
+## 戦闘システム
+
+### ターンの流れ
+
+1. プレイヤーがスペースキーを押す → `DungeonMap.attackPlayer()` を呼び出す
+2. 正面座標の敵を取得し、`canAttack()` で壁チェックを行う
+3. ダメージ計算: `BaseLoader.calculateDamageFromPlayer(playerVars, enemyVars)` が `base.yml` の `damageFromPlayer.formula` を評価（`Math.max(1, Math.floor(...))` クランプ）
+4. 敵が死亡した場合（`BaseLoader.isEnemyDead` 判定）: マップから除去し、`player.addExp()` で経験値付与
+5. `dispatchObjectEvent()` を呼び出し、隣接する敵の反撃ターンを処理
+6. 敵の反撃: `around-1` イベントが `canAttack()` を通過した場合のみ攻撃。ダメージは `BaseLoader.calculateDamageToPlayer` を経由
+7. プレイヤー死亡時（`BaseLoader.isDead`）: `EventBus.emit('game-over')` → GameOver シーンへ遷移
+
+### 壁越し攻撃の判定（`DungeonMap.canAttack()`）
+
+隣接する2セル間の攻撃可否を判定します（実装は `src/lib/map/PlayerActions.ts` の `canAttack`、`DungeonMap.canAttack()` から委譲）：
+
+- **縦横方向**: 出発点からその方向に「扉のない壁（solid wall）」があれば攻撃不可。**扉があれば通過可**（プレイヤー・敵が扉を挟んで隣接している場合は攻撃可能）
+- **斜め方向**: 角を回る2本のL字経路（横→縦 / 縦→横）のうち、**少なくとも1本が完全に開いた通路（壁ビットなし）であれば攻撃可**。扉ビットが立っているセルは壁として扱うため、扉経由の斜め攻撃は不可
+
+```text
+例1: 縦壁越し → 攻撃不可      例2: L字（1本通れる）→ 攻撃可
+　プ                            プ壁
+壁壁壁                          　　敵
+　敵
+
+例3: 扉越し直線 → 攻撃可      例4: 扉経由L字 → 攻撃不可
+プ扉敵                          プ扉□
+                                　　敵
+```
+
+### 経験値・レベルアップ（`Player`）
+
+- `player.addExp(amount): { levels: Array<{ level, learnedSkills }> }` — 経験値を加算し、各レベルアップの結果（到達レベルとそこで mastery 抽選により新規習得したスキル名）を順序付きで返す
+- `player.levelUp(): string[]` — 直接 1 段階レベルアップする。今回のレベルアップで新規習得したスキル名を返す
+- 必要経験値: `BaseLoader.getRequiredExp(vars)` が `base.yml` の `requiredExp.formula` を評価（既定の `base.yml` では `level * 50`）
+- レベルアップ時の上昇量: `base.yml` の `levelUpBonus` 配列で完全に設定駆動。`reset: yes` が付いていて fluctuation 対応のステータスは最大値増分後に現値を最大値へ揃える（既定では `life` の HP 全回復）
+- mastery 抽選: `skills.yml` の各スキルに対し、未習得かつ post-level >= `least` を満たすエントリのうち `least` が最大のものを採用し、その `rate` で `Math.random()` 抽選。`exact: N` は `{ least: N, rate: 1 }` の省略表記として SkillsLoader 内で正規化される。複数レベルアップ時（`addExp` で N → N+3 等）は各 `levelUp` ごとに抽選が走る
+
+### メッセージログ（`PhaserGame.vue`）
+
+戦闘・その他のゲームイベントは `EventBus.emit('message-log', message)` で発行し、`PhaserGame.vue` の Vue リアクティブ変数に蓄積します。ゲームキャンバス下部の `<textarea readonly>` に最新50件を表示します（テキスト選択・コピー可能）。
+
+アイテム取得・フロア移動など、将来のイベントも同じ `'message-log'` イベントを使用してください。

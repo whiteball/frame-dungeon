@@ -1,0 +1,187 @@
+# データ駆動設計 / base.yml / YAML 横断バリデーション
+
+[← 索引へ戻る](../architecture.md)
+
+YAML ファイルによるデータ定義の仕組みと、各 Loader、`base.yml` の中核設定、起動時の横断バリデーションを扱います。
+
+## データ駆動設計
+
+ゲームデータはYAMLファイルで管理されています：
+
+- **base.yml**（`public/data/base.yml`）: ゲーム全体の中核設定。ゲーム名・最終フロア・ダメージ式・経験値式・レベルアップボーナス・フロア毎構成・敵自動湧き判定式を保持。詳細は後述「base.yml — ゲーム全体設定」参照
+- **stats.yml**（`public/data/stats.yml`）: プレイヤーのステータス定義（HP、MP、攻撃力、防御力など）
+- **items.yml**（`public/data/items.yml`）: アイテム定義（武器、防具、消耗品）
+- **enemies.yml**（`public/data/enemies.yml`）: 敵の定義（HP、攻撃力、防御力、経験値、表示色）。`walk` フィールドで移動パターンを指定（[combat.md](./combat.md) の「敵システム」参照）
+- **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
+- **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
+- **skills.yml**（`public/data/skills.yml`）: スキル定義（コスト・ターゲット・action 列・習得条件）。詳細は [skills.md](./skills.md) を参照
+- **item_modifiers.yml**（`public/data/item_modifiers.yml`）: アイテム修飾状態（呪い・強化・弱化など）の定義。`effect[].name` は `add_stats`（formula 評価結果を target stat に加算）/ `cannot_unequip`（装備解除ブロック）のいずれかをオブジェクト形式で記述。`target: [weapon|main_armor|sub_armor|consumable]` で適用可能 type を指定、`countable: true` の modifier は `max` と `initial.{min,max}` を伴い重ねがけ可能。`kind` タグで解呪等の一括除去対象を分類、`weight` はフロア床配置・敵ドロップ時の抽選重み。詳細は [items.md](./items.md) の「アイテム修飾状態（modifier）」節を参照。ZIP カスタムデータでは欠落許容（後方互換のため optional 扱い）
+
+各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`、`ItemModifiersLoader`）によって読み込まれます。
+
+### Loader クラスと YamlDefinitionStore
+
+`StatsLoader` / `ItemsLoader` / `EnemyLoader` / `EffectsLoader` / `TrapsLoader` / `SkillsLoader` / `ItemModifiersLoader` はシングルトンパターンを持つクラスで、固有のバリデーションとドメイン固有ゲッターのみを実装します。fetch・YAMLパース・格納・基本ゲッターの共通処理は `YamlDefinitionStore<T>`（`src/lib/YamlDefinitionStore.ts`）に委譲されます（コンポジション）。
+
+`BaseLoader` は単一スカラー/フォーマット混在の構造（`floors[]` 配列、複数 formula、スカラー定数）のため `YamlDefinitionStore` に乗らず独自に fetch/parse する。
+
+```text
+StatsLoader ──────────┐
+ItemsLoader ──────────┤
+EnemyLoader ──────────┼─── YamlDefinitionStore<T>（fetch / parse / store / getAll / getByName）
+EffectsLoader ────────┤
+TrapsLoader ──────────┤
+SkillsLoader ─────────┤
+ItemModifiersLoader ──┘
+
+BaseLoader ───────── 独自実装（fetch / parse / formula コンパイル）
+```
+
+`YamlDefinitionStore<T extends { name: string }>` が提供するメソッド：
+
+| メソッド | 概要 |
+| --- | --- |
+| `load(filePath, dataLabel, validate, options?)` | fetch → YAML パース → バリデーション → 格納。エラー時は `alert` + throw |
+| `getAll()` | 全定義の配列コピーを返す |
+| `getByName(name)` | 名前で1件取得（Map ルックアップ） |
+| `getNames()` | 全名前の配列を返す |
+| `has(name)` | 名前の存在確認（`EffectsLoader.hasEffect()` が使用） |
+
+**ファイル不存在・空ファイルの扱い:**
+
+`stats.yml` 以外のデータファイルは存在しなくても起動可能です（敵なし・アイテムなし等のカスタムダンジョン）。`load()` の `options.required` で挙動を切り替えます：
+
+- `required: false`（デフォルト）: 不存在・空・空配列のとき `console.log` して空状態で続行
+- `required: true`（`StatsLoader` のみ使用）: 不存在・空・空配列でも `alert` + throw
+
+不正な定義（必須キー欠落など）は `required` の値によらず常に `alert` + throw となります。
+
+**EffectsLoader の特殊構成:**
+
+`EffectsLoader` は `YamlDefinitionStore<EffectDefinition>` に加え、`compiledByName: Map<string, CompiledEffect>` を独自に保持します。`loadEffects()` では `store.load()` 完了後に全エントリの数式を `expr-eval-fork` でコンパイルし、`getCompiledEffect(name)` で高速参照できるようキャッシュします。
+
+## base.yml — ゲーム全体設定
+
+`base.yml` はゲームの根幹挙動（戦闘式・成長式・フロア構成）を定義する **必須** データファイル。すべての formula 文字列は `expr-eval-fork` の `Parser` で起動時にコンパイルされ、`Expression` としてキャッシュされる。
+
+### スカラー設定
+
+| キー | 必須 | フォールバック | 用途 |
+| --- | --- | --- | --- |
+| `name` | 任意 | `'Dungeon Game'` | タイトル・セーブメタの `gameName` |
+| `goalFloor` | 任意 | `10` | このフロアの階段で `GameClear` シーンへ遷移 |
+| `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
+| `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |
+
+### 死亡判定 (`dead` / `enemyDead`)
+
+```yaml
+dead:
+  use: [life]              # （ドキュメント目的、実装は formula から自動解決）
+  formula: "life <= 0"     # 真のとき死亡
+```
+
+`enemyDead` は省略時 `dead.formula`、それも無ければ「`defaultEnemyDamageStat` <= 0」にフォールバック。
+
+### ダメージ計算 (`damageToPlayer` / `damageFromPlayer`)
+
+両方とも **必須**。formula 内で `player_<stat>` / `enemy_<stat>` プレフィックス付きで両者のステータスを参照可能。結果は `Math.max(1, Math.floor(...))` でクランプ。
+
+```yaml
+damageFromPlayer:
+  player: { use: [power] }
+  enemy:  { use: [defense] }
+  formula: "player_power - enemy_defense / 2"
+```
+
+`use` セクションはドキュメント上の依存宣言で、実装では参照されない（formula 内に書かれた変数名で動的に解決）。
+
+### 経験値式 (`requiredExp`) — 必須
+
+```yaml
+requiredExp:
+  use: [level]
+  formula: "level * 50"
+```
+
+`Player.expToNextLevel()` が `getFormulaVars()`（プレイヤーの実効ステータス + `level` + `exp`）を引数に評価。
+
+### レベルアップボーナス (`levelUpBonus`)
+
+配列。各エントリは `{ target, formula, reset? }`：
+
+- `target`: ステータス名
+- `formula`: 加算量。current 値で評価される
+- `reset: yes` （または `true`）: `stats.yml` で fluctuation 許可されているステータスのとき、最大値増分後に現在値を最大値に揃える（HP 全回復など）
+
+`fluctuation` 非対応ステータスでは `addStat()` 経由で base に加算。
+
+### フロア毎構成 (`floors`)
+
+配列。各要素は `{ <floorNum>: FloorConfigRaw }` のマップ。`getFloorConfig(floor)` は **指定フロア以下で最大のキー** を採用し、結果を `resolvedCache` にキャッシュ。
+
+```yaml
+floors:
+  - 1:
+      size: 15                  # number か { w, h }
+      enemyCount: 4             # ランダム敵の追加湧き目標
+      enemies:                  # 名前文字列 → ランダムプール、{ name, count } → 固定配置
+        - slime
+        - { name: ogre, count: 1 }
+      trapCount: 0              # number か { min, max }
+      traps: [spike, swamp]     # トラップ候補プール（空可）
+      itemModifierChance: 0.15  # 任意。床配置アイテムに modifier を付与する確率 (0..1)
+      itemModifierPool:         # 任意。modifier 名 → 追加重み（item_modifiers.yml の weight と乗算）
+        power_reinforced: 3
+        cursed: 1
+      enemyDropPool:            # 任意。フロア共通の敵ドロップ追加プール
+        - item: potion          # items.yml のアイテム名
+          rate: 0.05            # ドロップ確率 (0..1) 独立判定
+          modifierChance: 0.5   # 任意。当該ドロップの modifier 付与確率上書き
+      secretRoom: yes           # 任意。true/'yes' で 50%、数値ならその確率で隠し部屋を生成
+```
+
+`enemies` 内で `enemies.yml` に存在しない名前は warn + スキップ。`traps` も同様。`trapCount > 0` で `traps` が空の場合は warn のみ。
+
+**`itemModifierChance` / `itemModifierPool`:**
+
+- `itemModifierChance` (0..1) はフロア床配置時の modifier 付与確率。未指定または 0 なら付与なし。`Player.createItem(name, { rollModifiers: true, floor })` 経由で生成された Item にのみ適用される
+- `itemModifierPool` を指定すると **列挙された modifier 名のみが候補** となり、抽選重みは `item_modifiers.yml` の `weight` × pool の値で決まる（積算）
+- `itemModifierPool` を省略すると `item_modifiers.yml` の全 modifier が候補となり、各 `weight` のみで抽選される
+- `itemModifierPool` 内に存在しない modifier 名や負の重みがあれば `YamlCrossValidator` がエラーを返す
+
+**`secretRoom`:**
+
+- `true` / `'yes'` → 確率 0.5、`number`（0..1）ならその確率、`false` / 未指定 → 無効
+- マップ生成完了後、出入口（扉）が **1 つしかない部屋** を全部屋から走査し、候補から 1 部屋だけランダム抽選 → 上記確率で「扉を壁に偽装」した隠し部屋に変換する
+- 隠し部屋には階段・アイテム・トラップ・敵・プレイヤー初期位置を配置しない（`DungeonMap.getRandomPos({ withoutSecretRoom: true })`）。ただし非隠し部屋に置けない場合は `setPlayerRandom` が隠し部屋へのフォールバック配置を許可する
+- 偽装中の扉は MainView / MiniMapView の両方で壁として描画され、フォグ可視判定でも壁扱いされる。プレイヤーが隣接して「調べる」（C キー → `trySearch`）で正しい方向を選ぶと `PlayerActions.searchAt` が `dungeon.revealDisguisedDoor` を呼び `「隠し扉を発見した！」` を message-log に流して通常扉に戻す
+- 偽装状態は `DungeonSaveData.disguisedDoors` / `secretRoomRects` でセーブ/ロードに永続化される
+
+### 敵自動湧き判定 (`autoSpawner`)
+
+ランダム敵プールから敵を抽選する際、敵が当該フロアに「相応しいか」を判定する formula：
+
+```yaml
+autoSpawner:
+  use: [currentFloor, life]
+  formula: "currentFloor <= 2 ? life <= 40 : ..."
+```
+
+利用可能な変数：敵の全ステータス（`life`, `power`, `defense` ...）+ `currentFloor` + `maxFloor` + `rank` / `minRank` / `maxRank`。formula 省略時は「`rank / (maxRank - minRank) * maxFloor <= currentFloor`」というデフォルト式。
+
+### カスタムデータでの上書き
+
+`CustomDataStore.set('base', text)` で ZIP からのカスタム `base.yml` を注入可能。`BaseLoader.load(customText)` がこのテキストを優先採用する（fetch をスキップ）。
+
+## YAML 横断バリデーション
+
+`YamlCrossValidator.validate()`（`src/lib/YamlCrossValidator.ts`）は全 Loader の `load()` 完了後に走り、以下のクロス参照を検証する：
+
+- `base.yml` の `floors[].enemies` / `floors[].traps` 名が `enemies.yml` / `traps.yml` に存在するか
+- `traps.yml` の `effect[].type === 'addEffect'` の `value` が `effects.yml` に存在するか
+- `items.yml` の `effect.immediate.learnSkill` が `skills.yml` に存在するか
+- `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` 要素が `effects.yml` に存在するか
+- `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
+
+`{ errors: string[], infos: string[] }` を返し、`errors.length > 0` のとき `EventBus.emit('yaml-cross-validation-errors', errors)` で `YamlErrorDialog` を表示。INFO レベルは現状コンソール出力のみ。

@@ -28,7 +28,7 @@
 
 ### 主要モジュール概要
 
-ゲームロジックは `src/lib/` 配下のモジュール群と `src/game/scenes/Game.ts` で構成されます。各モジュールの責務と関係性の詳細は [docs/architecture.md](docs/architecture.md) を参照のこと。
+ゲームロジックは `src/lib/` 配下のモジュール群と `src/game/scenes/Game.ts` で構成されます。各モジュールの責務と関係性の詳細は [docs/architecture.md](docs/architecture.md) を起点に、トピック別に [docs/architecture/](docs/architecture/) 配下の各ファイル（`overview.md` / `data.md` / `combat.md` / `items.md` / `gameplay.md` / `skills.md`）を参照のこと。
 
 - **Vue-Phaser通信**: `EventBus.emit` / `EventBus.on` を介する（`src/game/EventBus.ts`）
 - **マップ上のオブジェクト**: 階段・トラップ・敵・落ちているアイテムなどは全て `MapObject` を継承し、`MapObjectStore`（`DungeonMap` 経由でアクセス）で統一管理（`instanceof` で型別フィルタ）。`around-0` は踏んだとき自動発火、`around-0-self` は「足下」ボタンで明示発火（`dispatchSelfEvent`）
@@ -38,8 +38,8 @@
 - **キー操作**: W=前進、A=左回転またはカニ歩き左、S=後退（180°回転）またはカニ歩き後退、D=右回転またはカニ歩き右、Q=カニ歩き左または左回転、E=カニ歩き右または右回転、Shift+S=カニ歩き後退または180°回転（Q/EとA/Dの動作・SとShift+Sの動作はそれぞれ設定ダイアログで入れ替え可能）、スペース=正面の敵を攻撃、M=ミニマップ ズーム/全体 切り替え（ミニマップクリックでも同様にトグル）、C=ステータス表示、1〜0=画面下シーンアクションボタンのショートカット（左から順に割当）。デフォルトのシーンアクションは `[1:スキル, 2:アイテム使用, 3:装備変更, 4:ステータス, 5:足下, 6:セーブ]` の 6 個。回転はターン消費なし、カニ歩き移動はターン消費あり（スタン中不可）。設定は `localStorage('gameSettings')` の `swapQEandAD` / `swapSandShiftS` フラグで永続化
 - **メッセージログ**: `EventBus.emit('message-log', text, turnCount?)` で発行 → `PhaserGame.vue` の `<textarea>` に最新50件を表示。戦闘・アイテム・フロア移動・状態異常など全イベントをこのチャンネルに流すこと
 - **セーブ/ロード**: `SaveManager` が LocalStorage にスロット単位で保存（`SaveDialog` / `LoadDialog` 経由）。`yamlDigest` でデータ互換性を確認する
-- **スキルシステム**: `skills.yml` で定義したスキルをレベルアップ抽選（mastery）またはアイテム使用（`learnSkill` 効果）で習得し、`src/lib/skills/SkillExecutor.ts` 経由でコスト評価・target 解決・action 実行（`attack` / `damage` / `heal` / `reveal_trap`）を行う。スタン中（`_action: skip`）は発動不可。詳細は [docs/architecture.md](docs/architecture.md) のスキルシステム節を参照
-- **アイテム修飾状態 (modifier)**: `item_modifiers.yml` で定義する装備個体差。`Item.modifiers: Map<name,count>` を持ち、装備中のみ `add_stats`（formula 評価結果を target stat に加算）/ `cannot_unequip`（解除ブロック）の effect が発動。`Player.getEffectiveStat` は base → 装備raw → modifier add_stats → continuous → permanent の順で合算。UI 表示は `Item.getLabelWithModifiers()` で `鉄の剣 [攻+2/呪]` のような suffix 形式。詳細は [docs/architecture.md](docs/architecture.md) の「アイテム修飾状態（modifier）」節を参照
+- **スキルシステム**: `skills.yml` で定義したスキルをレベルアップ抽選（mastery）またはアイテム使用（`learnSkill` 効果）で習得し、`src/lib/skills/SkillExecutor.ts` 経由でコスト評価・target 解決・action 実行（`attack` / `damage` / `heal` / `reveal_trap`）を行う。スタン中（`_action: skip`）は発動不可。詳細は [docs/architecture/skills.md](docs/architecture/skills.md) を参照
+- **アイテム修飾状態 (modifier)**: `item_modifiers.yml` で定義する装備個体差。`Item.modifiers: Map<name,count>` を持ち、装備中のみ `add_stats`（formula 評価結果を target stat に加算）/ `cannot_unequip`（解除ブロック）の effect が発動。`Player.getEffectiveStat` は base → 装備raw → modifier add_stats → continuous → permanent の順で合算。UI 表示は `Item.getLabelWithModifiers()` で `鉄の剣 [攻+2/呪]` のような suffix 形式。詳細は [docs/architecture/items.md](docs/architecture/items.md) の「アイテム修飾状態（modifier）」節を参照
 - **YAML 横断バリデーション**: `YamlCrossValidator.validate()` が起動直後に走り、`base.yml` の floor 定義と `enemies.yml` / `traps.yml` のクロスリファレンス、および `items.yml` の `learnSkill` 効果と `skills.yml` のクロスリファレンスを検証。エラーは `YamlErrorDialog` に表示
 
 ### プロジェクト構造メモ
@@ -56,9 +56,9 @@
 
 ### ドキュメント更新ルール
 
-- `src/lib/*Loader.ts` / `src/game/scenes/*.ts` を変更したら、`docs/architecture.md` の該当セクションも同コミットで更新する
-- `base.yml` のキーを追加/削除したら `docs/architecture.md` の「base.yml — ゲーム全体設定」表を更新する
-- `EventBus` の新イベントを追加したら `docs/architecture.md` の該当イベント一覧表に行を追加する
+- `src/lib/*Loader.ts` を変更したら `docs/architecture/data.md` の該当セクションを、`src/game/scenes/*.ts` を変更したら `docs/architecture/overview.md` または該当トピックのファイル（`combat.md` / `items.md` / `gameplay.md` / `skills.md`）を同コミットで更新する
+- `base.yml` のキーを追加/削除したら `docs/architecture/data.md` の「base.yml — ゲーム全体設定」表を更新する
+- `EventBus` の新イベントを追加したら関連トピックのファイル（ダイアログ関連は `docs/architecture/overview.md`、アイテム/スキル関連は `docs/architecture/items.md`、その他は該当ファイル）のイベント一覧表に行を追加する
 
 ### 未実装機能
 
