@@ -42,6 +42,8 @@ export class MapObject {
   public x: integer = -1;
   public y: integer = -1;
   public shape: MapShape = MapShape.NONE;
+  /** 床マーカーを同心四角ではなく同心円（楕円）で描画する */
+  public concentricCircle: boolean = false;
   public visible: boolean = true;
 }
 

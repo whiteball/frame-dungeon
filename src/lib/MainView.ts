@@ -358,6 +358,86 @@ export class MainView {
       graph.strokePoints([FTL, FTR, FBR, FBL], true);
     }
 
+    const VP_X = this.width / 2, VP_Y = this.height / 2;
+
+    // 一点透視で歪んだ四角形に対してインスクライブ楕円を描画する。
+    //
+    // 対辺の中点を結ぶ2本のベクトルを共役半直径 a, b として、
+    // 楕円 P(θ) = C + a·cosθ + b·sinθ の主軸を求めて回転描画する。
+    // 平行四辺形なら全辺中点がそのまま楕円上に乗る。
+    //
+    // 主軸計算: M = [a b] (2x2行列) として、対称行列 M·Mᵀ の固有値が
+    // 主半軸長の二乗、対応する固有ベクトル方向が主軸の向きとなる。
+    const drawInscribedEllipse = (poly: Phaser.Geom.Polygon, color: number, alpha: number) => {
+      const pts = poly.points;
+      if (pts.length < 4) return;
+      let cx = 0, cy = 0;
+      for (const p of pts) { cx += p.x; cy += p.y; }
+      cx /= pts.length; cy /= pts.length;
+      // 各辺の中点
+      const mids: { x: number, y: number }[] = [];
+      for (let i = 0; i < pts.length; i++) {
+        const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
+        mids.push({ x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 });
+      }
+      // 対辺中点を結ぶ2本の半直径ベクトル
+      const ax = (mids[2].x - mids[0].x) / 2;
+      const ay = (mids[2].y - mids[0].y) / 2;
+      const bx = (mids[3].x - mids[1].x) / 2;
+      const by = (mids[3].y - mids[1].y) / 2;
+      // M·Mᵀ = [[A, B], [B, C]]
+      const A = ax * ax + bx * bx;
+      const B = ax * ay + bx * by;
+      const C = ay * ay + by * by;
+      // 固有値: tr = A + C, disc = sqrt((A-C)² + 4B²)
+      const disc = Math.sqrt(Math.max(0, (A - C) * (A - C) + 4 * B * B));
+      const lambda1 = (A + C + disc) / 2;
+      const lambda2 = (A + C - disc) / 2;
+      // λ1 に対応する固有ベクトル: (B, λ1 - A)
+      // B≈0 のときも atan2(λ1-A, B) が正しく軸方向を返す
+      const angle = Math.atan2(lambda1 - A, B);
+      const major = 2 * Math.sqrt(Math.max(0, lambda1));
+      const minor = 2 * Math.sqrt(Math.max(0, lambda2));
+      graph.fillStyle(color, alpha);
+      graph.translateCanvas(cx, cy).rotateCanvas(angle);
+      graph.fillEllipse(0, 0, major, minor);
+      graph.rotateCanvas(-angle).translateCanvas(-cx, -cy);
+    };
+
+    // 床マーカー描画（同心四角 or 同心円）。3箇所で同一処理だったため共通化
+    const drawFloorMark = (
+      pol: Phaser.Geom.Polygon,
+      inner1: Phaser.Geom.Polygon | null,
+      inner2: Phaser.Geom.Polygon | null,
+      color: number,
+      asCircle: boolean,
+    ) => {
+      graph.lineStyle(1, 0x0, 0.5);
+      graph.strokePoints(pol.points, true);
+      if (!asCircle) {
+        // 対角線（X 字）— 同心四角モードでのみ意味があるので円モードでは描かない
+        graph.strokePoints([pol.points[0], pol.points[2]], true);
+        graph.strokePoints([pol.points[1], pol.points[3]], true);
+      }
+      graph.lineStyle(1, 0x0, 1);
+      // 一番外側はセルからはみ出すため、円モードでも polygon で塗る
+      graph.fillStyle(color, 0.3);
+      graph.fillPoints(pol.points, true);
+      if (asCircle) {
+        if (inner1) drawInscribedEllipse(inner1, color, 0.6);
+        if (inner2) drawInscribedEllipse(inner2, color, 1);
+      } else {
+        if (inner1) {
+          graph.fillStyle(color, 0.6);
+          graph.fillPoints(inner1.points, true);
+        }
+        if (inner2) {
+          graph.fillStyle(color, 1);
+          graph.fillPoints(inner2.points, true);
+        }
+      }
+    };
+
     // プレイヤー向き回転量: EAST=1, SOUTH=2, WEST=3, NORTH=0
     // originalDir = (rotatedDir + shift) % 4
     const shift = (player.direction + 1) % 4;
@@ -373,7 +453,6 @@ export class MainView {
     };
 
     const DOOR_COLOR = 0xA0522D;
-    const VP_X = this.width / 2, VP_Y = this.height / 2;
     // ポリゴンの4頂点から透視補間関数を生成する（側壁は調和平均ベース）
     const makeBpPersp = (pol: Phaser.Geom.Polygon) => {
       const sorted = [...pol.points].sort((a, b) => a.y - b.y);
@@ -477,23 +556,9 @@ export class MainView {
 
           const pol = this.polygonList[RANGE - i][order][2];
           if (pol) {
-            graph.lineStyle(1, 0x0, 0.5);
-            graph.strokePoints(pol.points, true);
-            graph.strokePoints([pol.points[0], pol.points[2]], true);
-            graph.strokePoints([pol.points[1], pol.points[3]], true);
-            graph.lineStyle(1, 0x0, 1);
-            graph.fillStyle(object.color, 0.3);
-            graph.fillPoints(pol.points, true);
             const inner1 = this.floorInner1List[RANGE - i][order];
-            if (inner1) {
-              graph.fillStyle(object.color, 0.6);
-              graph.fillPoints(inner1.points, true);
-            }
             const inner2 = this.floorInner2List[RANGE - i][order];
-            if (inner2) {
-              graph.fillStyle(object.color, 1);
-              graph.fillPoints(inner2.points, true);
-            }
+            drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
             const center = this.centerList[RANGE - i][order];
             if (object.shape === MapShape.SPHERE && center) {
               drawSphere(center, object.alpha);
@@ -547,23 +612,9 @@ export class MainView {
 
           const pol = this.polygonList[RANGE - i][order + 1][2];
           if (pol) {
-            graph.lineStyle(1, 0x0, 0.5);
-            graph.strokePoints(pol.points, true);
-            graph.strokePoints([pol.points[0], pol.points[2]], true);
-            graph.strokePoints([pol.points[1], pol.points[3]], true);
-            graph.lineStyle(1, 0x0, 1);
-            graph.fillStyle(object.color, 0.3);
-            graph.fillPoints(pol.points, true);
             const inner1 = this.floorInner1List[RANGE - i][order + 1];
-            if (inner1) {
-              graph.fillStyle(object.color, 0.6);
-              graph.fillPoints(inner1.points, true);
-            }
             const inner2 = this.floorInner2List[RANGE - i][order + 1];
-            if (inner2) {
-              graph.fillStyle(object.color, 1);
-              graph.fillPoints(inner2.points, true);
-            }
+            drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
             const center = this.centerList[RANGE - i][order + 1];
             if (object.shape === MapShape.SPHERE && center) {
               drawSphere(center, object.alpha);
@@ -637,23 +688,9 @@ export class MainView {
 
         const pol = this.polygonList[RANGE - i][0][2];
         if (pol) {
-          graph.lineStyle(1, 0x0, 0.5);
-          graph.strokePoints(pol.points, true);
-          graph.strokePoints([pol.points[0], pol.points[2]], true);
-          graph.strokePoints([pol.points[1], pol.points[3]], true);
-          graph.lineStyle(1, 0x0, 1);
-          graph.fillStyle(object.color, 0.3);
-          graph.fillPoints(pol.points, true);
           const inner1 = this.floorInner1List[RANGE - i][0];
-          if (inner1) {
-            graph.fillStyle(object.color, 0.6);
-            graph.fillPoints(inner1.points, true);
-          }
           const inner2 = this.floorInner2List[RANGE - i][0];
-          if (inner2) {
-            graph.fillStyle(object.color, 1);
-            graph.fillPoints(inner2.points, true);
-          }
+          drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
           const center = this.centerList[RANGE - i][0];
           if (object.shape === MapShape.SPHERE && center) {
             drawSphere(center, object.alpha);

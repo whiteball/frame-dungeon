@@ -54,6 +54,7 @@ export class Enemy extends MapObject {
         this.color = definition.color || 0xFF0000;
         this.alpha = 1;
         this.shape = MapShape.SPHERE;
+        this.concentricCircle = true;
         this.visible = true;
 
     }
