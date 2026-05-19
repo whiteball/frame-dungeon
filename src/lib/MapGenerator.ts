@@ -986,6 +986,7 @@ export class DungeonMap {
       if (!enemy.isAlive()) {
         EventBus.emit('message-log', `${enemy.getLabel()}は力尽きた`, turn);
         this.removeEnemy(enemy.x, enemy.y);
+        this._playerInstance?.incrementEnemiesDefeated();
       }
     }
   }

@@ -61,6 +61,10 @@ export class Player {
     // 習得済みスキル名（skills.yml の name と対応）
     private learnedSkills: Set<string> = new Set();
 
+    // 統計情報（プレイ進行に伴って累積。表示は今後実装予定）
+    private enemiesDefeated: number = 0;
+    private itemsUsed: number = 0;
+
     constructor() {
         this.stats = new Map();
         this.maxStats = new Map();
@@ -682,6 +686,22 @@ export class Player {
         return this.learnedSkills.delete(name);
     }
 
+    getEnemiesDefeated(): number {
+        return this.enemiesDefeated;
+    }
+
+    incrementEnemiesDefeated(): void {
+        this.enemiesDefeated++;
+    }
+
+    getItemsUsed(): number {
+        return this.itemsUsed;
+    }
+
+    incrementItemsUsed(): void {
+        this.itemsUsed++;
+    }
+
     getInventory(): Inventory {
         return this.inventory;
     }
@@ -1001,6 +1021,8 @@ export class Player {
                 count: e.count,
             })),
             learnedSkills: Array.from(this.learnedSkills),
+            enemiesDefeated: this.enemiesDefeated,
+            itemsUsed: this.itemsUsed,
         };
     }
 
@@ -1052,6 +1074,9 @@ export class Player {
                 console.warn(`Unknown skill in save data, skipped: ${name}`);
             }
         }
+
+        this.enemiesDefeated = data.enemiesDefeated ?? 0;
+        this.itemsUsed = data.itemsUsed ?? 0;
     }
 
     // アイテム作成ヘルパー

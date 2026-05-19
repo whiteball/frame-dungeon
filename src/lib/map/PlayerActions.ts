@@ -81,6 +81,7 @@ export function attackEnemyAt(dungeon: DungeonMap, targetX: integer, targetY: in
 
   if (!enemy.isAlive()) {
     dungeon.removeEnemy(targetX, targetY);
+    player.incrementEnemiesDefeated();
     tryEnemyDrop(dungeon, enemy, dungeon.getCurrentFloor());
     const result = player.addExp(enemy.getExp());
     EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`, dungeon.getTurnCount());
@@ -193,6 +194,7 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
   }
 
   inventory.removeItemById(instanceId);
+  player.incrementItemsUsed();
   EventBus.emit('message-log', `${item.getLabelWithModifiers()}を使った！${messageParts.length ? '（' + messageParts.join('、') + '）' : ''}`, dungeon.getTurnCount());
 
   dungeon.dispatchObjectEvent();

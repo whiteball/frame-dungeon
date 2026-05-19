@@ -86,6 +86,7 @@ export function executeDamageAction(
 
         if (!enemy.isAlive()) {
             dungeon.removeEnemy(enemy.x, enemy.y);
+            caster.incrementEnemiesDefeated();
             tryEnemyDrop(dungeon, enemy, dungeon.getCurrentFloor());
             const result = caster.addExp(enemy.getExp());
             EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`, turn);

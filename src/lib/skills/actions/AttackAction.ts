@@ -38,6 +38,7 @@ export function executeAttackAction(
 
         if (!enemy.isAlive()) {
             dungeon.removeEnemy(enemy.x, enemy.y);
+            caster.incrementEnemiesDefeated();
             const result = caster.addExp(enemy.getExp());
             EventBus.emit('message-log', `${enemy.getLabel()}を倒した！`, turn);
             for (const lv of result.levels) {

@@ -37,6 +37,10 @@ export interface PlayerSaveData {
     activeContinuousEffects: ContinuousEffectSaveData[];
     activeStatusEffects: StatusEffectSaveData[];
     learnedSkills: string[];
+    /** 倒した敵の累積数。旧セーブ互換のため optional（欠落時は 0 として復元） */
+    enemiesDefeated?: number;
+    /** 使ったアイテムの累積数。旧セーブ互換のため optional（欠落時は 0 として復元） */
+    itemsUsed?: number;
 }
 
 export type MapObjectSaveData =
