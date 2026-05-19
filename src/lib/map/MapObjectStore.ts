@@ -1,7 +1,7 @@
 'use strict';
 
 import { Enemy } from '../Enemy';
-import { MapObject } from '../MapObject';
+import { MapObject, MapShape } from '../MapObject';
 import type { ObjectEvent } from '../MapObject';
 import type { Player } from '../Player';
 import type { DungeonMap } from '../MapGenerator';
@@ -68,7 +68,7 @@ export class MapObjectStore {
     events: Map<string, ObjectEvent>,
     color: integer = 0xFFFFFF,
     alpha: integer = 1,
-    sphere = false,
+    shape: MapShape = MapShape.NONE,
     visible = true,
   ): integer {
     const obj = new MapObject();
@@ -78,7 +78,7 @@ export class MapObjectStore {
     obj.events = events;
     obj.color = color;
     obj.alpha = alpha;
-    obj.sphere = sphere;
+    obj.shape = shape;
     obj.visible = visible;
     return this.add(obj);
   }

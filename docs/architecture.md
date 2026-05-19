@@ -283,6 +283,7 @@ autoSpawner:
 
 - **MapObject**（`src/lib/MapObject.ts`）: 全オブジェクトの基底クラス。座標、表示マーク、色、イベントハンドラなどを保持
 - **MapMark定数**: オブジェクトの表示形状を定義（`CIRCLE`, `STAR`, `DIAMOND`, `CROSS`, `X_CROSS`）
+- **MapShape定数**: `MainView` でブロック中心に重ねて描画する立体形状を排他選択（`NONE` / `SPHERE` / `CUBE`）。`MapObject.shape` に設定すると `MainView.render()` が `object.color` で陰影付き描画する
 - **MapObjectStore**（`src/lib/map/MapObjectStore.ts`）: 全オブジェクトを `Map<integer, MapObject>` で一元管理。`instanceof` で型別のフィルタリングが可能。`DungeonMap` は同名の薄い委譲メソッド（`addEnemy`、`getEnemy`、`removeEnemy` など）を公開する
 
 ## 敵システム

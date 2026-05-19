@@ -23,6 +23,17 @@ export const MapMark = {
 } as const;
 export type MapMark = typeof MapMark[keyof typeof MapMark];
 
+/** MainView 上で重ねて描画する立体形状（排他選択） */
+export const MapShape = {
+  /** 立体描画なし */
+  NONE: 'none',
+  /** 球体 */
+  SPHERE: 'sphere',
+  /** 立方体 */
+  CUBE: 'cube',
+} as const;
+export type MapShape = typeof MapShape[keyof typeof MapShape];
+
 export class MapObject {
   public mark: MapMark | string = MapMark.CIRCLE;
   public color: integer = 0xFFFFFF;
@@ -30,7 +41,7 @@ export class MapObject {
   public events: Map<string, ObjectEvent> = new Map<string, ObjectEvent>();
   public x: integer = -1;
   public y: integer = -1;
-  public sphere: boolean = false;
+  public shape: MapShape = MapShape.NONE;
   public visible: boolean = true;
 }
 

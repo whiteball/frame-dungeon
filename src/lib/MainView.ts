@@ -1,5 +1,6 @@
 
 import { DungeonMap } from './MapGenerator';
+import { MapShape } from './MapObject';
 import { MapDirection } from './map/MapDirection';
 
 export class MainView {
@@ -277,6 +278,86 @@ export class MainView {
         .closePath().fill();
     }
 
+    // 一点透視図の焦点距離と消失点（drawCube が closure で参照する）
+    const CUBE_FOCAL = this.width / 2 / Math.tan(this.angle / 180 * Math.PI / 2);
+    const CUBE_VP_X = this.width / 2, CUBE_VP_Y = this.height / 2;
+
+    const drawCube = (circle: Phaser.Geom.Circle, color: number, alpha: number) => {
+      // 一辺の長さ = 球の直径。前面の半辺 = radius
+      const r = circle.radius;
+      const dx = circle.x - CUBE_VP_X, dy = circle.y - CUBE_VP_Y;
+      // 立方体中心から ±r の奥行による前面/背面のスケール（消失点に向けて収束）
+      const fS = CUBE_FOCAL / Math.max(CUBE_FOCAL - r, 1);
+      const bS = CUBE_FOCAL / (CUBE_FOCAL + r);
+      // 前面中心と半辺
+      const fx = CUBE_VP_X + dx * fS, fy = CUBE_VP_Y + dy * fS, fh = r * fS;
+      // 背面中心と半辺
+      const bx = CUBE_VP_X + dx * bS, by = CUBE_VP_Y + dy * bS, bh = r * bS;
+
+      // 8頂点（F=前面, B=背面, T/B=上/下, L/R=左/右）
+      const FTL = { x: fx - fh, y: fy - fh };
+      const FTR = { x: fx + fh, y: fy - fh };
+      const FBR = { x: fx + fh, y: fy + fh };
+      const FBL = { x: fx - fh, y: fy + fh };
+      const BTL = { x: bx - bh, y: by - bh };
+      const BTR = { x: bx + bh, y: by - bh };
+      const BBR = { x: bx + bh, y: by + bh };
+      const BBL = { x: bx - bh, y: by + bh };
+
+      // 表示する側面（消失点との位置関係で決定）
+      // dx > 0: 立方体は消失点より右 → 世界座標で左側面が見える
+      // dy > 0: 立方体は消失点より下 → 上面が見える
+      const showLeft = dx > 0;
+      const showRight = dx < 0;
+      const showTop = dy > 0;
+      const showBottom = dy < 0;
+
+      // 光源は右上方向（球の反射位置 (x+0.5r, y-0.5r) と整合）。
+      // 右面・上面が明るく、左面・下面が暗い
+      graph.lineStyle(1, 0x0, 1);
+
+      // 側面（前面より奥に位置するので先に描画）
+      if (showLeft) {
+        graph.fillStyle(color, alpha);
+        graph.fillPoints([FTL, BTL, BBL, FBL], true);
+        graph.fillStyle(0, alpha / 3);
+        graph.fillPoints([FTL, BTL, BBL, FBL], true);
+        graph.strokePoints([FTL, BTL, BBL, FBL], true);
+      }
+      if (showRight) {
+        graph.fillStyle(color, alpha);
+        graph.fillPoints([FTR, BTR, BBR, FBR], true);
+        graph.fillStyle(0xFFFFFF, alpha / 3);
+        graph.fillPoints([FTR, BTR, BBR, FBR], true);
+        graph.strokePoints([FTR, BTR, BBR, FBR], true);
+      }
+      if (showTop) {
+        graph.fillStyle(color, alpha);
+        graph.fillPoints([FTL, FTR, BTR, BTL], true);
+        graph.fillStyle(0xFFFFFF, alpha / 3);
+        graph.fillPoints([FTL, FTR, BTR, BTL], true);
+        graph.strokePoints([FTL, FTR, BTR, BTL], true);
+      }
+      if (showBottom) {
+        graph.fillStyle(color, alpha);
+        graph.fillPoints([FBL, FBR, BBR, BBL], true);
+        graph.fillStyle(0, alpha / 3);
+        graph.fillPoints([FBL, FBR, BBR, BBL], true);
+        graph.strokePoints([FBL, FBR, BBR, BBL], true);
+      }
+
+      // 前面
+      graph.fillStyle(color, alpha);
+      graph.fillPoints([FTL, FTR, FBR, FBL], true);
+      // 前面の光の反射（右上）— 球の楕円ハイライトに対応する短冊
+      graph.fillStyle(0xFFFFFF, alpha / 3);
+      graph.fillRect(fx + fh * 0.15, fy - fh * 0.75, fh * 0.55, fh * 0.35);
+      // 前面の影（左下三角）— 球の左下シャドウ弧に対応
+      graph.fillStyle(0, alpha / 5);
+      graph.fillPoints([FBL, { x: fx, y: fy + fh }, { x: fx - fh, y: fy }], true);
+      graph.strokePoints([FTL, FTR, FBR, FBL], true);
+    }
+
     // プレイヤー向き回転量: EAST=1, SOUTH=2, WEST=3, NORTH=0
     // originalDir = (rotatedDir + shift) % 4
     const shift = (player.direction + 1) % 4;
@@ -407,8 +488,10 @@ export class MainView {
               graph.fillPoints(inner2.points, true);
             }
             const center = this.centerList[RANGE - i][order];
-            if (object.sphere && center) {
+            if (object.shape === MapShape.SPHERE && center) {
               drawSphere(center, object.alpha);
+            } else if (object.shape === MapShape.CUBE && center) {
+              drawCube(center, object.color, object.alpha);
             }
           }
         }
@@ -473,8 +556,10 @@ export class MainView {
               graph.fillPoints(inner2.points, true);
             }
             const center = this.centerList[RANGE - i][order + 1];
-            if (object.sphere && center) {
+            if (object.shape === MapShape.SPHERE && center) {
               drawSphere(center, object.alpha);
+            } else if (object.shape === MapShape.CUBE && center) {
+              drawCube(center, object.color, object.alpha);
             }
           }
         }
@@ -558,8 +643,10 @@ export class MainView {
             graph.fillPoints(inner2.points, true);
           }
           const center = this.centerList[RANGE - i][0];
-          if (object.sphere && center) {
+          if (object.shape === MapShape.SPHERE && center) {
             drawSphere(center, object.alpha);
+          } else if (object.shape === MapShape.CUBE && center) {
+            drawCube(center, object.color, object.alpha);
           }
         }
       }

@@ -1,5 +1,5 @@
 import type { EnemyDefinition } from './EnemyLoader';
-import { MapObject, MapMark } from './MapObject';
+import { MapObject, MapMark, MapShape } from './MapObject';
 import { StatsLoader } from './StatsLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { BaseLoader } from './BaseLoader';
@@ -53,7 +53,7 @@ export class Enemy extends MapObject {
         this.mark = MapMark.DIAMOND;
         this.color = definition.color || 0xFF0000;
         this.alpha = 1;
-        this.sphere = true;
+        this.shape = MapShape.SPHERE;
         this.visible = true;
 
     }

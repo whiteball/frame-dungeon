@@ -1,7 +1,7 @@
 'use strict';
 
 import { Enemy } from './Enemy';
-import { MapObject, newMapEvent, type ObjectEvent } from './MapObject';
+import { MapObject, MapShape, newMapEvent, type ObjectEvent } from './MapObject';
 import type { Player } from './Player';
 import { getRandomInt } from './util/random';
 import { Rect } from './map/Rect';
@@ -791,8 +791,8 @@ export class DungeonMap {
    * マップにオブジェクトを追加する
    * @returns 追加されたオブジェクトのID
    */
-  public addObject(x: integer, y: integer, mark: string, events: Map<string, ObjectEvent>, color: integer = 0xFFFFFF, alpha: integer = 1, sphere = false, visible = true): integer {
-    return this._objectStore.addObject(x, y, mark, events, color, alpha, sphere, visible);
+  public addObject(x: integer, y: integer, mark: string, events: Map<string, ObjectEvent>, color: integer = 0xFFFFFF, alpha: integer = 1, shape: MapShape = MapShape.NONE, visible = true): integer {
+    return this._objectStore.addObject(x, y, mark, events, color, alpha, shape, visible);
   }
 
   /**
