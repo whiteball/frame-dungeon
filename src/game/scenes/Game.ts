@@ -175,7 +175,7 @@ export class Game extends Scene {
             const floorConfig = BaseLoader.getInstance().getFloorConfig(this.floor);
             dungeon.setCurrentFloor(this.floor);
             dungeon.resize(floorConfig.width, floorConfig.height);
-            dungeon.build();
+            dungeon.build({ secretRoomChance: floorConfig.secretRoomChance });
             dungeon.resetFloorTurnCount();
             // dungeon.dump();
 
@@ -183,7 +183,7 @@ export class Game extends Scene {
             dungeon.clearEnemies();
 
             const excludePositionList: integer[][] = [];
-            const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true });
+            const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true, withoutSecretRoom: true });
             if (step.length >= 2) {
                 // 階段の追加
                 const stairsObj = buildStairsObject((d) => this.enterStairMode(d));
@@ -195,7 +195,7 @@ export class Game extends Scene {
 
             // トラップ配置（base.yml の設定に従う）
             const trapCount = Phaser.Math.Between(floorConfig.trapMin, floorConfig.trapMax);
-            const traps = dungeon.getRandomPosList(trapCount, false, { withoutPlayer: true, excludePositionList: [step] });
+            const traps = dungeon.getRandomPosList(trapCount, false, { withoutPlayer: true, withoutSecretRoom: true, excludePositionList: [step] });
             for (const trapPos of traps) {
                 if (floorConfig.trapPool.length === 0) break;
                 const trapName = floorConfig.trapPool[Phaser.Math.Between(0, floorConfig.trapPool.length - 1)];
@@ -219,6 +219,7 @@ export class Game extends Scene {
                 const itemPositions = dungeon.getRandomPosList(itemCount, false, {
                     withoutCorridor: true,
                     withoutPlayer: true,
+                    withoutSecretRoom: true,
                     excludePositionList,
                 });
                 for (const pos of itemPositions) {
@@ -1019,6 +1020,7 @@ export class Game extends Scene {
         for (const { name, count } of config.fixedEnemies) {
             const positions = dungeon.getRandomPosList(count, false, {
                 withoutPlayer: true,
+                withoutSecretRoom: true,
                 excludePositionList: excludePositions,
             });
             for (const pos of positions) {
@@ -1034,6 +1036,7 @@ export class Game extends Scene {
         if (randomCount > 0 && config.randomEnemyPool.length > 0) {
             const positions = dungeon.getRandomPosList(randomCount, false, {
                 withoutPlayer: true,
+                withoutSecretRoom: true,
                 excludePositionList: excludePositions,
             });
             for (const pos of positions) {

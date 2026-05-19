@@ -80,6 +80,10 @@ export interface DungeonSaveData {
     roomsWithCorridors: { room: RectData; corridors: RectData[] }[];
     objects: MapObjectSaveData[];
     enemies: EnemySaveData[];
+    /** 壁に偽装中の隠し扉キー（形式 "x,y,dir"、両側 2 エントリ） */
+    disguisedDoors?: string[];
+    /** 隠し部屋の領域（オブジェクト配置除外用） */
+    secretRoomRects?: RectData[];
 }
 
 export interface SaveData {

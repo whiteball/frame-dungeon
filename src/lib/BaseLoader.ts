@@ -30,6 +30,12 @@ export interface FloorConfigRaw {
      * enemies.yml の drop[] と additive に合成され、各エントリは独立に rate で判定される。
      */
     enemyDropPool?: EnemyDropEntry[];
+    /**
+     * 隠し部屋有効化。
+     * true / 'yes' なら確率 0.5、数値ならその確率（0..1）で
+     * 「出入口が 1 つしかない部屋」から 1 部屋抽選し扉を壁に偽装する。
+     */
+    secretRoom?: boolean | number | string;
 }
 
 export interface ResolvedFloorConfig {
@@ -44,6 +50,8 @@ export interface ResolvedFloorConfig {
     itemModifierChance: number;
     itemModifierPool?: Record<string, number>;
     enemyDropPool: EnemyDropEntry[];
+    /** 隠し部屋抽選確率（0..1）。0 なら無効。boolean true は 0.5 に正規化される */
+    secretRoomChance: number;
 }
 
 export class BaseLoader {
@@ -385,6 +393,13 @@ export class BaseLoader {
             }
         }
 
+        let secretRoomChance = 0;
+        if (raw.secretRoom === true || raw.secretRoom === 'yes' || raw.secretRoom === 'true') {
+            secretRoomChance = 0.5;
+        } else if (typeof raw.secretRoom === 'number' && isFinite(raw.secretRoom)) {
+            secretRoomChance = Math.max(0, Math.min(1, raw.secretRoom));
+        }
+
         const enemyDropPool: EnemyDropEntry[] = [];
         if (Array.isArray(raw.enemyDropPool)) {
             for (const entry of raw.enemyDropPool) {
@@ -409,6 +424,7 @@ export class BaseLoader {
             itemModifierChance,
             itemModifierPool,
             enemyDropPool,
+            secretRoomChance,
         };
     }
 }

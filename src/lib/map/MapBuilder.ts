@@ -506,4 +506,39 @@ export class MapBuilder {
       if (south !== -1) dungeon.setAt(x, y + 1, south | 8);
     }
   }
+
+  /**
+   * 指定した部屋の 4 辺を走査し、扉ビットを持つセル位置と方向を返す
+   *
+   * 扉ビットの規約は `16 << direction`（EAST=16, SOUTH=32, WEST=64, NORTH=128）。
+   * 同じ部屋に複数の扉がある場合は全て返す。
+   *
+   * @param room 走査対象の部屋
+   * @returns 扉のリスト（部屋側セル座標と方向）
+   */
+  public findDoorsInRoom(room: Rect): { x: integer, y: integer, dir: MapDirection }[] {
+    const dungeon = this.dungeon;
+    const result: { x: integer, y: integer, dir: MapDirection }[] = [];
+    // EAST 辺
+    for (let y = room.y1; y <= room.y2; y++) {
+      const v = dungeon.getAt(room.x2, y);
+      if (v !== -1 && (v & 16) !== 0) result.push({ x: room.x2, y, dir: MapDirection.EAST });
+    }
+    // SOUTH 辺
+    for (let x = room.x1; x <= room.x2; x++) {
+      const v = dungeon.getAt(x, room.y2);
+      if (v !== -1 && (v & 32) !== 0) result.push({ x, y: room.y2, dir: MapDirection.SOUTH });
+    }
+    // WEST 辺
+    for (let y = room.y1; y <= room.y2; y++) {
+      const v = dungeon.getAt(room.x1, y);
+      if (v !== -1 && (v & 64) !== 0) result.push({ x: room.x1, y, dir: MapDirection.WEST });
+    }
+    // NORTH 辺
+    for (let x = room.x1; x <= room.x2; x++) {
+      const v = dungeon.getAt(x, room.y1);
+      if (v !== -1 && (v & 128) !== 0) result.push({ x, y: room.y1, dir: MapDirection.NORTH });
+    }
+    return result;
+  }
 }

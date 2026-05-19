@@ -36,7 +36,8 @@ export function canAttack(dungeon: DungeonMap, fromX: integer, fromY: integer, t
 
   const isSolidWall = (x: integer, y: integer, dir: number): boolean => {
     const val = dungeon.getAt(x, y);
-    return !!(val & (1 << dir)) && !(val & (1 << (dir + 4)));
+    if (!(val & (1 << dir))) return false;
+    return !dungeon.isDoorPassable(x, y, dir as MapDirection);
   };
 
   if (dy === 0) {
@@ -319,6 +320,33 @@ export function useSkill(
 export function searchAt(dungeon: DungeonMap, targetX: integer, targetY: integer): boolean {
   const { x, y } = dungeon.getPlayerPos();
   const turnCount = dungeon.getTurnCount();
+
+  // 隠し扉判定: ターゲットセル（前方／前方斜め）に対応する位置の隠し扉があれば顕在化
+  // - 前方（dx,dy）: プレイヤーのその方向の壁
+  // - 前方斜め: 前方セルの縦方向壁、または横セルの横方向壁（斜めから見える 2 つの壁を候補に）
+  const dx = targetX - x;
+  const dy = targetY - y;
+  const candidateDoors: { x: integer, y: integer, dir: MapDirection }[] = [];
+  if (Math.abs(dx) === 1 && dy === 0) {
+    candidateDoors.push({ x, y, dir: dx > 0 ? MapDirection.EAST : MapDirection.WEST });
+  } else if (dx === 0 && Math.abs(dy) === 1) {
+    candidateDoors.push({ x, y, dir: dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH });
+  } else if (Math.abs(dx) === 1 && Math.abs(dy) === 1) {
+    const hDir = dx > 0 ? MapDirection.EAST : MapDirection.WEST;
+    const vDir = dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH;
+    // 前方セルの縦壁（前方→斜め）
+    candidateDoors.push({ x: x + dx, y, dir: vDir });
+    // 横セルの横壁（横→斜め）
+    candidateDoors.push({ x, y: y + dy, dir: hDir });
+  }
+  for (const c of candidateDoors) {
+    if (dungeon.isDisguisedDoor(c.x, c.y, c.dir)) {
+      dungeon.revealDisguisedDoor(c.x, c.y, c.dir);
+      EventBus.emit('message-log', `隠し扉を発見した！`, turnCount);
+      dungeon.dispatchObjectEvent();
+      return true;
+    }
+  }
 
   if (!dungeon.canAttack(x, y, targetX, targetY)) {
     // その方向は壁

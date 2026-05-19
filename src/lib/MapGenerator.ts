@@ -33,7 +33,13 @@ export type RandomPosConfig = {
   withoutCorridor?: boolean,
   withoutDoor?: boolean,
   withoutPlayer?: boolean,
+  withoutSecretRoom?: boolean,
   excludePositionList?: integer[][]
+}
+
+export type DungeonBuildOptions = {
+  /** 隠し部屋抽選確率（0..1）。0 なら隠し部屋を生成しない */
+  secretRoomChance?: number,
 }
 
 /**
@@ -58,6 +64,10 @@ export class DungeonMap {
 
   private _rooms: Rect[];
   private _roomsWithCorridors: RoomWithCorridors[];
+  /** 壁に偽装された隠し扉キーの集合。形式 "x,y,dir"（両側セル分を 2 エントリ登録） */
+  private _disguisedDoors: Set<string> = new Set();
+  /** 隠し部屋の領域（オブジェクト配置除外フィルタ用） */
+  private _secretRoomRects: Rect[] = [];
 
   private _player: {
     x: integer,
@@ -93,6 +103,8 @@ export class DungeonMap {
     this._mapCurrentView = [];
     this._rooms = [];
     this._roomsWithCorridors = [];
+    this._disguisedDoors.clear();
+    this._secretRoomRects = [];
     this._objectStore.clear();
     const fog = this._enableFog ? 1 : 0;
     for (let i = 0; i < this._width * this._height; i++) {
@@ -284,7 +296,7 @@ export class DungeonMap {
    * ダンジョン全体を構築する
    * 初期化、部屋生成、通路生成、壁設定、プレイヤー配置を順次実行する
    */
-  public build() {
+  public build(options: DungeonBuildOptions = {}) {
     this.init();
     if (this._map.length > 0) {
       const builder = new MapBuilder(this, this._width, this._height, this._minRoomLength);
@@ -292,8 +304,87 @@ export class DungeonMap {
       this._roomsWithCorridors = builder.makeCorridor(this._rooms);
       builder.setWall(this._roomsWithCorridors);
       builder.placeObstacles(this._roomsWithCorridors);
+      this._markSecretRoomCandidate(builder, options.secretRoomChance ?? 0);
     }
     this.setPlayerRandom();
+  }
+
+  /**
+   * 出入口が 1 つしかない部屋から 1 部屋抽選し、指定確率で扉を壁に偽装する
+   *
+   * - chance が 0 以下なら何もしない
+   * - 候補（出入口 1 つの部屋）が無ければ何もしない
+   * - 候補から 1 部屋ランダム抽選 → `Math.random() < chance` で隠し化判定
+   * - 採用した部屋の扉セル両側に "x,y,dir" キーを `_disguisedDoors` に登録
+   * - 部屋自体を `_secretRoomRects` に登録（オブジェクト配置除外用）
+   */
+  private _markSecretRoomCandidate(builder: MapBuilder, chance: number): void {
+    if (chance <= 0) return;
+    const candidates: Rect[] = [];
+    for (const room of this._rooms) {
+      const doors = builder.findDoorsInRoom(room);
+      if (doors.length === 1) candidates.push(room);
+    }
+    if (candidates.length === 0) return;
+    const picked = candidates[getRandomInt(0, candidates.length)];
+    if (Math.random() >= chance) return;
+
+    const doors = builder.findDoorsInRoom(picked);
+    if (doors.length === 0) return;
+    const door = doors[0];
+    const [dx, dy] = getDirectionOffset(door.dir);
+    const oppDir = ((door.dir + 2) % 4) as MapDirection;
+    this._disguisedDoors.add(`${door.x},${door.y},${door.dir}`);
+    this._disguisedDoors.add(`${door.x + dx},${door.y + dy},${oppDir}`);
+    this._secretRoomRects.push(picked);
+  }
+
+  /**
+   * 指定セル・指定方向の扉が現在「壁に偽装された隠し扉」かどうかを返す
+   */
+  public isDisguisedDoor(x: integer, y: integer, dir: MapDirection): boolean {
+    return this._disguisedDoors.has(`${x},${y},${dir}`);
+  }
+
+  /**
+   * 隠し扉の偽装を解除して通常の扉として顕在化する
+   * 両側セル分のエントリを削除する
+   * @returns 実際に解除した場合 true
+   */
+  public revealDisguisedDoor(x: integer, y: integer, dir: MapDirection): boolean {
+    const key = `${x},${y},${dir}`;
+    if (!this._disguisedDoors.has(key)) return false;
+    const [dx, dy] = getDirectionOffset(dir);
+    const oppDir = ((dir + 2) % 4) as MapDirection;
+    this._disguisedDoors.delete(key);
+    this._disguisedDoors.delete(`${x + dx},${y + dy},${oppDir}`);
+    return true;
+  }
+
+  /**
+   * 指定座標が隠し部屋（出入口偽装中）の内部かどうか判定する
+   */
+  public isInSecretRoom(x: integer, y: integer): boolean {
+    for (const room of this._secretRoomRects) {
+      if (room.x1 <= x && x <= room.x2 && room.y1 <= y && y <= room.y2) return true;
+    }
+    return false;
+  }
+
+  public getSecretRoomRects(): Rect[] {
+    return this._secretRoomRects;
+  }
+
+  /**
+   * 指定セル・指定方向の扉が「通過可能な扉」かを返す。
+   * 扉ビットがあっても隠し扉（壁偽装中）なら false を返す。
+   * 通行/攻撃/経路探索/視界判定が共通で参照する。
+   */
+  public isDoorPassable(x: integer, y: integer, dir: MapDirection): boolean {
+    const v = this.getAt(x, y);
+    if (v < 0) return false;
+    if (!(v & (16 << dir))) return false;
+    return !this._disguisedDoors.has(`${x},${y},${dir}`);
   }
 
   /**
@@ -337,7 +428,14 @@ export class DungeonMap {
     ];
     const tileVal = (d: number, j: number): number => {
       const [tx, ty] = coord(d, j);
-      return this.getAt(tx, ty);
+      const v = this.getAt(tx, ty);
+      if (v < 0) return v;
+      // 隠し扉は壁として扱うため、対応する扉ビットを落とす
+      let masked = v;
+      if ((masked & forwardDoorBit) && this._disguisedDoors.has(`${tx},${ty},${direction}`)) masked &= ~forwardDoorBit;
+      if ((masked & leftDoorBit) && this._disguisedDoors.has(`${tx},${ty},${leftDir}`)) masked &= ~leftDoorBit;
+      if ((masked & rightDoorBit) && this._disguisedDoors.has(`${tx},${ty},${rightDir}`)) masked &= ~rightDoorBit;
+      return masked;
     };
     const reveal = (d: number, j: number): void => {
       const [tx, ty] = coord(d, j);
@@ -415,7 +513,7 @@ export class DungeonMap {
    * @param config ランダム位置取得の設定オプション
    * @returns ランダムな位置の座標配列[x, y]、取得できない場合は空配列
    */
-  public getRandomPos({ withoutCorridor = false, withoutDoor = false, withoutPlayer = false, excludePositionList = [] }: RandomPosConfig): integer[] {
+  public getRandomPos({ withoutCorridor = false, withoutDoor = false, withoutPlayer = false, withoutSecretRoom = false, excludePositionList = [] }: RandomPosConfig): integer[] {
     let x: integer = 0, y: integer = 0, pos = -1;
     const limit = 1000;
     for (let i = 0; i < limit && pos === -1; i++) {
@@ -441,6 +539,12 @@ export class DungeonMap {
       if (pos !== -1 && withoutPlayer) {
         if (x === this._player.x && y === this._player.y) {
           // プレイヤー直上をキャンセル
+          pos = -1;
+        }
+      }
+      if (pos !== -1 && withoutSecretRoom) {
+        if (this.isInSecretRoom(x, y)) {
+          // 隠し部屋内をキャンセル
           pos = -1;
         }
       }
@@ -496,7 +600,13 @@ export class DungeonMap {
    * @returns 配置に成功した場合true、失敗した場合false
    */
   public setPlayerRandom() {
-    const pos = this.getRandomPos({});
+    // まず隠し部屋を除外して抽選、見つからなければ隠し部屋にも置けるフォールバック
+    let pos = this._secretRoomRects.length > 0
+      ? this.getRandomPos({ withoutSecretRoom: true })
+      : [];
+    if (pos.length === 0) {
+      pos = this.getRandomPos({});
+    }
     if (pos.length === 0) {
       console.error('fault player set');
       return false;
@@ -518,7 +628,8 @@ export class DungeonMap {
   public movePlayer(direction: MapDirection): integer {
     const value = this.getAt(this._player.x, this._player.y)
     if (value & (2 ** direction)) {
-      if (!(value & (2 ** (direction + 4)))) {
+      // 壁あり: 通過可能な扉（隠し扉でない）でなければ移動不可
+      if (!this.isDoorPassable(this._player.x, this._player.y, direction)) {
         return 0;
       }
     }
@@ -835,7 +946,8 @@ export class DungeonMap {
   public tryMoveEnemy(enemy: Enemy, direction: MapDirection): boolean {
     const value = this.getAt(enemy.x, enemy.y);
     if (value & (2 ** direction)) {
-      if (!(value & (2 ** (direction + 4)))) return false;
+      // 隠し扉は壁扱いで通過不可
+      if (!this.isDoorPassable(enemy.x, enemy.y, direction)) return false;
     }
 
     const [dx, dy] = getDirectionOffset(direction);
@@ -1119,6 +1231,8 @@ export class DungeonMap {
       })),
       objects,
       enemies,
+      disguisedDoors: Array.from(this._disguisedDoors),
+      secretRoomRects: this._secretRoomRects.map(r => ({ x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 })),
     };
   }
 
@@ -1141,6 +1255,8 @@ export class DungeonMap {
       room: new Rect(rwc.room.x1, rwc.room.y1, rwc.room.x2, rwc.room.y2),
       corridors: rwc.corridors.map(c => new Rect(c.x1, c.y1, c.x2, c.y2)),
     }));
+    this._disguisedDoors = new Set(data.disguisedDoors ?? []);
+    this._secretRoomRects = (data.secretRoomRects ?? []).map(r => new Rect(r.x1, r.y1, r.x2, r.y2));
 
     this._objectStore.clear();
 

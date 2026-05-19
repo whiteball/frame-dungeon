@@ -88,8 +88,8 @@ export function canPass(dungeon: DungeonMap, x: integer, y: integer, dir: MapDir
   if (value === -1) return false;
   const wallBit = 1 << dir;
   if (value & wallBit) {
-    // 壁あり → 扉がなければ通過不可
-    if (!(value & (wallBit << 4))) return false;
+    // 壁あり → 通過可能な扉（隠し扉でない）でなければ通過不可
+    if (!dungeon.isDoorPassable(x, y, dir)) return false;
   }
   const [dx, dy] = getDirectionOffset(dir);
   return dungeon.getAt(x + dx, y + dy) !== -1;

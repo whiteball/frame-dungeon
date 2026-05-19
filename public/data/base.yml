@@ -68,6 +68,7 @@ floors:
       traps:
       # アイテム床配置時に 15% の確率で modifier を付与（item_modifiers.yml の weight で抽選）
       itemModifierChance: 0.15
+      secretRoom: yes
   - 4:
       size:
         w: 15

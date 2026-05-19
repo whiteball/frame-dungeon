@@ -90,19 +90,20 @@ export class MiniMapView {
       }
 
       graph.lineStyle(2, 0xCC0000);
-      if (block.wallState.door[MapDirection.EAST]) {
+      // 隠し扉は壁として描画済みなので扉線をスキップする
+      if (block.wallState.door[MapDirection.EAST] && !dun.isDisguisedDoor(block.x, block.y, MapDirection.EAST)) {
         graph.lineBetween(baseX + blockWidth, baseY, baseX + blockWidth, baseY + blockHeight)
         graph.lineBetween(baseX + blockWidth - blockWidth / 6, baseY + blockHeight / 2, baseX + blockWidth, baseY + blockHeight / 2)
       }
-      if (block.wallState.door[MapDirection.SOUTH]) {
+      if (block.wallState.door[MapDirection.SOUTH] && !dun.isDisguisedDoor(block.x, block.y, MapDirection.SOUTH)) {
         graph.lineBetween(baseX, baseY + blockHeight, baseX + blockWidth, baseY + blockHeight)
         graph.lineBetween(baseX + blockWidth / 2, baseY + blockHeight - blockHeight / 6, baseX + blockWidth / 2, baseY + blockHeight)
       }
-      if (block.wallState.door[MapDirection.WEST]) {
+      if (block.wallState.door[MapDirection.WEST] && !dun.isDisguisedDoor(block.x, block.y, MapDirection.WEST)) {
         graph.lineBetween(baseX, baseY, baseX, baseY + blockHeight)
         graph.lineBetween(baseX, baseY + blockHeight / 2, baseX + blockWidth / 6, baseY + blockHeight / 2)
       }
-      if (block.wallState.door[MapDirection.NORTH]) {
+      if (block.wallState.door[MapDirection.NORTH] && !dun.isDisguisedDoor(block.x, block.y, MapDirection.NORTH)) {
         graph.lineBetween(baseX, baseY, baseX + blockWidth, baseY)
         graph.lineBetween(baseX + blockWidth / 2, baseY, baseX + blockWidth / 2, baseY + blockHeight / 6)
       }
