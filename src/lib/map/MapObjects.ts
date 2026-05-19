@@ -27,7 +27,12 @@ export class ItemObject extends MapObject {
   constructor(public readonly item: Item) {
     super();
     this.mark = MapMark.CROSS;
-    this.color = 0x00FFFF;
+    if (item.getType() === 'consumable') {
+      this.color = 0xFFA012;
+    } else {
+      this.color = 0x12A0FF;
+    }
+    
 
     const label = item.getLabelWithModifiers();
     const onPickup: ObjectEvent = (dungeon) => {
