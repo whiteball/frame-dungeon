@@ -421,4 +421,89 @@ export class MapBuilder {
       }
     }
   }
+
+  /**
+   * 部屋の中にランダムで 1x1 の障害物（進入禁止セル）を配置する
+   *
+   * 条件:
+   * - 部屋内部のセル（部屋の外周セルを除く）のみが対象。通路には配置しない
+   * - 配置候補セルおよびその周囲 8 セル（Chebyshev 距離 1）に扉ビットを持つセルが
+   *   含まれている場合は除外する（扉の通行を阻害しないため）
+   * - 進入禁止化された部屋は対象外
+   *
+   * 配置数はマップサイズから計算する: `base = floor(width * height / 50)` を基準値とし、
+   * `[-base, base]` の範囲の三角分布オフセット（重みは `base + 1 - |k|`、k=0 で最大、両端で 1）を
+   * 加算する。これにより最低でも 0、最大で `2 * base` の範囲で 0 寄りに偏った値が得られる
+   * （例: 10x10 マップで base=2 となり 2±2 程度、20x20 マップで base=8 となり 8±8 程度）。
+   * 条件を満たす候補が無い場合は配置をスキップする。
+   *
+   * @param roomsWithCorridors 部屋と通路のペアの配列
+   */
+  public placeObstacles(roomsWithCorridors: RoomWithCorridors[]): void {
+    const dungeon = this.dungeon;
+    const usableArea = (this.width - 2) * (this.height - 2);
+    const base = Math.floor(usableArea / 50);
+
+    // base を中心とした三角分布の重み付きオフセット配列を構築する
+    // - オフセットの範囲は [-base, base]（最低オフセットを足すと配置数が 0 になる）
+    // - 各オフセット k の重みは (base + 1) - |k|（k=0 で最大、両端で 1）
+    // 例: base=2 → [-2,-1,-1,0,0,0,1,1,2] / base=3 → [-3,-2,-2,-1,-1,-1,0,0,0,0,1,1,1,2,2,3]
+    const offsetTable: integer[] = [];
+    for (let k = -base; k <= base; k++) {
+      const weight = (base + 1) - Math.abs(k);
+      for (let i = 0; i < weight; i++) {
+        offsetTable.push(k);
+      }
+    }
+    const offset = offsetTable[getRandomInt(0, offsetTable.length)];
+    const count = Math.max(0, base + offset);
+    if (count === 0) return;
+
+    const candidates: { x: integer, y: integer }[] = [];
+    for (const roomWithCorridors of roomsWithCorridors) {
+      const room = roomWithCorridors.room;
+      // 進入禁止化された部屋は -1 で埋められているのでスキップ
+      if (dungeon.getAt(room.x1, room.y1) === -1) continue;
+
+      // 部屋の外周を除いた内部セルを候補にする（通路は外周の外にあるため自動的に除外される）
+      for (let x = room.x1 + 1; x <= room.x2 - 1; x++) {
+        for (let y = room.y1 + 1; y <= room.y2 - 1; y++) {
+          if (dungeon.getAt(x, y) === -1) continue;
+
+          // 周囲 3x3 範囲に扉ビット (0xF0) を持つセルがあれば除外
+          let nearDoor = false;
+          for (let dx = -1; dx <= 1 && !nearDoor; dx++) {
+            for (let dy = -1; dy <= 1 && !nearDoor; dy++) {
+              const v = dungeon.getAt(x + dx, y + dy);
+              if (v !== -1 && (v & 0xF0) !== 0) {
+                nearDoor = true;
+              }
+            }
+          }
+          if (nearDoor) continue;
+
+          candidates.push({ x, y });
+        }
+      }
+    }
+
+    if (candidates.length === 0) return;
+
+    arrayShuffle(candidates);
+    const placeCount = Math.min(count, candidates.length);
+    for (let i = 0; i < placeCount; i++) {
+      const { x, y } = candidates[i];
+      dungeon.setAt(x, y, -1);
+      // 障害物に隣接するセルへ障害物方向の壁ビットを追加する
+      // 障害物セルは部屋内部にあるため、隣接 4 セルも同じ部屋内 (-1 でない) のはず
+      const west = dungeon.getAt(x - 1, y);
+      if (west !== -1) dungeon.setAt(x - 1, y, west | 1);
+      const east = dungeon.getAt(x + 1, y);
+      if (east !== -1) dungeon.setAt(x + 1, y, east | 4);
+      const north = dungeon.getAt(x, y - 1);
+      if (north !== -1) dungeon.setAt(x, y - 1, north | 2);
+      const south = dungeon.getAt(x, y + 1);
+      if (south !== -1) dungeon.setAt(x, y + 1, south | 8);
+    }
+  }
 }

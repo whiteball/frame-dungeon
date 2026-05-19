@@ -291,6 +291,7 @@ export class DungeonMap {
       this._rooms = builder.makeRoom();
       this._roomsWithCorridors = builder.makeCorridor(this._rooms);
       builder.setWall(this._roomsWithCorridors);
+      builder.placeObstacles(this._roomsWithCorridors);
     }
     this.setPlayerRandom();
   }
