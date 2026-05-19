@@ -72,10 +72,14 @@ src/components/dialogs/
 | `SettingsDialog` | `localViewRange/Fog/ShowAllEnemies`（`visible` watch でリセット） | `settingsVisible`, `settingsViewRange/Fog/ShowAllEnemies` |
 | `StatusDialog` | なし | `statusVisible`, `statusText` |
 | `SaveDialog` | `selectedSlot`, `memo`（`visible` watch でリセット） | `saveDialogVisible`, `saveSlotMetas` |
-| `LoadDialog` | `digestMismatchVisible`, `digestMismatchSaveData` | `loadDialogVisible`, `loadSlotMetas` |
+| `LoadDialog` | `digestMismatchVisible`, `digestMismatchSaveData`, `importPendingData`, `importErrorMessage`, `isDragOver` | `loadDialogVisible`, `loadSlotMetas` |
 | `YamlErrorDialog` | なし | `yamlErrorVisible`, `yamlValidationErrors` |
 
 **`LoadDialog` のダイジェスト確認フロー：** コンポーネント内で `SaveManager.loadFromSlot()` と `calculateDigest()` を実行し、バージョン不一致時は内部パネルを表示します。ロード確定時のみ `loadConfirmed` emit が発火し、`PhaserGame.vue` が `EventBus.emit('load-game', saveData)` を呼びます。
+
+**`LoadDialog` のインポートフロー：** 「インポート」ボタンの隠し `<input type="file" accept=".sav">` またはダイアログへのドラッグ＆ドロップで `.sav` ファイルを受け取り、`SaveManager.parseImportedText()` で `SaveData` にパースした後、メタ情報（gameName / floor / savedAt / memo）を表示した確認パネルを出します。確認 OK で通常のロード経路（`proceedLoad()` → ダイジェスト検証 → `loadConfirmed` emit）に合流します。パース失敗時は赤枠のエラーパネルを表示します。
+
+**`SaveDialog` のエクスポートフロー：** 「エクスポート」ボタン押下で `exportSave` emit → `PhaserGame.vue` が `EventBus.emit('export-save', { memo })` → `Game.buildSaveData(memo)` で **現在状態** から `SaveData` を構築し、`SaveManager.downloadSaveFile()` でローカル時刻ベースのファイル名 `frame_dungeon_YYYYMMDD_HHMMSS.sav` として `Blob` ダウンロードします。Firefox 互換のため `<a>` を DOM に append → click → remove する手順を踏みます。
 
 **ダイアログ関連の EventBus イベント：**
 
@@ -86,6 +90,7 @@ src/components/dialogs/
 | `open-status` | Phaser→Vue | `string` | ステータスダイアログを開く |
 | `open-save-dialog` | Phaser→Vue | なし | セーブダイアログを開く |
 | `save-to-slot` | Vue→Phaser | `{ slot: number, memo: string }` | セーブ実行 |
+| `export-save` | Vue→Phaser | `{ memo: string }` | 現在状態を `.sav` ファイルとしてダウンロード |
 | `close-save-dialog` | Phaser→Vue | なし | セーブダイアログを閉じる（セーブ完了時） |
 | `open-load-dialog` | Phaser→Vue | なし | ロードダイアログを開く |
 | `close-load-dialog` | Phaser→Vue | なし | ロードダイアログを閉じる |

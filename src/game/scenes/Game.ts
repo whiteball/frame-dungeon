@@ -165,6 +165,7 @@ export class Game extends Scene {
         EventBus.removeAllListeners('open-drop-list-for-pickup');
         EventBus.removeAllListeners('drop-item');
         EventBus.removeAllListeners('save-to-slot');
+        EventBus.removeAllListeners('export-save');
         EventBus.removeAllListeners('close-save-dialog');
 
         this.floor = 1;
@@ -467,6 +468,17 @@ export class Game extends Scene {
                 EventBus.emit('close-save-dialog');
             }
             this.setSceneActions(this.defaultSceneActions);
+        });
+
+        EventBus.on('export-save', async ({ memo }: { memo: string }) => {
+            try {
+                const saveData = await this.buildSaveData(memo);
+                SaveManager.downloadSaveFile(saveData);
+                EventBus.emit('message-log', 'セーブデータをエクスポートしました', this.dungeon.getTurnCount());
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
+                EventBus.emit('message-log', `エクスポートに失敗しました: ${msg}`, this.dungeon.getTurnCount());
+            }
         });
 
         EventBus.on('close-save-dialog', () => {

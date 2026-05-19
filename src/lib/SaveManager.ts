@@ -167,4 +167,66 @@ export class SaveManager {
     static getAllSlotMeta(): SlotMeta[] {
         return Array.from({ length: 10 }, (_, i) => this.getSlotMeta(i + 1));
     }
+
+    /**
+     * ローカル時刻で `frame_dungeon_YYYYMMDD_HHMMSS.sav` 形式のファイル名を生成する。
+     */
+    static buildExportFilename(date: Date = new Date()): string {
+        const pad2 = (n: number) => String(n).padStart(2, '0');
+        const y = date.getFullYear();
+        const mo = pad2(date.getMonth() + 1);
+        const d = pad2(date.getDate());
+        const h = pad2(date.getHours());
+        const mi = pad2(date.getMinutes());
+        const s = pad2(date.getSeconds());
+        return `frame_dungeon_${y}${mo}${d}_${h}${mi}${s}.sav`;
+    }
+
+    /**
+     * SaveData を JSON テキスト化してローカルファイルとしてダウンロードさせる。
+     * Firefox は <a> が DOM ツリーに無いと .click() が無視されるケースがあるため、
+     * 必ず body に append → click → remove の順で実行する。
+     */
+    static downloadSaveFile(saveData: SaveData, filename?: string): void {
+        const text = JSON.stringify(saveData);
+        const blob = new Blob([text], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename ?? this.buildExportFilename();
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    /**
+     * インポートされたテキストを SaveData にパースする。
+     * 形式不正の場合は Error を投げる。
+     */
+    static parseImportedText(text: string): SaveData {
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(text);
+        } catch {
+            throw new Error('セーブデータの形式が不正です');
+        }
+        if (!parsed || typeof parsed !== 'object') {
+            throw new Error('セーブデータの内容が不正です');
+        }
+        const obj = parsed as Record<string, unknown>;
+        const meta = obj.meta as Record<string, unknown> | undefined;
+        if (
+            !meta ||
+            typeof meta.savedAt !== 'string' ||
+            typeof meta.gameName !== 'string' ||
+            typeof meta.yamlDigest !== 'string' ||
+            typeof obj.floor !== 'number' ||
+            !obj.player || typeof obj.player !== 'object' ||
+            !obj.dungeon || typeof obj.dungeon !== 'object'
+        ) {
+            throw new Error('セーブデータの内容が不正です');
+        }
+        return parsed as SaveData;
+    }
 }

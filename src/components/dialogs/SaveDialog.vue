@@ -10,6 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     save: [payload: { slot: number; memo: string }]
+    exportSave: [payload: { memo: string }]
     cancel: []
 }>();
 
@@ -68,6 +69,7 @@ watch(() => props.visible, (v) => {
             </div>
             <div style="display: flex; justify-content: center; gap: 16px;">
                 <button class="button" @click="emit('save', { slot: selectedSlot, memo })">保存</button>
+                <button class="button" @click="emit('exportSave', { memo })">エクスポート</button>
                 <button class="button" @click="emit('cancel')">キャンセル</button>
             </div>
         </div>

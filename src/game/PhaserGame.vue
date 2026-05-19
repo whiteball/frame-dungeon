@@ -489,6 +489,7 @@ defineExpose({ scene, game });
             :visible="saveDialogVisible"
             :slot-metas="saveSlotMetas"
             @save="(p) => EventBus.emit('save-to-slot', p)"
+            @export-save="(p) => EventBus.emit('export-save', p)"
             @cancel="() => { saveDialogVisible = false; EventBus.emit('close-save-dialog'); }"
         />
         <LoadDialog
