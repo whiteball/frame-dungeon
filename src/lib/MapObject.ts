@@ -31,6 +31,12 @@ export const MapShape = {
   SPHERE: 'sphere',
   /** 立方体 */
   CUBE: 'cube',
+  /** 直方体（床接地） */
+  BOX: 'box',
+  /** 円柱（床接地） */
+  CYLINDER: 'cylinder',
+  /** 四角錐（床接地） */
+  PYRAMID: 'pyramid',
 } as const;
 export type MapShape = typeof MapShape[keyof typeof MapShape];
 

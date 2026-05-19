@@ -358,50 +358,196 @@ export class MainView {
       graph.strokePoints([FTL, FTR, FBR, FBL], true);
     }
 
+    // 床接地オブジェクト（直方体・円柱・四角錐）共通のパラメータ計算。
+    // 球と同じ底面サイズ（半幅 r、奥行半幅 r）で、高さは 2r/3（セル高さ 4r の 1/6、半高 r/3）。
+    // 中心 y は床（球の中心より +2r）から半高 r/3 上、つまり球の中心より 5r/3 下にあり、床に接地する。
+    const computeFloorObjectFrame = (circle: Phaser.Geom.Circle) => {
+      const r = circle.radius;
+      const halfW = r, halfH = r / 3;
+      const dx = circle.x - CUBE_VP_X, dy = circle.y - CUBE_VP_Y;
+      const objDy = dy + (2 * r - halfH);
+      const fS = CUBE_FOCAL / Math.max(CUBE_FOCAL - halfW, 1);
+      const bS = CUBE_FOCAL / (CUBE_FOCAL + halfW);
+      const fx = CUBE_VP_X + dx * fS, bx = CUBE_VP_X + dx * bS;
+      const fy_c = CUBE_VP_Y + objDy * fS, by_c = CUBE_VP_Y + objDy * bS;
+      const fW = halfW * fS, fH = halfH * fS;
+      const bW = halfW * bS, bH = halfH * bS;
+      return { r, dx, fx, bx, fy_c, by_c, fW, fH, bW, bH };
+    };
+
+    const drawBox = (circle: Phaser.Geom.Circle, color: number, alpha: number) => {
+      const { dx, fx, bx, fy_c, by_c, fW, fH, bW, bH } = computeFloorObjectFrame(circle);
+      const FTL = { x: fx - fW, y: fy_c - fH }, FTR = { x: fx + fW, y: fy_c - fH };
+      const FBR = { x: fx + fW, y: fy_c + fH }, FBL = { x: fx - fW, y: fy_c + fH };
+      const BTL = { x: bx - bW, y: by_c - bH }, BTR = { x: bx + bW, y: by_c - bH };
+      const BBR = { x: bx + bW, y: by_c + bH }, BBL = { x: bx - bW, y: by_c + bH };
+      graph.lineStyle(1, 0x0, 1);
+      if (dx > 0) {
+        graph.fillStyle(color, alpha); graph.fillPoints([FTL, BTL, BBL, FBL], true);
+        graph.fillStyle(0, alpha / 3); graph.fillPoints([FTL, BTL, BBL, FBL], true);
+        graph.strokePoints([FTL, BTL, BBL, FBL], true);
+      }
+      if (dx < 0) {
+        graph.fillStyle(color, alpha); graph.fillPoints([FTR, BTR, BBR, FBR], true);
+        graph.fillStyle(0xFFFFFF, alpha / 3); graph.fillPoints([FTR, BTR, BBR, FBR], true);
+        graph.strokePoints([FTR, BTR, BBR, FBR], true);
+      }
+      graph.fillStyle(color, alpha); graph.fillPoints([FTL, FTR, BTR, BTL], true);
+      graph.fillStyle(0xFFFFFF, alpha / 3); graph.fillPoints([FTL, FTR, BTR, BTL], true);
+      graph.strokePoints([FTL, FTR, BTR, BTL], true);
+      graph.fillStyle(color, alpha); graph.fillPoints([FTL, FTR, FBR, FBL], true);
+      graph.fillStyle(0xFFFFFF, alpha / 5);
+      graph.fillRect(fx + fW * 0.1, fy_c - fH * 0.8, fW * 0.5, fH * 0.4);
+      graph.fillStyle(0, alpha / 5);
+      graph.fillPoints([FBL, { x: fx, y: fy_c + fH }, { x: fx - fW, y: fy_c }], true);
+      graph.strokePoints([FTL, FTR, FBR, FBL], true);
+    };
+
+    const drawCylinder = (circle: Phaser.Geom.Circle, color: number, alpha: number) => {
+      const { fx, bx, fy_c, by_c, fW, fH, bW, bH } = computeFloorObjectFrame(circle);
+      // 上面・底面は z 方向の遠近で歪む台形に内接する楕円として描画する
+      const topFace = new Phaser.Geom.Polygon([
+        fx - fW, fy_c - fH, fx + fW, fy_c - fH,
+        bx + bW, by_c - bH, bx - bW, by_c - bH,
+      ]);
+      const bottomFace = new Phaser.Geom.Polygon([
+        fx - fW, fy_c + fH, fx + fW, fy_c + fH,
+        bx + bW, by_c + bH, bx - bW, by_c + bH,
+      ]);
+      const topE = getEllipseFromInscribedQuad(topFace);
+      const bottomE = getEllipseFromInscribedQuad(bottomFace);
+      if (!topE || !bottomE) return;
+      const topEx = getEllipseHorizontalExtremes(topE);
+      const bottomEx = getEllipseHorizontalExtremes(bottomE);
+
+      // 1. 底面（塗り + 輪郭）
+      drawInscribedEllipse(bottomFace, color, alpha);
+      strokeInscribedEllipse(bottomFace, 0x0, 1);
+
+      // 2. 胴体（上面・底面楕円の左右接点を結ぶ4頂点）
+      const body = [topEx.left, topEx.right, bottomEx.right, bottomEx.left];
+      graph.fillStyle(color, alpha);
+      graph.fillPoints(body, true);
+      // 左右の辺のみ枠線（上下端は上面・底面の楕円輪郭が担う）
+      graph.lineStyle(1, 0x0, 1);
+      graph.beginPath().moveTo(topEx.left.x, topEx.left.y).lineTo(bottomEx.left.x, bottomEx.left.y).strokePath();
+      graph.beginPath().moveTo(topEx.right.x, topEx.right.y).lineTo(bottomEx.right.x, bottomEx.right.y).strokePath();
+
+      // 3. 上面（塗り + ハイライト + 輪郭）
+      drawInscribedEllipse(topFace, 0xFFFFFF, alpha);
+      drawInscribedEllipse(topFace, color, alpha / 3);
+      strokeInscribedEllipse(topFace, 0x0, 1);
+    };
+
+    const drawPyramid = (circle: Phaser.Geom.Circle, color: number, alpha: number) => {
+      const { dx, fx, bx, fy_c, by_c, fW, fH, bW, bH } = computeFloorObjectFrame(circle);
+      const FBL = { x: fx - fW, y: fy_c + fH };
+      const FBR = { x: fx + fW, y: fy_c + fH };
+      const BBL = { x: bx - bW, y: by_c + bH };
+      const BBR = { x: bx + bW, y: by_c + bH };
+      // 頂点は底面中心の真上、床から高さ 2r/3（セル高さ 4r の 1/6）。
+      // 球体中心の世界 y を 0、床を +2r とすると、頂点の世界 y = 2r - 2r/3 = 4r/3。
+      const apex = { x: circle.x, y: circle.y + (4 / 3) * circle.radius };
+      graph.lineStyle(1, 0x0, 1);
+      // 頂点がカメラより下にあるため4側面すべての法線がやや上向きとなり常に見える。
+      // 描画順は奥から手前：背面 → 視点と反対側の側面 → 視点側の側面 → 前面。
+      const drawLeft = () => {
+        graph.fillStyle(color, alpha); graph.fillPoints([FBL, BBL, apex], true);
+        graph.fillStyle(0, alpha / 3); graph.fillPoints([FBL, BBL, apex], true);
+        graph.strokePoints([FBL, BBL, apex], true);
+      };
+      const drawRight = () => {
+        graph.fillStyle(color, alpha); graph.fillPoints([FBR, BBR, apex], true);
+        graph.fillStyle(0xFFFFFF, alpha / 3); graph.fillPoints([FBR, BBR, apex], true);
+        graph.strokePoints([FBR, BBR, apex], true);
+      };
+      // 背面三角（最奥）
+      graph.fillStyle(color, alpha); graph.fillPoints([BBL, BBR, apex], true);
+      graph.fillStyle(0, alpha / 4); graph.fillPoints([BBL, BBR, apex], true);
+      graph.strokePoints([BBL, BBR, apex], true);
+      // 左右側面（dx の符号で奥行順を入れ替え）
+      if (dx >= 0) {
+        drawRight();
+        drawLeft();
+      } else {
+        drawLeft();
+        drawRight();
+      }
+      // 前面三角（最手前）
+      graph.fillStyle(color, alpha); graph.fillPoints([FBL, FBR, apex], true);
+      graph.fillStyle(0xFFFFFF, alpha / 5);
+      graph.fillPoints([{ x: (FBR.x + apex.x) / 2, y: (FBR.y + apex.y) / 2 }, FBR, apex], true);
+      graph.strokePoints([FBL, FBR, apex], true);
+    };
+
     const VP_X = this.width / 2, VP_Y = this.height / 2;
 
-    // 一点透視で歪んだ四角形に対してインスクライブ楕円を描画する。
+    // 一点透視で歪んだ四角形に対するインスクライブ楕円の幾何情報を求める。
     //
     // 対辺の中点を結ぶ2本のベクトルを共役半直径 a, b として、
-    // 楕円 P(θ) = C + a·cosθ + b·sinθ の主軸を求めて回転描画する。
+    // 楕円 P(θ) = C + a·cosθ + b·sinθ の主軸を求める。
     // 平行四辺形なら全辺中点がそのまま楕円上に乗る。
     //
     // 主軸計算: M = [a b] (2x2行列) として、対称行列 M·Mᵀ の固有値が
     // 主半軸長の二乗、対応する固有ベクトル方向が主軸の向きとなる。
-    const drawInscribedEllipse = (poly: Phaser.Geom.Polygon, color: number, alpha: number) => {
+    type EllipseGeom = { cx: number, cy: number, a: number, b: number, angle: number };
+    const getEllipseFromInscribedQuad = (poly: Phaser.Geom.Polygon): EllipseGeom | null => {
       const pts = poly.points;
-      if (pts.length < 4) return;
+      if (pts.length < 4) return null;
       let cx = 0, cy = 0;
       for (const p of pts) { cx += p.x; cy += p.y; }
       cx /= pts.length; cy /= pts.length;
-      // 各辺の中点
       const mids: { x: number, y: number }[] = [];
       for (let i = 0; i < pts.length; i++) {
         const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
         mids.push({ x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 });
       }
-      // 対辺中点を結ぶ2本の半直径ベクトル
       const ax = (mids[2].x - mids[0].x) / 2;
       const ay = (mids[2].y - mids[0].y) / 2;
       const bx = (mids[3].x - mids[1].x) / 2;
       const by = (mids[3].y - mids[1].y) / 2;
-      // M·Mᵀ = [[A, B], [B, C]]
       const A = ax * ax + bx * bx;
       const B = ax * ay + bx * by;
       const C = ay * ay + by * by;
-      // 固有値: tr = A + C, disc = sqrt((A-C)² + 4B²)
       const disc = Math.sqrt(Math.max(0, (A - C) * (A - C) + 4 * B * B));
       const lambda1 = (A + C + disc) / 2;
       const lambda2 = (A + C - disc) / 2;
-      // λ1 に対応する固有ベクトル: (B, λ1 - A)
-      // B≈0 のときも atan2(λ1-A, B) が正しく軸方向を返す
       const angle = Math.atan2(lambda1 - A, B);
-      const major = 2 * Math.sqrt(Math.max(0, lambda1));
-      const minor = 2 * Math.sqrt(Math.max(0, lambda2));
+      const a = Math.sqrt(Math.max(0, lambda1));
+      const b = Math.sqrt(Math.max(0, lambda2));
+      return { cx, cy, a, b, angle };
+    };
+
+    const drawInscribedEllipse = (poly: Phaser.Geom.Polygon, color: number, alpha: number) => {
+      const e = getEllipseFromInscribedQuad(poly);
+      if (!e) return;
       graph.fillStyle(color, alpha);
-      graph.translateCanvas(cx, cy).rotateCanvas(angle);
-      graph.fillEllipse(0, 0, major, minor);
-      graph.rotateCanvas(-angle).translateCanvas(-cx, -cy);
+      graph.translateCanvas(e.cx, e.cy).rotateCanvas(e.angle);
+      graph.fillEllipse(0, 0, 2 * e.a, 2 * e.b);
+      graph.rotateCanvas(-e.angle).translateCanvas(-e.cx, -e.cy);
+    };
+
+    const strokeInscribedEllipse = (poly: Phaser.Geom.Polygon, color: number, alpha: number) => {
+      const e = getEllipseFromInscribedQuad(poly);
+      if (!e) return;
+      graph.lineStyle(1, color, alpha);
+      graph.translateCanvas(e.cx, e.cy).rotateCanvas(e.angle);
+      graph.strokeEllipse(0, 0, 2 * e.a, 2 * e.b);
+      graph.rotateCanvas(-e.angle).translateCanvas(-e.cx, -e.cy);
+    };
+
+    // 楕円上で x 座標が極値となる2点（視覚的な左右端）。
+    // P(θ) = C + a·cosθ·u + b·sinθ·v（u, v は主軸・副軸の単位ベクトル）として
+    // dP_x/dθ = 0 を解くと、d_x = ±√(a²cos²α + b²sin²α)（α は楕円の回転角）。
+    // それに対応する y の補正は (a²-b²)·sinα·cosα / d_x。
+    const getEllipseHorizontalExtremes = (e: EllipseGeom) => {
+      const cosA = Math.cos(e.angle), sinA = Math.sin(e.angle);
+      const dx = Math.sqrt(e.a * e.a * cosA * cosA + e.b * e.b * sinA * sinA);
+      const dy = dx === 0 ? 0 : (e.a * e.a - e.b * e.b) * sinA * cosA / dx;
+      return {
+        left: { x: e.cx - dx, y: e.cy - dy },
+        right: { x: e.cx + dx, y: e.cy + dy },
+      };
     };
 
     // 床マーカー描画（同心四角 or 同心円）。3箇所で同一処理だったため共通化
@@ -564,6 +710,12 @@ export class MainView {
               drawSphere(center, object.alpha);
             } else if (object.shape === MapShape.CUBE && center) {
               drawCube(center, object.color, object.alpha);
+            } else if (object.shape === MapShape.BOX && center) {
+              drawBox(center, object.color, object.alpha);
+            } else if (object.shape === MapShape.CYLINDER && center) {
+              drawCylinder(center, object.color, object.alpha);
+            } else if (object.shape === MapShape.PYRAMID && center) {
+              drawPyramid(center, object.color, object.alpha);
             }
           }
         }
@@ -620,6 +772,12 @@ export class MainView {
               drawSphere(center, object.alpha);
             } else if (object.shape === MapShape.CUBE && center) {
               drawCube(center, object.color, object.alpha);
+            } else if (object.shape === MapShape.BOX && center) {
+              drawBox(center, object.color, object.alpha);
+            } else if (object.shape === MapShape.CYLINDER && center) {
+              drawCylinder(center, object.color, object.alpha);
+            } else if (object.shape === MapShape.PYRAMID && center) {
+              drawPyramid(center, object.color, object.alpha);
             }
           }
         }
@@ -696,6 +854,12 @@ export class MainView {
             drawSphere(center, object.alpha);
           } else if (object.shape === MapShape.CUBE && center) {
             drawCube(center, object.color, object.alpha);
+          } else if (object.shape === MapShape.BOX && center) {
+            drawBox(center, object.color, object.alpha);
+          } else if (object.shape === MapShape.CYLINDER && center) {
+            drawCylinder(center, object.color, object.alpha);
+          } else if (object.shape === MapShape.PYRAMID && center) {
+            drawPyramid(center, object.color, object.alpha);
           }
         }
       }

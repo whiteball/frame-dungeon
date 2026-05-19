@@ -1,6 +1,6 @@
 'use strict';
 
-import { MapMark, MapObject, newMapEvent } from '../MapObject';
+import { MapMark, MapObject, MapShape, newMapEvent } from '../MapObject';
 import type { ObjectEvent } from '../MapObject';
 import { EventBus } from '../../game/EventBus';
 import type { TrapDefinition } from '../TrapsLoader';
@@ -19,6 +19,7 @@ export class TrapObject extends MapObject {
     super();
     this.mark = MapMark.X_CROSS;
     this.color = 0xFF0000;
+    this.shape = MapShape.PYRAMID;
     this.visible = false;
   }
 }
@@ -27,6 +28,7 @@ export class ItemObject extends MapObject {
   constructor(public readonly item: Item) {
     super();
     this.mark = MapMark.CROSS;
+    this.shape = MapShape.BOX;
     if (item.getType() === 'consumable') {
       this.color = 0xFFA012;
     } else {
