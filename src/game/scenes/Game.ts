@@ -65,18 +65,20 @@ export class Game extends Scene {
     private revealAll = false;
     private swapQEandAD = false;
     private swapSandShiftS = false;
+    private debugCommands = false;
     private pendingSaveData: SaveData | null = null;
 
     constructor() {
         super('Game');
     }
 
-    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean; swapQEandAD?: boolean; swapSandShiftS?: boolean; saveData?: SaveData }) {
+    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean; swapQEandAD?: boolean; swapSandShiftS?: boolean; debugCommands?: boolean; saveData?: SaveData }) {
         this.viewRange = data.viewRange ?? 3;
         this.enableFog = data.enableFog ?? true;
         this.revealAll = data.showAllEnemies ?? false;
         this.swapQEandAD = data.swapQEandAD ?? false;
         this.swapSandShiftS = data.swapSandShiftS ?? false;
+        this.debugCommands = data.debugCommands ?? false;
         this.pendingSaveData = data.saveData ?? null;
     }
 
@@ -505,7 +507,9 @@ export class Game extends Scene {
         }
         EventBus.emit('current-scene-ready', this);
 
-        this.setupDebugCommands();
+        if (this.debugCommands) {
+            this.setupDebugCommands();
+        }
 
         this.defaultSceneActions = [
             { label: 'スキル', onClick: () => this.toggleList('skill') },
@@ -695,6 +699,13 @@ export class Game extends Scene {
         } else {
             lines.push('なし');
         }
+        lines.push('');
+
+        lines.push('設定');
+        lines.push(`プレイヤーの視界：${this.viewRange}`);
+        lines.push(`フォグの有無：${this.enableFog ? 'あり' : 'なし'}`);
+        lines.push(`常に敵を表示：${this.revealAll ? 'ON' : 'OFF'}`);
+        lines.push(`デバッグコマンド：${this.debugCommands ? 'ON' : 'OFF'}`);
 
         return lines.join('\n');
     }

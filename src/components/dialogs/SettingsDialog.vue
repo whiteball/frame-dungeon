@@ -9,6 +9,7 @@ const props = defineProps<{
     initialShowAllEnemies: boolean
     initialSwapQEAndAD: boolean
     initialSwapSAndShiftS: boolean
+    initialDebugCommands: boolean
 }>();
 
 const emit = defineEmits<{
@@ -18,6 +19,7 @@ const emit = defineEmits<{
         showAllEnemies: boolean;
         swapQEandAD: boolean;
         swapSandShiftS: boolean;
+        debugCommands: boolean;
     }]
     cancel: []
 }>();
@@ -27,6 +29,7 @@ const localEnableFog = ref(props.initialEnableFog);
 const localShowAllEnemies = ref(props.initialShowAllEnemies);
 const localSwapQEandAD = ref(props.initialSwapQEAndAD);
 const localSwapSandShiftS = ref(props.initialSwapSAndShiftS);
+const localDebugCommands = ref(props.initialDebugCommands);
 
 watch(() => props.visible, (v) => {
     if (v) {
@@ -35,6 +38,7 @@ watch(() => props.visible, (v) => {
         localShowAllEnemies.value = props.initialShowAllEnemies;
         localSwapQEandAD.value = props.initialSwapQEAndAD;
         localSwapSandShiftS.value = props.initialSwapSAndShiftS;
+        localDebugCommands.value = props.initialDebugCommands;
     }
 });
 
@@ -45,6 +49,7 @@ function confirm() {
         showAllEnemies: localShowAllEnemies.value,
         swapQEandAD: localSwapQEandAD.value,
         swapSandShiftS: localSwapSandShiftS.value,
+        debugCommands: localDebugCommands.value,
     });
 }
 </script>
@@ -84,6 +89,16 @@ function confirm() {
                         <input
                             type="checkbox"
                             v-model="localShowAllEnemies"
+                            style="width: 18px; height: 18px; cursor: pointer;"
+                        />
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 16px 8px 0; white-space: nowrap;">デバッグコマンド</td>
+                    <td style="padding: 8px 0;">
+                        <input
+                            type="checkbox"
+                            v-model="localDebugCommands"
                             style="width: 18px; height: 18px; cursor: pointer;"
                         />
                     </td>

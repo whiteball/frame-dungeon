@@ -14,6 +14,7 @@ export class MainMenu extends Scene
     private showAllEnemies = false;
     private swapQEandAD = false;
     private swapSandShiftS = false;
+    private debugCommands = false;
 
     private loadSettings () {
         try {
@@ -25,6 +26,7 @@ export class MainMenu extends Scene
                 if (typeof parsed.showAllEnemies === 'boolean') this.showAllEnemies = parsed.showAllEnemies;
                 if (typeof parsed.swapQEandAD === 'boolean') this.swapQEandAD = parsed.swapQEandAD;
                 if (typeof parsed.swapSandShiftS === 'boolean') this.swapSandShiftS = parsed.swapSandShiftS;
+                if (typeof parsed.debugCommands === 'boolean') this.debugCommands = parsed.debugCommands;
             }
         } catch { /* 読み込み失敗時はデフォルト値を使用 */ }
     }
@@ -36,6 +38,7 @@ export class MainMenu extends Scene
             showAllEnemies: this.showAllEnemies,
             swapQEandAD: this.swapQEandAD,
             swapSandShiftS: this.swapSandShiftS,
+            debugCommands: this.debugCommands,
         }));
     }
 
@@ -67,15 +70,16 @@ export class MainMenu extends Scene
         EventBus.emit('scene-actions', [
             { label: 'ゲーム開始', onClick: () => this.changeScene() },
             { label: 'ロード', onClick: () => EventBus.emit('open-load-dialog') },
-            { label: '設定', onClick: () => EventBus.emit('open-settings', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies, swapQEandAD: this.swapQEandAD, swapSandShiftS: this.swapSandShiftS }) },
+            { label: '設定', onClick: () => EventBus.emit('open-settings', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies, swapQEandAD: this.swapQEandAD, swapSandShiftS: this.swapSandShiftS, debugCommands: this.debugCommands }) },
         ]);
 
-        EventBus.on('settings-confirmed', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean }) => {
+        EventBus.on('settings-confirmed', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean; debugCommands: boolean }) => {
             this.viewRange = data.viewRange;
             this.enableFog = data.enableFog;
             this.showAllEnemies = data.showAllEnemies;
             this.swapQEandAD = data.swapQEandAD;
             this.swapSandShiftS = data.swapSandShiftS;
+            this.debugCommands = data.debugCommands;
             this.saveSettings();
         });
 
@@ -93,7 +97,7 @@ export class MainMenu extends Scene
     changeScene ()
     {
         EventBus.emit('game-scene-start');
-        this.scene.start('Game', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies, swapQEandAD: this.swapQEandAD, swapSandShiftS: this.swapSandShiftS });
+        this.scene.start('Game', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies, swapQEandAD: this.swapQEandAD, swapSandShiftS: this.swapSandShiftS, debugCommands: this.debugCommands });
     }
 
     private startLoadedGame(saveData: SaveData): void {
@@ -105,6 +109,7 @@ export class MainMenu extends Scene
             showAllEnemies: this.showAllEnemies,
             swapQEandAD: this.swapQEandAD,
             swapSandShiftS: this.swapSandShiftS,
+            debugCommands: this.debugCommands,
             saveData,
         });
     }

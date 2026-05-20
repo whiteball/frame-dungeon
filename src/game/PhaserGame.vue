@@ -45,6 +45,7 @@ const settingsEnableFog = ref(true);
 const settingsShowAllEnemies = ref(false);
 const settingsSwapQEandAD = ref(false);
 const settingsSwapSandShiftS = ref(false);
+const settingsDebugCommands = ref(false);
 
 const statusVisible = ref(false);
 const statusText = ref('');
@@ -263,12 +264,13 @@ onMounted(() => {
         modeLabel.value = label;
     });
 
-    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean }) => {
+    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean; debugCommands: boolean }) => {
         settingsViewRange.value = data.viewRange;
         settingsEnableFog.value = data.enableFog;
         settingsShowAllEnemies.value = data.showAllEnemies;
         settingsSwapQEandAD.value = data.swapQEandAD;
         settingsSwapSandShiftS.value = data.swapSandShiftS;
+        settingsDebugCommands.value = data.debugCommands;
         settingsVisible.value = true;
     });
 
@@ -492,6 +494,7 @@ defineExpose({ scene, game });
             :initial-show-all-enemies="settingsShowAllEnemies"
             :initial-swap-q-e-and-a-d="settingsSwapQEandAD"
             :initial-swap-s-and-shift-s="settingsSwapSandShiftS"
+            :initial-debug-commands="settingsDebugCommands"
             @confirm="(p) => { EventBus.emit('settings-confirmed', p); settingsVisible = false; }"
             @cancel="settingsVisible = false"
         />
