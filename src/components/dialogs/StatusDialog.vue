@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import ModalOverlay from './ModalOverlay.vue';
 
-defineProps<{
+withDefaults(defineProps<{
     visible: boolean
     statusText: string
-}>();
+    title?: string
+}>(), {
+    title: 'ステータス'
+});
 
 const emit = defineEmits<{
     close: []
@@ -14,7 +17,7 @@ const emit = defineEmits<{
 <template>
     <ModalOverlay :visible="visible" :bg-alpha="0.6" :z-index="100">
         <div style="padding: 32px 40px; min-width: 380px; color: #fff;">
-            <h2 style="margin: 0 0 16px 0; text-align: center; font-size: 22px;">ステータス</h2>
+            <h2 style="margin: 0 0 16px 0; text-align: center; font-size: 22px;">{{ title }}</h2>
             <textarea
                 :value="statusText"
                 readonly

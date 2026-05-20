@@ -48,6 +48,9 @@ const settingsSwapSandShiftS = ref(false);
 const statusVisible = ref(false);
 const statusText = ref('');
 
+const resultVisible = ref(false);
+const resultText = ref('');
+
 const saveDialogVisible = ref(false);
 const saveSlotMetas = ref<SlotMeta[]>([]);
 
@@ -269,6 +272,11 @@ onMounted(() => {
         statusVisible.value = true;
     });
 
+    EventBus.on('open-result', (text: string) => {
+        resultText.value = text;
+        resultVisible.value = true;
+    });
+
     EventBus.on('open-save-dialog', () => {
         saveSlotMetas.value = SaveManager.getAllSlotMeta();
         saveDialogVisible.value = true;
@@ -300,6 +308,7 @@ onUnmounted(() => {
     EventBus.removeListener('close-item-list');
     EventBus.removeListener('open-settings');
     EventBus.removeListener('open-status');
+    EventBus.removeListener('open-result');
     EventBus.removeListener('open-save-dialog');
     EventBus.removeListener('close-save-dialog', handleCloseSaveDialog);
     EventBus.removeListener('open-load-dialog');
@@ -484,6 +493,12 @@ defineExpose({ scene, game });
             :visible="statusVisible"
             :status-text="statusText"
             @close="statusVisible = false"
+        />
+        <StatusDialog
+            :visible="resultVisible"
+            :status-text="resultText"
+            title="リザルト"
+            @close="resultVisible = false"
         />
         <SaveDialog
             :visible="saveDialogVisible"

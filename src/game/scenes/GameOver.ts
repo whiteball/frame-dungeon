@@ -29,7 +29,11 @@ export class GameOver extends Scene
         
         EventBus.emit('current-scene-ready', this);
 
+        const data = this.scene.settings.data as { resultText?: string };
+        const resultText = data?.resultText ?? '';
+
         EventBus.emit('scene-actions', [
+            { label: 'リザルト', onClick: () => EventBus.emit('open-result', resultText) },
             { label: 'リスタート', onClick: () => this.changeScene() },
         ]);
     }

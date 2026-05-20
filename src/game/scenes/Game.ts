@@ -357,12 +357,14 @@ export class Game extends Scene {
 
         EventBus.on('game-over', () => {
             this.closeList();
-            this.scene.start('GameOver');
+            const resultText = this.buildResultText();
+            this.scene.start('GameOver', { resultText });
         })
 
         EventBus.on('game-clear', () => {
             this.closeList();
-            this.scene.start('GameClear');
+            const resultText = this.buildResultText();
+            this.scene.start('GameClear', { resultText });
         })
 
         EventBus.on('use-item', (payload: { instanceId: string }) => {
@@ -655,6 +657,46 @@ export class Game extends Scene {
         }
 
         EventBus.emit('open-status', lines.join('\n'));
+    }
+
+    private buildResultText(): string {
+        const lines: string[] = [];
+
+        lines.push(`最終到達階層：${this.floor}`);
+        lines.push(`総経過ターン数：${this.dungeon.getTurnCount()}`);
+        lines.push(`レベル：${this.player.level}`);
+        lines.push(`次のレベルまでの経験値：${this.player.expToNextLevel() - this.player.exp}`);
+        lines.push(`倒した敵の数：${this.player.getEnemiesDefeated()}`);
+        lines.push(`使ったアイテムの数：${this.player.getItemsUsed()}`);
+        lines.push('');
+
+        const displayParams = this.getDisplayParams();
+        for (const [key, value] of displayParams) {
+            lines.push(`${key}：${value}`);
+        }
+        if (!displayParams.has('状態')) {
+            lines.push('状態：なし');
+        }
+        lines.push('');
+
+        lines.push(`武器：${this.player.getEquippedWeapon()?.getLabelWithModifiers() ?? 'なし'}`);
+        lines.push(`メイン防具：${this.player.getEquippedMainArmor()?.getLabelWithModifiers() ?? 'なし'}`);
+        lines.push(`サブ防具１：${this.player.getEquippedSubArmor1()?.getLabelWithModifiers() ?? 'なし'}`);
+        lines.push(`サブ防具２：${this.player.getEquippedSubArmor2()?.getLabelWithModifiers() ?? 'なし'}`);
+        lines.push('');
+
+        const inventory = this.player.getInventory();
+        lines.push(`アイテム(${inventory.getUsedCapacity()}/${inventory.getCapacity()})：`);
+        const items = inventory.getItems();
+        if (items.length > 0) {
+            for (const item of items) {
+                lines.push(item.getLabelWithModifiers());
+            }
+        } else {
+            lines.push('なし');
+        }
+
+        return lines.join('\n');
     }
 
     private toggleList(mode: 'item' | 'equip' | 'skill'): void {
