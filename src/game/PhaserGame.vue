@@ -37,6 +37,7 @@ const selectedIndex = ref(0);
 const listRef = ref<HTMLUListElement | null>(null);
 const listMode = ref<ListMode>('item');
 const actionLabel = ref<string>('使用');
+const modeLabel = ref<string>('');
 
 const settingsVisible = ref(false);
 const settingsViewRange = ref(3);
@@ -258,6 +259,10 @@ onMounted(() => {
         selectedIndex.value = 0;
     });
 
+    EventBus.on('set-mode-label', (label: string) => {
+        modeLabel.value = label;
+    });
+
     EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean }) => {
         settingsViewRange.value = data.viewRange;
         settingsEnableFog.value = data.enableFog;
@@ -306,6 +311,7 @@ onUnmounted(() => {
     EventBus.removeListener('reset-message-log');
     EventBus.removeListener('open-item-list');
     EventBus.removeListener('close-item-list');
+    EventBus.removeListener('set-mode-label');
     EventBus.removeListener('open-settings');
     EventBus.removeListener('open-status');
     EventBus.removeListener('open-result');
@@ -414,7 +420,7 @@ defineExpose({ scene, game });
             >{{ log }}</div>
         </div>
         <div
-            v-show="itemListVisible"
+            v-show="itemListVisible || modeLabel"
             style="position: absolute; left: 10px; top: 10px;
                    width: 760px; height: 520px;
                    display: flex; justify-content: center; align-items: center;
@@ -428,7 +434,7 @@ defineExpose({ scene, game });
                        border-radius: 6px;
                        padding: 12px 32px;
                        box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);"
-            >{{ listMode === 'skill' ? 'スキル選択中' : listMode === 'equip' ? '装備変更中' : listMode === 'drop' ? '置くもの選択中' : 'アイテム選択中' }}</span>
+            >{{ modeLabel || (listMode === 'skill' ? 'スキル選択中' : listMode === 'equip' ? '装備変更中' : listMode === 'drop' ? '置くもの選択中' : 'アイテム選択中') }}</span>
         </div>
         <div
             v-show="itemListVisible"

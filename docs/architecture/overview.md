@@ -99,6 +99,7 @@ src/components/dialogs/
 | `close-load-dialog` | Phaser→Vue | なし | ロードダイアログを閉じる |
 | `load-game` | Vue→Phaser | `SaveData` | ロード実行 |
 | `yaml-cross-validation-errors` | Phaser→Vue | `string[]` | YAMLエラーモーダルを開く |
+| `set-mode-label` | Phaser→Vue | `string` | MainView 上のモードラベルを設定・クリア（空文字でクリア）。攻撃/調査の方向選択モード入退時に `Game.ts` が発行 |
 
 ## マップ系モジュール構成
 

@@ -1108,6 +1108,10 @@ export class Game extends Scene {
         EventBus.emit('scene-actions', actions);
     }
 
+    private setModeLabel(label: string): void {
+        EventBus.emit('set-mode-label', label);
+    }
+
     private toggleMiniMapMode(): void {
         const isFullMap = this.miniMapView.toggleMapMode();
         localStorage.setItem('frame_dungeon_minimap_full', String(isFullMap));
@@ -1187,6 +1191,7 @@ export class Game extends Scene {
         ];
 
         this.setSceneActions(actions);
+        this.setModeLabel('攻撃方向選択中');
     }
 
     private executeAttackDirection(targetX: integer, targetY: integer): void {
@@ -1196,6 +1201,7 @@ export class Game extends Scene {
 
     private exitAttackDirectionMode(): void {
         this.setSceneActions(this.defaultSceneActions);
+        this.setModeLabel('');
     }
 
     /**
@@ -1227,6 +1233,7 @@ export class Game extends Scene {
             },
         ];
         this.setSceneActions(actions);
+        this.setModeLabel('スキル方向選択中');
     }
 
     private executeSkillWithFront(skillName: string, cell: { x: integer; y: integer }): void {
@@ -1236,6 +1243,7 @@ export class Game extends Scene {
 
     private exitSkillTargetSelectMode(): void {
         this.setSceneActions(this.defaultSceneActions);
+        this.setModeLabel('');
     }
 
     private trySearch(): void {
@@ -1266,6 +1274,7 @@ export class Game extends Scene {
         ];
 
         this.setSceneActions(actions);
+        this.setModeLabel('調査方向選択中');
     }
 
     private executeSearch(directionLabel: string, targetX: integer, targetY: integer): void {
