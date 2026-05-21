@@ -224,6 +224,74 @@ export class MapBuilder {
         }
       }
     }
+    // 非進入禁止部屋が全て連結になるよう保証する（孤立部屋とメインコンポーネントの間の最短路上にある進入禁止部屋を解除する）
+    {
+      const isBlocked = (i: integer) => blocked.some(v => v === i);
+      // 通路が部屋の境界に隣接しているか（y/x 範囲が重なる）
+      const corridorTouchesRoom = (c: Rect, room: Rect): boolean => {
+        if (c.x1 === room.x2 + 1 && c.y1 <= room.y2 && c.y2 >= room.y1) return true;
+        if (c.x2 + 1 === room.x1 && c.y1 <= room.y2 && c.y2 >= room.y1) return true;
+        if (c.y1 === room.y2 + 1 && c.x1 <= room.x2 && c.x2 >= room.x1) return true;
+        if (c.y2 + 1 === room.y1 && c.x1 <= room.x2 && c.x2 >= room.x1) return true;
+        return false;
+      };
+      // isContact は非対称なため双方向チェック、さらに通路経由の隣接も考慮する
+      const getNeighbors = (i: integer): integer[] => {
+        const result: integer[] = [];
+        const ri = roomsWithCorridors[i];
+        for (let j = 0; j < roomsWithCorridors.length; j++) {
+          if (i === j) continue;
+          const rj = roomsWithCorridors[j];
+          if (ri.room.isContact(rj.room) || rj.room.isContact(ri.room) ||
+              ri.corridors.some(c => corridorTouchesRoom(c, rj.room)) ||
+              rj.corridors.some(c => corridorTouchesRoom(c, ri.room))) {
+            result.push(j);
+          }
+        }
+        return result;
+      };
+      for (;;) {
+        const nonBlocked = roomsWithCorridors.map((_, i) => i).filter(i => !isBlocked(i));
+        if (nonBlocked.length === 0) break;
+        // 最初の非進入禁止部屋から BFS で到達可能な部屋集合を求める
+        const mainComponent = new Set<integer>();
+        const bfsQueue = [nonBlocked[0]];
+        while (bfsQueue.length > 0) {
+          const curr = bfsQueue.shift()!;
+          if (mainComponent.has(curr)) continue;
+          mainComponent.add(curr);
+          for (const n of getNeighbors(curr)) {
+            if (!isBlocked(n)) bfsQueue.push(n);
+          }
+        }
+        // 孤立した非進入禁止部屋を探す
+        const orphan = nonBlocked.find(i => !mainComponent.has(i));
+        if (orphan === undefined) break;
+        // orphan から全部屋（進入禁止含む）を辿る BFS でメインコンポーネントへの最短路を探す
+        const prev = new Map<integer, integer | null>();
+        const pathQueue: integer[] = [orphan];
+        prev.set(orphan, null);
+        let bridgeEnd = -1;
+        outer: while (pathQueue.length > 0) {
+          const curr = pathQueue.shift()!;
+          for (const n of getNeighbors(curr)) {
+            if (prev.has(n)) continue;
+            prev.set(n, curr);
+            if (mainComponent.has(n)) { bridgeEnd = n; break outer; }
+            pathQueue.push(n);
+          }
+        }
+        if (bridgeEnd === -1) break; // 到達不能（フォールバック）
+        // 経路上の進入禁止部屋を解除する（bridgeEnd から orphan へ遡る）
+        let cur = bridgeEnd;
+        while (prev.get(cur) !== null) {
+          const p = prev.get(cur)!;
+          const idx = blocked.indexOf(cur);
+          if (idx !== -1) blocked.splice(idx, 1);
+          cur = p;
+        }
+      }
+    }
     // ランダムに部屋を繋げる
     const connected = new Map<integer, Set<integer>>(),
       _addConnected = (roomNumber: integer, direction: integer) => {
