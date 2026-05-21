@@ -10,6 +10,10 @@ export class MiniMapView {
 
   private fullMapMode: boolean;
 
+  private moveMode = false;
+  private moveOffsetX = 0;
+  private moveOffsetY = 0;
+
   /**
    * ミニマップビューを初期化する
    * @param factory Phaserのゲームオブジェクトファクトリー
@@ -57,8 +61,12 @@ export class MiniMapView {
     // 左上に描画するマスのマップ上の座標
     const origin: [number | undefined, number | undefined] = [undefined, undefined];
 
+    const centerOverride = (this.moveMode && !this.fullMapMode)
+      ? { x: dun.getPlayerPos().x + this.moveOffsetX, y: dun.getPlayerPos().y + this.moveOffsetY }
+      : undefined;
+
     // マス描画
-    for (const block of dun.mapIterator(around, false)) {
+    for (const block of dun.mapIterator(around, false, centerOverride)) {
       if (origin[0] === undefined) origin[0] = block.x;
       if (origin[1] === undefined) origin[1] = block.y;
       const baseX = (block.x - origin[0]) * blockWidth, baseY = (block.y - origin[1]) * blockHeight;
@@ -219,6 +227,28 @@ export class MiniMapView {
 
     graph.strokeTriangleShape(tri)
     graph.fillTriangleShape(tri)
+  }
+
+  public enterMoveMode(initialOffsetX = 0, initialOffsetY = 0): void {
+    this.moveMode = true;
+    this.moveOffsetX = initialOffsetX;
+    this.moveOffsetY = initialOffsetY;
+  }
+
+  public exitMoveMode(): void {
+    this.moveMode = false;
+    this.moveOffsetX = 0;
+    this.moveOffsetY = 0;
+  }
+
+  public isMoveMode(): boolean {
+    return this.moveMode;
+  }
+
+  public scroll(dx: number, dy: number, dun: DungeonMap): void {
+    const {x: px, y: py} = dun.getPlayerPos();
+    this.moveOffsetX = Math.max(1 - px, Math.min(dun.getWidth() - px, this.moveOffsetX + dx));
+    this.moveOffsetY = Math.max(1 - py, Math.min(dun.getHeight() - py, this.moveOffsetY + dy));
   }
 
   public toggleMapMode() {

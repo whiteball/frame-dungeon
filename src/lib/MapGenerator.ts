@@ -810,11 +810,13 @@ export class DungeonMap {
    * 
    * @yields マップセルの情報（座標、壁状態、フォグ、進入可能性、歩行済み状態）
    */
-  public * mapIterator(aroundPlayer: number = 0, excludeOutOfMap = false) {
+  public * mapIterator(aroundPlayer: number = 0, excludeOutOfMap = false, centerOverride?: { x: number; y: number }) {
+    const cx = centerOverride?.x ?? this._player.x;
+    const cy = centerOverride?.y ?? this._player.y;
     const area = aroundPlayer === 0
         ? new Rect(1, 1, this._width - 1, this._height - 1)
-        : new Rect(this._player.x - aroundPlayer, this._player.y - aroundPlayer,
-              this._player.x + aroundPlayer + 1, this._player.y + aroundPlayer + 1);
+        : new Rect(cx - aroundPlayer, cy - aroundPlayer,
+              cx + aroundPlayer + 1, cy + aroundPlayer + 1);
     if (area.x2 - area.x1 > this._width) {
       area.x1 = 1;
       area.x2 = this._width - 1;

@@ -41,6 +41,7 @@ export class Game extends Scene {
         keyM: Phaser.Input.Keyboard.Key | undefined,
         keyC: Phaser.Input.Keyboard.Key | undefined,
         keySpace: Phaser.Input.Keyboard.Key | undefined,
+        keyEsc: Phaser.Input.Keyboard.Key | undefined,
     };
     dungeon: DungeonMap;
     floor: integer = 1;
@@ -67,6 +68,7 @@ export class Game extends Scene {
     private swapSandShiftS = false;
     private debugCommands = false;
     private pendingSaveData: SaveData | null = null;
+    private minimapMoveEnteredFromFullMap = false;
 
     constructor() {
         super('Game');
@@ -264,7 +266,30 @@ export class Game extends Scene {
         const savedMinimapMode = localStorage.getItem('frame_dungeon_minimap_full') === 'true';
         this.miniMapView = new MiniMapView(this.add, miniMapX, miniMapY, miniMapSize, miniMapSize, savedMinimapMode);
         const miniMapZone = this.add.zone(miniMapX + miniMapSize / 2, miniMapY + miniMapSize / 2, miniMapSize, miniMapSize).setInteractive();
-        miniMapZone.on('pointerdown', () => {
+        miniMapZone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.rightButtonDown()) {
+                if (this.miniMapView.isMoveMode()) {
+                    this.exitMinimapMoveMode();
+                } else if (!this.isModalMode) {
+                    if (this.miniMapView.getFullMapMode()) {
+                        // 全体マップモード: クリック座標からタイル座標を計算してズーム移動モードへ
+                        const relX = pointer.x - miniMapX;
+                        const relY = pointer.y - miniMapY;
+                        const maxLength = Math.max(this.dungeon.getWidth(), this.dungeon.getHeight());
+                        const blockSize = miniMapSize / maxLength;
+                        const tileX = Math.max(1, Math.min(this.dungeon.getWidth() - 2, Math.floor(relX / blockSize) + 1));
+                        const tileY = Math.max(1, Math.min(this.dungeon.getHeight() - 2, Math.floor(relY / blockSize) + 1));
+                        const playerPos = this.dungeon.getPlayerPos();
+                        this.miniMapView.toggleMapMode();
+                        localStorage.setItem('frame_dungeon_minimap_full', 'false');
+                        this.enterMinimapMoveMode(tileX - playerPos.x, tileY - playerPos.y, true);
+                        this.miniMapView.render(this.dungeon, this.revealAll);
+                    } else {
+                        this.enterMinimapMoveMode();
+                    }
+                }
+                return;
+            }
             if (this.isModalMode) return;
             this.toggleMiniMapMode();
         });
@@ -281,9 +306,15 @@ export class Game extends Scene {
             keyM: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.M),
             keyC: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C),
             keySpace: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+            keyEsc: this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
         };
 
         this.keys.keyW?.on('down', () => {
+            if (this.miniMapView.isMoveMode()) {
+                this.miniMapView.scroll(0, -1, this.dungeon);
+                this.miniMapView.render(this.dungeon, this.revealAll);
+                return;
+            }
             if (this.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.executeAction(() => this.dungeon.goPlayer() > 0);
@@ -294,6 +325,11 @@ export class Game extends Scene {
             this.tryAttackOrShowDirections(event.shiftKey);
         })
         this.keys.keyA?.on('down', () => {
+            if (this.miniMapView.isMoveMode()) {
+                this.miniMapView.scroll(-1, 0, this.dungeon);
+                this.miniMapView.render(this.dungeon, this.revealAll);
+                return;
+            }
             if (this.isModalMode) return;
             if (this.swapQEandAD) {
                 if (this.handlePlayerActionDirective()) return;
@@ -303,6 +339,11 @@ export class Game extends Scene {
             }
         })
         this.keys.keyS?.on('down', (event: KeyboardEvent) => {
+            if (this.miniMapView.isMoveMode()) {
+                this.miniMapView.scroll(0, 1, this.dungeon);
+                this.miniMapView.render(this.dungeon, this.revealAll);
+                return;
+            }
             if (this.isModalMode) return;
             const doStrafeBack = this.swapSandShiftS ? !event.shiftKey : event.shiftKey;
             if (doStrafeBack) {
@@ -313,6 +354,11 @@ export class Game extends Scene {
             }
         })
         this.keys.keyD?.on('down', () => {
+            if (this.miniMapView.isMoveMode()) {
+                this.miniMapView.scroll(1, 0, this.dungeon);
+                this.miniMapView.render(this.dungeon, this.revealAll);
+                return;
+            }
             if (this.isModalMode) return;
             if (this.swapQEandAD) {
                 if (this.handlePlayerActionDirective()) return;
@@ -339,7 +385,15 @@ export class Game extends Scene {
                 this.executeAction(() => this.dungeon.goLeftPlayer() > 0);
             }
         })
-        this.keys.keyM?.on('down', () => {
+        this.keys.keyM?.on('down', (event: KeyboardEvent) => {
+            if (event.shiftKey) {
+                if (this.miniMapView.isMoveMode()) {
+                    this.exitMinimapMoveMode();
+                } else if (!this.isModalMode && !this.miniMapView.getFullMapMode()) {
+                    this.enterMinimapMoveMode();
+                }
+                return;
+            }
             if (this.isModalMode) return;
             this.toggleMiniMapMode();
         })
@@ -348,6 +402,12 @@ export class Game extends Scene {
             if (this.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.trySearch();
+        })
+
+        this.keys.keyEsc?.on('down', () => {
+            if (this.miniMapView.isMoveMode()) {
+                this.exitMinimapMoveMode();
+            }
         })
 
         this.dungeon = dun;
@@ -1126,6 +1186,28 @@ export class Game extends Scene {
     private toggleMiniMapMode(): void {
         const isFullMap = this.miniMapView.toggleMapMode();
         localStorage.setItem('frame_dungeon_minimap_full', String(isFullMap));
+        this.miniMapView.render(this.dungeon, this.revealAll);
+    }
+
+    private enterMinimapMoveMode(initialOffsetX = 0, initialOffsetY = 0, fromFullMap = false): void {
+        this.minimapMoveEnteredFromFullMap = fromFullMap;
+        this.miniMapView.enterMoveMode(initialOffsetX, initialOffsetY);
+        this.setSceneActions([{
+            label: 'キャンセル',
+            onClick: () => this.exitMinimapMoveMode(),
+        }]);
+        this.setModeLabel('ミニマップズーム移動中');
+    }
+
+    private exitMinimapMoveMode(): void {
+        this.miniMapView.exitMoveMode();
+        if (this.minimapMoveEnteredFromFullMap) {
+            this.minimapMoveEnteredFromFullMap = false;
+            this.miniMapView.toggleMapMode();
+            localStorage.setItem('frame_dungeon_minimap_full', 'true');
+        }
+        this.setSceneActions(this.defaultSceneActions);
+        this.setModeLabel('');
         this.miniMapView.render(this.dungeon, this.revealAll);
     }
 

@@ -387,7 +387,7 @@ defineExpose({ scene, game });
 
     <!-- ゲーム本体（起動後） -->
     <div v-else style="position: relative; display: inline-block;">
-        <div id="game-container"></div>
+        <div id="game-container" @contextmenu.prevent></div>
         <div
             style="position: absolute; left: 0; top: 540px;
                    width: 1024px; height: 50px;
