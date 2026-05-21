@@ -188,6 +188,12 @@ export class Enemy extends MapObject {
             this.randomWalkCount = 0;
         }
 
+        // プレイヤー追跡中で、移動した地点からプレイヤーが見えているなら、目標地点を更新する
+        if (this.targetIsPlayerPos && dungeon.hasLineOfSight(this.x, this.y, px, py)) {
+            this.target = { x: px, y: py };
+            this.targetIsPlayerPos = true;
+        }
+
         // 目標地点に到達したなら、それを解除する
         if (this.x === this.target.x && this.y === this.target.y) {
             this.target = null;
