@@ -403,7 +403,7 @@ defineExpose({ scene, game });
                 :disabled="a.disabled"
                 @mousedown.prevent
                 @click="a.onClick"
-            >{{ a.label }}</button>
+            >{{ a.label }} [{{ (i + 1) % 10 }}]</button>
         </div>
         <div
             ref="logRef"
