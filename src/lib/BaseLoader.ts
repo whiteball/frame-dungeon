@@ -48,6 +48,11 @@ export interface FloorConfigRaw {
      * フロア経過ターン数が本値の倍数のとき、`(enemyCount - 現在敵数) / enemyCount` の確率で敵を1体補充する。
      */
     respawnCycle?: number;
+    /**
+     * このフロアの長居警告/強制移動の規定ターン数（絶対値）。
+     * 指定があれば width*height*longStayFactor よりも優先される。
+     */
+    longStayTurns?: number;
 }
 
 export interface TreasureItemEntryRaw {
@@ -94,6 +99,11 @@ export interface ResolvedFloorConfig {
     extraDoorRate: number;
     /** 敵リスポーン間隔（ターン数）。既定 20。経過ターン数が本値の倍数のとき確率判定でリスポーン */
     respawnCycle: number;
+    /**
+     * このフロアの長居警告/強制移動の規定ターン数（絶対値）。
+     * null のときはトップレベルの longStayFactor を用いて width*height*factor で算出される。
+     */
+    longStayTurns: number | null;
 }
 
 export class BaseLoader {
@@ -114,6 +124,8 @@ export class BaseLoader {
     private compiledLevelUpBonuses: CompiledLevelUpBonus[] = [];
     private autoSpawnerFormula: Expression | null = null;
     private playerInitialStats: Map<string, number> = new Map();
+    private _longStayMessages: string[] | null = null;
+    private _longStayFactor: number = 4;
 
     // INFOレベル判定用フラグ
     private _nameExplicit = false;
@@ -261,6 +273,18 @@ export class BaseLoader {
                     }
                 }
             }
+
+            if (Array.isArray(parsed.longStay)) {
+                const msgs = parsed.longStay.filter((m: unknown): m is string => typeof m === 'string');
+                if (msgs.length >= 3) {
+                    this._longStayMessages = msgs.slice(0, 3);
+                } else if (msgs.length > 0) {
+                    console.warn(`base.yml の longStay は3要素以上の文字列配列で指定してください。長居機構は無効になります`);
+                }
+            }
+            if (typeof parsed.longStayFactor === 'number' && isFinite(parsed.longStayFactor) && parsed.longStayFactor > 0) {
+                this._longStayFactor = parsed.longStayFactor;
+            }
         } catch (error) {
             this._throwWithAlert(filePath, error);
         }
@@ -379,6 +403,16 @@ export class BaseLoader {
 
     getGoalFloor(): number {
         return this.goalFloor;
+    }
+
+    /** 長居警告/強制移動用のメッセージ配列。null のとき機構は無効 */
+    getLongStayMessages(): string[] | null {
+        return this._longStayMessages;
+    }
+
+    /** 規定ターン数算出の倍率（floorConfig.longStayTurns が無い場合に使用） */
+    getLongStayFactor(): number {
+        return this._longStayFactor;
     }
 
     getFloorConfig(floor: number): ResolvedFloorConfig {
@@ -514,6 +548,10 @@ export class BaseLoader {
             ? Math.floor(raw.respawnCycle)
             : 20;
 
+        const longStayTurns = typeof raw.longStayTurns === 'number' && isFinite(raw.longStayTurns) && raw.longStayTurns > 0
+            ? Math.floor(raw.longStayTurns)
+            : null;
+
         return {
             width, height,
             enemyCount: raw.enemyCount ?? 0,
@@ -526,6 +564,7 @@ export class BaseLoader {
             treasure,
             extraDoorRate,
             respawnCycle,
+            longStayTurns,
         };
     }
 }

@@ -85,6 +85,8 @@ export class DungeonMap {
   private _turnCount: number = 0;
   private _floorStartTurnCount: number = 0;
   private _currentFloor: number = 1;
+  // 0=未通知, 1=50%警告済, 2=75%警告済, 3=強制移動発火済
+  private _longStayStage: number = 0;
 
   constructor(width: integer, height: integer, viewRange = 3, enableFog = true) {
     this.resize(width, height);
@@ -1081,6 +1083,9 @@ export class DungeonMap {
     this._tryRespawnEnemy();
 
     this._turnCount++;
+
+    // フロア長居警告/強制移動判定（ターンカウントを増やした後）
+    this._checkLongStay();
   }
 
   /**
@@ -1106,6 +1111,36 @@ export class DungeonMap {
     const name = floorConfig.randomEnemyPool[Math.floor(Math.random() * floorConfig.randomEnemyPool.length)];
     const enemy = Player.createEnemyByName(name, x, y);
     if (enemy) this.addEnemy(enemy);
+  }
+
+  /**
+   * フロア滞在ターン数が規定値の 50% / 75% / 100% を超えた最初の1ターンで
+   * EventBus('long-stay-warning', stage, message, turn) を発火する。
+   * 最終フロアでは無効。メッセージ未設定（base.yml longStay 省略）でも無効。
+   */
+  private _checkLongStay(): void {
+    if (this._longStayStage >= 3) return;
+    const baseLoader = BaseLoader.getInstance();
+    const messages = baseLoader.getLongStayMessages();
+    if (!messages) return;
+    if (this._currentFloor >= baseLoader.getGoalFloor()) return;
+
+    const floorConfig = baseLoader.getFloorConfig(this._currentFloor);
+    const limit = floorConfig.longStayTurns !== null
+      ? floorConfig.longStayTurns
+      : floorConfig.width * floorConfig.height * baseLoader.getLongStayFactor();
+    if (limit <= 0) return;
+
+    const floorTurn = this.getFloorTurnCount();
+    let stage = 0;
+    if (floorTurn > limit) stage = 3;
+    else if (floorTurn > limit * 0.75) stage = 2;
+    else if (floorTurn > limit * 0.5) stage = 1;
+
+    if (stage > this._longStayStage) {
+      this._longStayStage = stage;
+      EventBus.emit('long-stay-warning', stage, messages[stage - 1], this._turnCount);
+    }
   }
 
   /**
@@ -1248,6 +1283,7 @@ export class DungeonMap {
 
   public resetFloorTurnCount(): void {
     this._floorStartTurnCount = this._turnCount;
+    this._longStayStage = 0;
   }
 
   public getCurrentFloor(): integer {

@@ -191,9 +191,21 @@ export class Game extends Scene {
         EventBus.removeAllListeners('save-to-slot');
         EventBus.removeAllListeners('export-save');
         EventBus.removeAllListeners('close-save-dialog');
+        EventBus.removeAllListeners('long-stay-warning');
 
         this.floor = 1;
         const dun = new DungeonMap(15, 15, this.viewRange, this.enableFog);
+
+        EventBus.on('long-stay-warning', (stage: number, message: string, turn: number) => {
+            EventBus.emit('message-log', message, turn);
+            if (stage === 3) {
+                this.exitStairMode();
+                this.floor++;
+                EventBus.emit('go-to-next-floor', this.dungeon);
+            } else {
+                this.enterLongStayWarningMode();
+            }
+        });
 
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
             // フロア設定を取得してマップをリサイズ
@@ -1555,6 +1567,20 @@ export class Game extends Scene {
     }
 
     private exitTrapConfirmMode(): void {
+        this.setSceneActions(this.defaultSceneActions);
+    }
+
+    private enterLongStayWarningMode(): void {
+        const actions: SceneAction[] = [
+            {
+                label: '確認',
+                onClick: () => this.exitLongStayWarningMode(),
+            },
+        ];
+        this.setSceneActions(actions);
+    }
+
+    private exitLongStayWarningMode(): void {
         this.setSceneActions(this.defaultSceneActions);
     }
 

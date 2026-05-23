@@ -73,6 +73,8 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | `playerInitialStats` | 任意 | 全ステータス `0` | `stats.yml` で定義した各ステータスの開始値（例: `life: 100`）。未記載ステータスは `0` |
 | `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
 | `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |
+| `longStay` | 任意 | `null`（機構無効） | フロア長居時の警告/強制移動メッセージ配列。3要素以上のとき先頭3要素を `[50%警告, 75%警告, 100%強制]` として採用。後述「フロア長居警告/強制移動」参照 |
+| `longStayFactor` | 任意 | `4` | 規定ターン数の倍率。`floors[].longStayTurns` 未指定時に `width * height * longStayFactor` で算出 |
 
 ### 死亡判定 (`dead` / `enemyDead`)
 
@@ -142,6 +144,7 @@ floors:
       secretRoom: yes           # 任意。true/'yes' で 50%、数値ならその確率で隠し部屋を生成
       extraDoorRate: 0.3        # 任意。MST 連結後に冗長隣接へ扉を追加する確率 (0..1)。未指定で 0.3
       respawnCycle: 20          # 任意。敵リスポーン間隔ターン数。未指定で 20
+      longStayTurns: 1500       # 任意。長居警告/強制移動の規定ターン数（絶対値）。指定時は longStayFactor より優先
       treasure:                 # 任意。隠し部屋に出現する宝箱の設定（secretRoom 有効時のみ機能）
         rate: 0.5               # 各隠し部屋ごとの宝箱出現確率 (0..1)
         trapRate: 0.5           # 開封時にトラップ発動する確率 (0..1)
@@ -179,6 +182,16 @@ floors:
 - 配置候補の除外条件：プレイヤーのいる部屋ゾーン（接続通路含む）、プレイヤー部屋に8方向隣接する部屋ゾーン、隠し部屋、通路セル全般、`StairsObject` / `TrapObject` / `ItemObject` / `TreasureObject` の真上、`isCellBlocked` が真のセル、プレイヤーセル。候補が0個の場合はリスポーンしない
 - 8方向隣接判定：プレイヤーゾーンを構成する全矩形（部屋＋接続通路）を1セル分外側に拡張し、いずれかが他部屋矩形と重なれば隣接とみなす。プレイヤーが通路に立っているとき、通路1セルを挟んで壁越しに隣接する部屋へリスポーンしてしまうのを防ぐため
 - リスポーン成功時はメッセージログを発行しない（探索の緊張感を保つため）
+
+**フロア長居警告/強制移動 (`longStay` / `longStayFactor` / `longStayTurns`):**
+
+- 同一フロアに留まりすぎてレベル上げが無限に成立するのを抑制するための機構。`base.yml` トップレベルに `longStay`（メッセージ3要素配列）を定義しないと機構自体が無効
+- 規定ターン数の解決順：フロアの `longStayTurns`（絶対値）> トップレベル `longStayFactor` × `floor.width × floor.height`（既定倍率 4）
+- `DungeonMap.dispatchObjectEvent()` 内、`_turnCount++` 直後に `_checkLongStay()` が走り、`getFloorTurnCount()` が規定ターン数の 50% / 75% / 100% を **初めて超えた1ターン** で `EventBus.emit('long-stay-warning', stage, message, turn)` を発火する（各 stage は1度のみ）
+- Game シーン側のリスナーは `message-log` にメッセージを流し、`stage === 1` / `stage === 2`（50% / 75% 警告）のときは `enterLongStayWarningMode()` で「確認」ボタンのみのシーンアクションに切り替える。これにより `isModalMode` が真となり、移動・攻撃・カニ歩きなどすべてのキー入力がブロックされる。「確認」押下で `exitLongStayWarningMode()` がデフォルトシーンアクションへ復帰させる（ユーザーがログを見逃さないための注意喚起モーダル）
+- `stage === 3`（100% 強制移動）のときは確認モーダル無しで `floor++` & `go-to-next-floor` イベント発火（強制フロア遷移）。フェイルセーフとして直前に `exitStairMode()` を呼びシーンアクションをデフォルトへ戻す
+- 最終フロア（`floor >= goalFloor`）では機構が完全に無効化される（警告も強制移動も発動しない）
+- フロア遷移時に `resetFloorTurnCount()` 内で `_longStayStage` が 0 にリセットされる
 
 **`secretRoom`:**
 

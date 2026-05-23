@@ -63,6 +63,16 @@ autoSpawner:
     - life
   formula: "currentFloor <= 2 ? life <= 40 : (currentFloor <= 5 ? life <= 60 : currentFloor <= 9 ? life <= 100 : true)"
 
+# 同一フロアへの長居警告/強制移動
+# longStay は3要素配列で、それぞれ 50% 警告 / 75% 警告 / 100% 強制移動時のメッセージ
+# longStayFactor はフロアセル数 (width*height) に掛ける倍率で、規定ターン数を算出
+# 個別フロアで longStayTurns を指定するとそちらが優先される
+longStay:
+  - 風が吹いてきた……。
+  - 風が強い。早く次の階に移動しなければ。
+  - 強風によって次の階に吹き飛ばされた！
+longStayFactor: 4
+
 floors:
   - 1:
       size: 15
