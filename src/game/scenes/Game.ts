@@ -10,6 +10,7 @@ import { Player } from '../../lib/Player';
 import type { Enemy } from '../../lib/Enemy';
 import type { Item } from '../../lib/Item';
 import { ItemsLoader } from '../../lib/ItemsLoader';
+import { formatItemTypeLabel, formatItemEffect } from '../../lib/ItemDescriptionFormatter';
 import { TrapsLoader } from '../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { EffectsLoader } from '../../lib/EffectsLoader';
@@ -737,7 +738,7 @@ export class Game extends Scene {
         }
     }
 
-    private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean; type: string; effectJson: string }> {
+    private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean; typeLabel: string; effectSummary: string }> {
         const equippedIds = new Set(
             this.player.getAllEquippedItems()
                 .filter((it): it is Item => it !== null)
@@ -748,8 +749,8 @@ export class Game extends Scene {
             label: it.getLabelWithModifiers(),
             description: it.getDescription(),
             isEquipped: equippedIds.has(it.getInstanceId()),
-            type: it.getType(),
-            effectJson: JSON.stringify(it.getDefinition().effect),
+            typeLabel: formatItemTypeLabel(it.getType()),
+            effectSummary: formatItemEffect(it.getEffectSpecs()),
         }));
     }
 

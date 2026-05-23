@@ -17,7 +17,7 @@ type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 type ListMode = 'item' | 'equip' | 'drop' | 'skill';
 type ItemListEntry = {
     id: string, label: string, description: string,
-    isEquipped?: boolean, type?: string, effectJson?: string,
+    isEquipped?: boolean, typeLabel?: string, effectSummary?: string,
     costSummary?: string, targetSummary?: string,
     disabled?: boolean, disabledReason?: string,
 };
@@ -129,9 +129,15 @@ function confirmSelect() {
 function showDescription() {
     const it = itemList.value[selectedIndex.value];
     if (!it) return;
-    const line1 = `${it.label}:${it.type ?? ''}:${it.description}`;
-    const line2 = it.effectJson ?? '{}';
-    EventBus.emit('message-log', `${line1}\n${line2}`);
+    let message: string;
+    if (listMode.value === 'skill') {
+        const costPart = it.costSummary ? `:消費:${it.costSummary}` : '';
+        message = `${it.label}${costPart}:${it.description}`;
+    } else {
+        const head = `${it.label}:${it.typeLabel ?? ''}:${it.description}`;
+        message = it.effectSummary ? `${head}\n${it.effectSummary}` : head;
+    }
+    EventBus.emit('message-log', `--\n${message}\n--`);
 }
 
 function buildSummaryText(it: ItemListEntry): string {
