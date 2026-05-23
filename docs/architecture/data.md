@@ -140,6 +140,7 @@ floors:
           rate: 0.05            # ドロップ確率 (0..1) 独立判定
           modifierChance: 0.5   # 任意。当該ドロップの modifier 付与確率上書き
       secretRoom: yes           # 任意。true/'yes' で 50%、数値ならその確率で隠し部屋を生成
+      extraDoorRate: 0.3        # 任意。MST 連結後に冗長隣接へ扉を追加する確率 (0..1)。未指定で 0.3
       treasure:                 # 任意。隠し部屋に出現する宝箱の設定（secretRoom 有効時のみ機能）
         rate: 0.5               # 各隠し部屋ごとの宝箱出現確率 (0..1)
         trapRate: 0.5           # 開封時にトラップ発動する確率 (0..1)
@@ -161,6 +162,13 @@ floors:
 - `itemModifierPool` を指定すると **列挙された modifier 名のみが候補** となり、抽選重みは `item_modifiers.yml` の `weight` × pool の値で決まる（積算）
 - `itemModifierPool` を省略すると `item_modifiers.yml` の全 modifier が候補となり、各 `weight` のみで抽選される
 - `itemModifierPool` 内に存在しない modifier 名や負の重みがあれば `YamlCrossValidator` がエラーを返す
+
+**`extraDoorRate`:**
+
+- 値域 (0..1)。範囲外の値は clamp、未指定/非数値なら既定 `0.3` が採用される
+- `MapBuilder.setWall` の扉配置フェーズで `Phase A の壁開放 + 通路同士接続` 後の連結性をセル単位 Union-Find で判定し、両側セルが別コンポーネントなら必ず扉を設置（MST により全非進入禁止部屋の連結を保証）。同一コンポーネントの冗長な隣接ペアに対しては `extraDoorRate` の確率で追加扉を生やす
+- `0` に近いほど一本道寄りの迷路、`1` で従来通り全隣接ペアに扉が生える状態となる
+- 既存ロジックの「ランダム y/x 抽選で扉位置を決定」は維持しつつ、境界上の有効セルを全列挙してから抽選する形に変更されているため、抽選失敗による扉欠落が発生しない
 
 **`secretRoom`:**
 

@@ -192,9 +192,16 @@ export class MapBuilder {
   /**
    * マップの各マスに壁と扉を設定する
    * 部屋と通路の配置に基づいて壁の配置を決定し、扉を配置する
+   *
+   * 扉配置は Union-Find による MST + 冗長辺の確率復活法を用いる:
+   * 1. Phase A の壁開放と通路同士の接続を終えた時点で、セル単位の Union-Find を構築する
+   * 2. 各部屋の 4 方向について扉候補位置を一度ずつ検討し、両側セルが別コンポーネントなら必ず設置（MST）
+   * 3. 既に同じコンポーネントに属する候補は `extraDoorRate` の確率でのみ設置（ループ復活）
+   *
    * @param roomsWithCorridors 部屋と通路をペアにした配列
+   * @param extraDoorRate MST 後に冗長な扉を追加する確率（0..1、既定 0.3）
    */
-  public setWall(roomsWithCorridors: RoomWithCorridors[]): void {
+  public setWall(roomsWithCorridors: RoomWithCorridors[], extraDoorRate: number = 0.3): void {
     const dungeon = this.dungeon;
     const _set = function (x: integer, y: integer, rect: Rect) {
       let val = 0;
@@ -457,34 +464,123 @@ export class MapBuilder {
       }
       return false;
     }
+
+    // セル単位の Union-Find を構築し、Phase A の壁開放と通路同士接続による既存連結性を反映する
+    const cellCount = this.width * this.height;
+    const cellParent = new Int32Array(cellCount);
+    for (let i = 0; i < cellCount; i++) cellParent[i] = i;
+    const cellIndex = (x: integer, y: integer) => y * this.width + x;
+    const findCell = (x: integer): integer => {
+      let r = x;
+      while (cellParent[r] !== r) r = cellParent[r];
+      while (cellParent[x] !== r) {
+        const next = cellParent[x];
+        cellParent[x] = r;
+        x = next;
+      }
+      return r;
+    };
+    const unionCell = (a: integer, b: integer): void => {
+      const ra = findCell(a), rb = findCell(b);
+      if (ra !== rb) cellParent[ra] = rb;
+    };
+    // 隣接セル間で壁が無ければ連結扱いとする（bit 1=東壁, 2=南壁, 4=西壁, 8=北壁）
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const v = dungeon.getAt(x, y);
+        if (v === -1) continue;
+        if (x + 1 < this.width) {
+          const v2 = dungeon.getAt(x + 1, y);
+          if (v2 !== -1 && (v & 1) === 0 && (v2 & 4) === 0) {
+            unionCell(cellIndex(x, y), cellIndex(x + 1, y));
+          }
+        }
+        if (y + 1 < this.height) {
+          const v2 = dungeon.getAt(x, y + 1);
+          if (v2 !== -1 && (v & 2) === 0 && (v2 & 8) === 0) {
+            unionCell(cellIndex(x, y), cellIndex(x, y + 1));
+          }
+        }
+      }
+    }
+
+    // MST + extraDoorRate で扉候補を採否判定する。両側セルが別コンポーネントなら必ず採用、
+    // 同一コンポーネントなら extraDoorRate の確率で採用する
+    const tryPlaceDoor = (
+      x1: integer, y1: integer, bit1: integer,
+      x2: integer, y2: integer, bit2: integer,
+    ): void => {
+      const idx1 = cellIndex(x1, y1);
+      const idx2 = cellIndex(x2, y2);
+      const sameComponent = findCell(idx1) === findCell(idx2);
+      if (sameComponent && Math.random() >= extraDoorRate) return;
+      dungeon.setAt(x1, y1, dungeon.getAt(x1, y1) | bit1);
+      dungeon.setAt(x2, y2, dungeon.getAt(x2, y2) | bit2);
+      if (!sameComponent) unionCell(idx1, idx2);
+    };
+
+    // 各部屋について 4 方向の境界を確認し、扉設置可能な全位置から 1 つ抽選して
+    // MST + extraDoorRate 判定（tryPlaceDoor 内で実施）にかける
     for (const roomWithCorridors of roomsWithCorridors) {
       const room = roomWithCorridors.room;
+      // 東 (wallA=1=東壁, wallB=4=西壁)
       if (!existsDoor(16, room.x2, room.y1, room.x2, room.y2)) {
-        const y = getRandomInt(room.y1, room.y2 + 1)
-        if ((dungeon.getAt(room.x2, y) & 1) === 1 && (dungeon.getAt(room.x2 + 1, y) & 4) === 4 && dungeon.getAt(room.x2 + 1, y) !== -1) {
-          dungeon.setAt(room.x2, y, dungeon.getAt(room.x2, y) | 16);
-          dungeon.setAt(room.x2 + 1, y, dungeon.getAt(room.x2 + 1, y) | 64);
+        const positions: { y: integer }[] = [];
+        for (let y = room.y1; y <= room.y2; y++) {
+          const va = dungeon.getAt(room.x2, y);
+          const vb = dungeon.getAt(room.x2 + 1, y);
+          if (va === -1 || vb === -1) continue;
+          if ((va & 1) !== 1 || (vb & 4) !== 4) continue;
+          positions.push({ y });
+        }
+        if (positions.length > 0) {
+          const y = positions[getRandomInt(0, positions.length)].y;
+          tryPlaceDoor(room.x2, y, 16, room.x2 + 1, y, 64);
         }
       }
+      // 南 (wallA=2=南壁, wallB=8=北壁)
       if (!existsDoor(32, room.x1, room.y2, room.x2, room.y2)) {
-        const x = getRandomInt(room.x1, room.x2 + 1)
-        if ((dungeon.getAt(x, room.y2) & 2) === 2 && (dungeon.getAt(x, room.y2 + 1) & 8) === 8 && dungeon.getAt(x, room.y2 + 1) !== -1) {
-          dungeon.setAt(x, room.y2, dungeon.getAt(x, room.y2) | 32);
-          dungeon.setAt(x, room.y2 + 1, dungeon.getAt(x, room.y2 + 1) | 128);
+        const positions: { x: integer }[] = [];
+        for (let x = room.x1; x <= room.x2; x++) {
+          const va = dungeon.getAt(x, room.y2);
+          const vb = dungeon.getAt(x, room.y2 + 1);
+          if (va === -1 || vb === -1) continue;
+          if ((va & 2) !== 2 || (vb & 8) !== 8) continue;
+          positions.push({ x });
+        }
+        if (positions.length > 0) {
+          const x = positions[getRandomInt(0, positions.length)].x;
+          tryPlaceDoor(x, room.y2, 32, x, room.y2 + 1, 128);
         }
       }
+      // 西 (wallA=4=西壁, wallB=1=東壁)
       if (!existsDoor(64, room.x1, room.y1, room.x1, room.y2)) {
-        const y = getRandomInt(room.y1, room.y2 + 1)
-        if ((dungeon.getAt(room.x1, y) & 4) === 4 && (dungeon.getAt(room.x1 - 1, y) & 1) === 1 && dungeon.getAt(room.x1 - 1, y) !== -1) {
-          dungeon.setAt(room.x1, y, dungeon.getAt(room.x1, y) | 64);
-          dungeon.setAt(room.x1 - 1, y, dungeon.getAt(room.x1 - 1, y) | 16);
+        const positions: { y: integer }[] = [];
+        for (let y = room.y1; y <= room.y2; y++) {
+          const va = dungeon.getAt(room.x1, y);
+          const vb = dungeon.getAt(room.x1 - 1, y);
+          if (va === -1 || vb === -1) continue;
+          if ((va & 4) !== 4 || (vb & 1) !== 1) continue;
+          positions.push({ y });
+        }
+        if (positions.length > 0) {
+          const y = positions[getRandomInt(0, positions.length)].y;
+          tryPlaceDoor(room.x1, y, 64, room.x1 - 1, y, 16);
         }
       }
+      // 北 (wallA=8=北壁, wallB=2=南壁)
       if (!existsDoor(128, room.x1, room.y1, room.x2, room.y1)) {
-        const x = getRandomInt(room.x1, room.x2 + 1)
-        if ((dungeon.getAt(x, room.y1) & 8) === 8 && (dungeon.getAt(x, room.y1 - 1) & 2) === 2 && dungeon.getAt(x, room.y1 - 1) !== -1) {
-          dungeon.setAt(x, room.y1, dungeon.getAt(x, room.y1) | 128);
-          dungeon.setAt(x, room.y1 - 1, dungeon.getAt(x, room.y1 - 1) | 32);
+        const positions: { x: integer }[] = [];
+        for (let x = room.x1; x <= room.x2; x++) {
+          const va = dungeon.getAt(x, room.y1);
+          const vb = dungeon.getAt(x, room.y1 - 1);
+          if (va === -1 || vb === -1) continue;
+          if ((va & 8) !== 8 || (vb & 2) !== 2) continue;
+          positions.push({ x });
+        }
+        if (positions.length > 0) {
+          const x = positions[getRandomInt(0, positions.length)].x;
+          tryPlaceDoor(x, room.y1, 128, x, room.y1 - 1, 32);
         }
       }
     }

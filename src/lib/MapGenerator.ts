@@ -40,6 +40,11 @@ export type RandomPosConfig = {
 export type DungeonBuildOptions = {
   /** 隠し部屋抽選確率（0..1）。0 なら隠し部屋を生成しない */
   secretRoomChance?: number,
+  /**
+   * MST で連結確保後、冗長な隣接ペアに追加で扉を生やす確率（0..1）。
+   * 未指定なら既定値 0.3 が使用される
+   */
+  extraDoorRate?: number,
 }
 
 /**
@@ -302,7 +307,7 @@ export class DungeonMap {
       const builder = new MapBuilder(this, this._width, this._height, this._minRoomLength);
       this._rooms = builder.makeRoom();
       this._roomsWithCorridors = builder.makeCorridor(this._rooms);
-      builder.setWall(this._roomsWithCorridors);
+      builder.setWall(this._roomsWithCorridors, options.extraDoorRate ?? 0.3);
       builder.placeObstacles(this._roomsWithCorridors);
       this._markSecretRoomCandidate(builder, options.secretRoomChance ?? 0);
     }

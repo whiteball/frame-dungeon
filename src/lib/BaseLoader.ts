@@ -38,6 +38,11 @@ export interface FloorConfigRaw {
     secretRoom?: boolean | number | string;
     /** 隠し部屋に置く宝箱の設定。secretRoom が無効なら無視される */
     treasure?: TreasureConfigRaw;
+    /**
+     * MST で連結性を確保したあと、冗長な隣接ペアに追加で扉を生やす確率（0..1）。
+     * 未指定なら既定値 0.3 が使用される。0 なら一本道寄りの迷路、1 で従来通り全隣接接続。
+     */
+    extraDoorRate?: number;
 }
 
 export interface TreasureItemEntryRaw {
@@ -80,6 +85,8 @@ export interface ResolvedFloorConfig {
     secretRoomChance: number;
     /** 隠し部屋宝箱設定。なければ undefined */
     treasure?: ResolvedTreasureConfig;
+    /** MST で連結確保後、冗長な隣接ペアに追加で扉を生やす確率（0..1）。既定 0.3 */
+    extraDoorRate: number;
 }
 
 export class BaseLoader {
@@ -492,6 +499,10 @@ export class BaseLoader {
             }
         }
 
+        const extraDoorRate = typeof raw.extraDoorRate === 'number' && isFinite(raw.extraDoorRate)
+            ? Math.max(0, Math.min(1, raw.extraDoorRate))
+            : 0.3;
+
         return {
             width, height,
             enemyCount: raw.enemyCount ?? 0,
@@ -502,6 +513,7 @@ export class BaseLoader {
             enemyDropPool,
             secretRoomChance,
             treasure,
+            extraDoorRate,
         };
     }
 }

@@ -200,7 +200,10 @@ export class Game extends Scene {
             const floorConfig = BaseLoader.getInstance().getFloorConfig(this.floor);
             dungeon.setCurrentFloor(this.floor);
             dungeon.resize(floorConfig.width, floorConfig.height);
-            dungeon.build({ secretRoomChance: floorConfig.secretRoomChance });
+            dungeon.build({
+                secretRoomChance: floorConfig.secretRoomChance,
+                extraDoorRate: floorConfig.extraDoorRate,
+            });
             dungeon.resetFloorTurnCount();
             // dungeon.dump();
 
