@@ -2,17 +2,26 @@
   abbreviation: HP
   fluctuation: yes
   description: HP
-  initial: 100
+  order: 1
 - name: magic
   abbreviation: MP
   fluctuation: yes
   description: MP
-  initial: 50
+  order: 2
 - name: power
   abbreviation: POW
   description: 攻撃力
-  initial: 10
+  order: 3
 - name: defense
   abbreviation: DEF
   description: 防御力
-  initial: 5
+  order: 4
+- name: luck
+  abbreviation: LUK
+  description: 運の良さ
+- name: karma
+  abbreviation: カルマ
+  description: KAR
+  order: 5
+  default: 50
+

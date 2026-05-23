@@ -19,9 +19,13 @@ export interface StatDefinition {
      */
     description: string;
     /**
-     * 初期値
+     * InfoView への表示順（0以上の整数）。未指定のステータスは InfoView に表示しない
      */
-    initial?: number;
+    order?: number;
+    /**
+     * この値と現在値（base）が一致するとき InfoView に表示しない
+     */
+    default?: number;
 }
 
 export class StatsLoader {
@@ -69,8 +73,9 @@ export class StatsLoader {
         return stat ? (stat.fluctuation || false) : false;
     }
 
-    getInitialValue(statName: string): number {
-        const stat = this.getStat(statName);
-        return stat ? (stat.initial || 0) : 0;
+    getDisplayOrderedStats(): StatDefinition[] {
+        return this.store.getAll()
+            .filter(s => s.order !== undefined)
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     }
 }

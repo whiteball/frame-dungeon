@@ -9,7 +9,7 @@ YAML ファイルによるデータ定義の仕組みと、各 Loader、`base.ym
 ゲームデータはYAMLファイルで管理されています：
 
 - **base.yml**（`public/data/base.yml`）: ゲーム全体の中核設定。ゲーム名・最終フロア・ダメージ式・経験値式・レベルアップボーナス・フロア毎構成・敵自動湧き判定式を保持。詳細は後述「base.yml — ゲーム全体設定」参照
-- **stats.yml**（`public/data/stats.yml`）: プレイヤーのステータス定義（HP、MP、攻撃力、防御力など）
+- **stats.yml**（`public/data/stats.yml`）: プレイヤーのステータス定義（HP、MP、攻撃力、防御力など）。`order` で InfoView 表示順を制御（未指定は非表示）、`default` で「この値と一致するとき非表示」を指定可能。初期値は `base.yml` の `playerInitialStats` で定義
 - **items.yml**（`public/data/items.yml`）: アイテム定義（武器、防具、消耗品）
 - **enemies.yml**（`public/data/enemies.yml`）: 敵の定義（HP、攻撃力、防御力、経験値、表示色）。`walk` フィールドで移動パターンを指定（[combat.md](./combat.md) の「敵システム」参照）
 - **effects.yml**（`public/data/effects.yml`）: 状態異常/強化効果の定義（毒、麻痺、睡眠、強化など）
@@ -70,6 +70,7 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | --- | --- | --- | --- |
 | `name` | 任意 | `'Dungeon Game'` | タイトル・セーブメタの `gameName` |
 | `goalFloor` | 任意 | `10` | このフロアの階段で `GameClear` シーンへ遷移 |
+| `playerInitialStats` | 任意 | 全ステータス `0` | `stats.yml` で定義した各ステータスの開始値（例: `life: 100`）。未記載ステータスは `0` |
 | `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
 | `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |
 

@@ -140,13 +140,7 @@ export class Player {
     }
 
     private getInitialValue(statName: string): number {
-        // stats.ymlから初期値を取得
-        if (Player.statsLoader) {
-            return Player.statsLoader.getInitialValue(statName);
-        }
-        
-        // statsLoaderが利用できない場合はエラー
-        throw new Error(`Cannot get initial value for ${statName}: StatsLoader not available`);
+        return BaseLoader.getInstance().getPlayerInitialStat(statName);
     }
 
     getStats(): Map<string, number> {

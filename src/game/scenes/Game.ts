@@ -112,22 +112,42 @@ export class Game extends Scene {
         });
     }
 
-    private getDisplayParams(): Map<string, number | string> {
+    private formatStatValue(data: { bonus: number; hasFluctuation: boolean; maxValue: number | null; currentValue: number }): number | string {
+        const bonusStr = data.bonus > 0 ? `(+${data.bonus})` : `(${data.bonus})`;
+        if (data.hasFluctuation && data.maxValue !== null) {
+            const maxPart = data.bonus !== 0 ? `${data.maxValue}${bonusStr}` : `${data.maxValue}`;
+            return `${data.currentValue}/${maxPart}`;
+        } else if (data.bonus !== 0) {
+            return `${data.currentValue}${bonusStr}`;
+        } else {
+            return data.currentValue;
+        }
+    }
+
+    private getDisplayParams(showAll = false): Map<string, number | string> {
         const displayParams = new Map<string, number | string>();
         const displayStats = this.player.getDisplayStats();
+        const statsLoader = StatsLoader.getInstance();
 
-        for (const data of displayStats.values()) {
-            let displayValue: number | string;
-            const bonusStr = data.bonus > 0 ? `(+${data.bonus})` : `(${data.bonus})`;
-            if (data.hasFluctuation && data.maxValue !== null) {
-                const maxPart = data.bonus !== 0 ? `${data.maxValue}${bonusStr}` : `${data.maxValue}`;
-                displayValue = `${data.currentValue}/${maxPart}`;
-            } else if (data.bonus !== 0) {
-                displayValue = `${data.currentValue}${bonusStr}`;
-            } else {
-                displayValue = data.currentValue;
+        if (showAll) {
+            const sorted = [...statsLoader.getStats()].sort((a, b) => {
+                if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+                if (a.order !== undefined) return -1;
+                if (b.order !== undefined) return 1;
+                return 0;
+            });
+            for (const statDef of sorted) {
+                const data = displayStats.get(statDef.name);
+                if (!data) continue;
+                displayParams.set(data.abbreviation, this.formatStatValue(data));
             }
-            displayParams.set(data.abbreviation, displayValue);
+        } else {
+            for (const statDef of statsLoader.getDisplayOrderedStats()) {
+                const data = displayStats.get(statDef.name);
+                if (!data) continue;
+                if (statDef.default !== undefined && data.currentValue === statDef.default) continue;
+                displayParams.set(data.abbreviation, this.formatStatValue(data));
+            }
         }
 
         const statusEffects = this.player.getActiveStatusEffects();
@@ -694,7 +714,7 @@ export class Game extends Scene {
         lines.push(`次のレベルまでの経験値：${this.player.expToNextLevel() - this.player.exp}`);
         lines.push('');
 
-        const displayParams = this.getDisplayParams();
+        const displayParams = this.getDisplayParams(true);
         for (const [key, value] of displayParams) {
             lines.push(`${key}：${value}`);
         }
@@ -734,7 +754,7 @@ export class Game extends Scene {
         lines.push(`使ったアイテムの数：${this.player.getItemsUsed()}`);
         lines.push('');
 
-        const displayParams = this.getDisplayParams();
+        const displayParams = this.getDisplayParams(true);
         for (const [key, value] of displayParams) {
             lines.push(`${key}：${value}`);
         }

@@ -1,6 +1,13 @@
 name: Sample Game
 goalFloor: 10
 
+playerInitialStats:
+  life: 100
+  magic: 50
+  power: 10
+  defense: 5
+  karma: 50
+
 defaultDamageStat: life
 
 dead:

@@ -71,6 +71,7 @@ export class BaseLoader {
     private requiredExpFormula: Expression | null = null;
     private compiledLevelUpBonuses: CompiledLevelUpBonus[] = [];
     private autoSpawnerFormula: Expression | null = null;
+    private playerInitialStats: Map<string, number> = new Map();
 
     // INFOレベル判定用フラグ
     private _nameExplicit = false;
@@ -210,6 +211,14 @@ export class BaseLoader {
                     throw new Error(`autoSpawner.formula のパースに失敗しました: ${parsed.autoSpawner.formula}`);
                 }
             }
+
+            if (parsed.playerInitialStats && typeof parsed.playerInitialStats === 'object') {
+                for (const [key, value] of Object.entries(parsed.playerInitialStats)) {
+                    if (typeof value === 'number') {
+                        this.playerInitialStats.set(key, value);
+                    }
+                }
+            }
         } catch (error) {
             this._throwWithAlert(filePath, error);
         }
@@ -316,6 +325,10 @@ export class BaseLoader {
         const { rank, minRank, maxRank } = rankInfo;
         if (maxRank === minRank) return true;
         return rank / (maxRank - minRank) * maxFloor <= floor;
+    }
+
+    getPlayerInitialStat(statName: string): number {
+        return this.playerInitialStats.get(statName) ?? 0;
     }
 
     getName(): string {
