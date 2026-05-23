@@ -26,17 +26,17 @@ export type MapMark = typeof MapMark[keyof typeof MapMark];
 /** MainView 上で重ねて描画する立体形状（排他選択） */
 export const MapShape = {
   /** 立体描画なし */
-  NONE: 'none',
+  NONE: '0_none',
   /** 球体 */
-  SPHERE: 'sphere',
+  SPHERE: '5_sphere',
   /** 立方体 */
-  CUBE: 'cube',
+  CUBE: '4_cube',
   /** 直方体（床接地） */
-  BOX: 'box',
+  BOX: '3_box',
   /** 円柱（床接地） */
-  CYLINDER: 'cylinder',
+  CYLINDER: '2_cylinder',
   /** 四角錐（床接地） */
-  PYRAMID: 'pyramid',
+  PYRAMID: '1_pyramid',
 } as const;
 export type MapShape = typeof MapShape[keyof typeof MapShape];
 

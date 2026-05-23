@@ -258,8 +258,9 @@ export class MainView {
     graph.lineStyle(1, 0x0, 1);
     graph.fillStyle(0xFFFFFF);
 
-    const drawSphere = (circle: Phaser.Geom.Circle, alpha: number) => {
+    const drawSphere = (circle: Phaser.Geom.Circle, color: number, alpha: number) => {
       // 球の本体
+      graph.fillStyle(color, alpha);
       graph.strokeCircleShape(circle).fillCircleShape(circle);
 
       // 光の反射
@@ -695,7 +696,9 @@ export class MainView {
             }
           }
         }
-        for (const object of dun.getObject(blockList[i][order][1], blockList[i][order][2])) {
+        let doneDrawFloor = false;
+        // MapShapeの文字列辞書順に描画する
+        for (const object of dun.getObject(blockList[i][order][1], blockList[i][order][2]).sort((a, b) => a.shape.localeCompare(b.shape))) {
           if (!object.visible) {
             continue;
           }
@@ -704,10 +707,15 @@ export class MainView {
           if (pol) {
             const inner1 = this.floorInner1List[RANGE - i][order];
             const inner2 = this.floorInner2List[RANGE - i][order];
-            drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
+            if (!doneDrawFloor) {
+              // 同じセルの床は最初のオブジェクトだけ
+              // 敵オブジェクトはリストの最後にあるので、アイテムの上に敵の床マークを描画しない
+              drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
+              doneDrawFloor = true;
+            }
             const center = this.centerList[RANGE - i][order];
             if (object.shape === MapShape.SPHERE && center) {
-              drawSphere(center, object.alpha);
+              drawSphere(center, object.color, object.alpha);
             } else if (object.shape === MapShape.CUBE && center) {
               drawCube(center, object.color, object.alpha);
             } else if (object.shape === MapShape.BOX && center) {
@@ -757,7 +765,9 @@ export class MainView {
             }
           }
         }
-        for (const object of dun.getObject(blockList[i][order + 1][1], blockList[i][order + 1][2])) {
+        doneDrawFloor = false;
+        // MapShapeの文字列辞書順に描画する
+        for (const object of dun.getObject(blockList[i][order + 1][1], blockList[i][order + 1][2]).sort((a, b) => a.shape.localeCompare(b.shape))) {
           if (!object.visible) {
             continue;
           }
@@ -766,10 +776,15 @@ export class MainView {
           if (pol) {
             const inner1 = this.floorInner1List[RANGE - i][order + 1];
             const inner2 = this.floorInner2List[RANGE - i][order + 1];
-            drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
+            if (!doneDrawFloor) {
+              // 同じセルの床は最初のオブジェクトだけ
+              // 敵オブジェクトはリストの最後にあるので、アイテムの上に敵の床マークを描画しない
+              drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
+              doneDrawFloor = true;
+            }
             const center = this.centerList[RANGE - i][order + 1];
             if (object.shape === MapShape.SPHERE && center) {
-              drawSphere(center, object.alpha);
+              drawSphere(center, object.color, object.alpha);
             } else if (object.shape === MapShape.CUBE && center) {
               drawCube(center, object.color, object.alpha);
             } else if (object.shape === MapShape.BOX && center) {
@@ -839,7 +854,9 @@ export class MainView {
           }
         }
       }
-      for (const object of dun.getObject(blockList[i][0][1], blockList[i][0][2])) {
+      let doneDrawFloor = false;
+      // MapShapeの文字列辞書順に描画する
+      for (const object of dun.getObject(blockList[i][0][1], blockList[i][0][2]).sort((a, b) => a.shape.localeCompare(b.shape))) {
         if (!object.visible) {
           continue;
         }
@@ -848,10 +865,15 @@ export class MainView {
         if (pol) {
           const inner1 = this.floorInner1List[RANGE - i][0];
           const inner2 = this.floorInner2List[RANGE - i][0];
-          drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
+          if (!doneDrawFloor) {
+            // 同じセルの床は最初のオブジェクトだけ
+            // 敵オブジェクトはリストの最後にあるので、アイテムの上に敵の床マークを描画しない
+            drawFloorMark(pol, inner1, inner2, object.color, object.concentricCircle);
+            doneDrawFloor = true;
+          }
           const center = this.centerList[RANGE - i][0];
           if (object.shape === MapShape.SPHERE && center) {
-            drawSphere(center, object.alpha);
+            drawSphere(center, object.color, object.alpha);
           } else if (object.shape === MapShape.CUBE && center) {
             drawCube(center, object.color, object.alpha);
           } else if (object.shape === MapShape.BOX && center) {
