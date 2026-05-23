@@ -1070,13 +1070,17 @@ export class DungeonMap {
     this._objectStore.dispatchEvent(this, this._player.x, this._player.y, this._playerInstance);
     this.tickEnemies();
 
-    // 一定ターンごとに僅かに回復させる
-    // @todo この処理をここに置くべきか要検討。また回復量や回復ペース、対象のステータスを設定可能にする。
-    if (this._turnCount % 10 === 0 && this._playerInstance) {
-      const target = BaseLoader.getInstance().getDefaultDamageStat();
-      const max = this._playerInstance.getMaxStat(target);
-      const delta = Math.floor(max * 0.01);
-      this._playerInstance.addStat(target, delta < 1 ? 1 : delta);
+    // 一定ターンごとに僅かに回復させる（base.yml の regenerate 定義に従う）
+    if (this._playerInstance) {
+      const rules = BaseLoader.getInstance().getRegenerateRules();
+      if (rules.length > 0) {
+        const vars = this._playerInstance.getEffectiveFormulaVarsWithMax();
+        for (const rule of rules) {
+          if (this._turnCount % rule.turn !== 0) continue;
+          const delta = Math.floor(Number(rule.formula.evaluate(vars)));
+          if (delta > 0) this._playerInstance.addStat(rule.target, delta);
+        }
+      }
     }
 
     // 敵リスポーン判定（ターンカウントを増やす前）

@@ -15,6 +15,18 @@ export interface CompiledLevelUpBonus {
     reset: boolean;
 }
 
+interface RawRegenerateSpec {
+    target: string;
+    turn: number;
+    formula: string | number;
+}
+
+export interface CompiledRegenerateRule {
+    target: string;
+    turn: number;
+    formula: Expression;
+}
+
 export interface FloorConfigRaw {
     size: number | { w: number; h: number };
     enemyCount: number;
@@ -122,6 +134,7 @@ export class BaseLoader {
     private damageFromPlayerFormula: Expression | null = null;
     private requiredExpFormula: Expression | null = null;
     private compiledLevelUpBonuses: CompiledLevelUpBonus[] = [];
+    private compiledRegenerateRules: CompiledRegenerateRule[] = [];
     private autoSpawnerFormula: Expression | null = null;
     private playerInitialStats: Map<string, number> = new Map();
     private _longStayMessages: string[] | null = null;
@@ -274,6 +287,24 @@ export class BaseLoader {
                 }
             }
 
+            if (Array.isArray(parsed.regenerate)) {
+                for (const entry of parsed.regenerate as RawRegenerateSpec[]) {
+                    if (!entry || typeof entry.target !== 'string') continue;
+                    if (typeof entry.turn !== 'number' || !isFinite(entry.turn) || entry.turn <= 0) continue;
+                    if (entry.formula === undefined || entry.formula === null) continue;
+                    const formulaStr = String(entry.formula);
+                    try {
+                        this.compiledRegenerateRules.push({
+                            target: entry.target,
+                            turn: Math.floor(entry.turn),
+                            formula: this.parser.parse(formulaStr),
+                        });
+                    } catch (e) {
+                        console.warn(`regenerate[${entry.target}].formula のパースに失敗しました: ${formulaStr}`);
+                    }
+                }
+            }
+
             if (Array.isArray(parsed.longStay)) {
                 const msgs = parsed.longStay.filter((m: unknown): m is string => typeof m === 'string');
                 if (msgs.length >= 3) {
@@ -376,6 +407,10 @@ export class BaseLoader {
 
     getLevelUpBonuses(): CompiledLevelUpBonus[] {
         return this.compiledLevelUpBonuses;
+    }
+
+    getRegenerateRules(): CompiledRegenerateRule[] {
+        return this.compiledRegenerateRules;
     }
 
     isEnemySpawnableOnFloor(

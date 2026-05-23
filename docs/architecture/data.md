@@ -73,6 +73,7 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | `playerInitialStats` | 任意 | 全ステータス `0` | `stats.yml` で定義した各ステータスの開始値（例: `life: 100`）。未記載ステータスは `0` |
 | `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
 | `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |
+| `regenerate` | 任意 | `[]`（自動回復なし） | 一定ターンごとの自動回復ルール配列。各要素 `{ target, turn, formula }`。後述「自動回復 (`regenerate`)」参照 |
 | `longStay` | 任意 | `null`（機構無効） | フロア長居時の警告/強制移動メッセージ配列。3要素以上のとき先頭3要素を `[50%警告, 75%警告, 100%強制]` として採用。後述「フロア長居警告/強制移動」参照 |
 | `longStayFactor` | 任意 | `4` | 規定ターン数の倍率。`floors[].longStayTurns` 未指定時に `width * height * longStayFactor` で算出 |
 
@@ -118,6 +119,28 @@ requiredExp:
 - `reset: yes` （または `true`）: `stats.yml` で fluctuation 許可されているステータスのとき、最大値増分後に現在値を最大値に揃える（HP 全回復など）
 
 `fluctuation` 非対応ステータスでは `addStat()` 経由で base に加算。
+
+### 自動回復 (`regenerate`)
+
+配列。各エントリは `{ target, turn, formula }`：
+
+- `target`: 回復対象のステータス名
+- `turn`: 回復周期（正の整数ターン）。`turnCount % turn === 0` のターンで発火
+- `formula`: 回復量。`Math.floor(...)` で整数化され、正の値のみ `addStat()` 経由で加算（`fluctuation` 許可ステータスは最大値でクランプ）
+
+formula 内ではプレイヤーの実効ステータス値と、`<stat>_max` 形式の最大値（例: `life_max`）を参照可能。
+
+```yaml
+regenerate:
+  - target: life
+    turn: 10
+    formula: "floor(life_max * 0.01) <= 0 ? 1 : floor(life_max * 0.01)"
+  - target: magic
+    turn: 30
+    formula: "floor(magic_max * 0.01) <= 0 ? 1 : floor(magic_max * 0.01)"
+```
+
+`MapGenerator.dispatchObjectEvent()` が `_turnCount` インクリメント前に評価する。未定義/空配列なら自動回復は発生しない。回復時に message-log は発行されない。
 
 ### フロア毎構成 (`floors`)
 

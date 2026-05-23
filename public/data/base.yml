@@ -63,6 +63,17 @@ autoSpawner:
     - life
   formula: "currentFloor <= 2 ? life <= 40 : (currentFloor <= 5 ? life <= 60 : currentFloor <= 9 ? life <= 100 : true)"
 
+# 一定ターンごとに自動回復させるステータス
+# 各エントリは target / turn / formula を持ち、turnCount % turn == 0 のターンに formula 評価値を addStat する
+# formula 内では各ステータスの実効値と <stat>_max を参照可能
+regenerate:
+  - target: life
+    turn: 10
+    formula: "floor(life_max * 0.01) <= 0 ? 1 : floor(life_max * 0.01)"
+  - target: magic
+    turn: 30
+    formula: "floor(magic_max * 0.01) <= 0 ? 1 : floor(magic_max * 0.01)"
+
 # 同一フロアへの長居警告/強制移動
 # longStay は3要素配列で、それぞれ 50% 警告 / 75% 警告 / 100% 強制移動時のメッセージ
 # longStayFactor はフロアセル数 (width*height) に掛ける倍率で、規定ターン数を算出
