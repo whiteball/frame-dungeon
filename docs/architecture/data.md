@@ -174,6 +174,7 @@ floors:
 
 - `true` / `'yes'` → 確率 0.5、`number`（0..1）ならその確率、`false` / 未指定 → 無効
 - マップ生成完了後、出入口（扉）が **1 つしかない部屋** を全部屋から走査し、候補から 1 部屋だけランダム抽選 → 上記確率で「扉を壁に偽装」した隠し部屋に変換する
+- 候補抽出時、外周境界に「壁も扉も無い開放セル」を持つ部屋（`_addConnected` 等で隣接部屋／通路と直結された部屋）は `MapGenerator._hasOpenBoundary` で除外する。扉以外の侵入経路があると秘密の扉を経由せず入れてしまうため
 - 隠し部屋には階段・アイテム・トラップ・敵・プレイヤー初期位置を配置しない（`DungeonMap.getRandomPos({ withoutSecretRoom: true })`）。ただし非隠し部屋に置けない場合は `setPlayerRandom` が隠し部屋へのフォールバック配置を許可する
 - 偽装中の扉は MainView / MiniMapView の両方で壁として描画され、フォグ可視判定でも壁扱いされる。プレイヤーが隣接して「調べる」（C キー → `trySearch`）で正しい方向を選ぶと `PlayerActions.searchAt` が `dungeon.revealDisguisedDoor` を呼び `「隠し扉を発見した！」` を message-log に流して通常扉に戻す
 - 偽装状態は `DungeonSaveData.disguisedDoors` / `secretRoomRects` でセーブ/ロードに永続化される

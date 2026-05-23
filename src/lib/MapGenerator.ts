@@ -315,10 +315,44 @@ export class DungeonMap {
   }
 
   /**
+   * 指定した部屋の外周境界に「壁も扉も無い開放セル」が存在するかを返す。
+   *
+   * `MapBuilder.setWall` の `_addConnected` 機構で隣接部屋と直結された場合、
+   * 該当辺の境界セルから外向き壁ビットが取り払われる（扉ビットも立たない）。
+   * `findDoorsInRoom` はこの開放境界を扉として数えないため、扉1+開放境界1の
+   * 部屋を隠し部屋にしてしまうと「秘密の扉を通らずに入れる」状態になる。
+   * その判定用ヘルパー。
+   */
+  private _hasOpenBoundary(room: Rect): boolean {
+    // EAST 辺: 東向き壁ビット (1) が落ちている境界セルがあれば開放
+    for (let y = room.y1; y <= room.y2; y++) {
+      const v = this.getAt(room.x2, y);
+      if (v !== -1 && (v & 1) === 0) return true;
+    }
+    // SOUTH 辺: 南向き壁ビット (2)
+    for (let x = room.x1; x <= room.x2; x++) {
+      const v = this.getAt(x, room.y2);
+      if (v !== -1 && (v & 2) === 0) return true;
+    }
+    // WEST 辺: 西向き壁ビット (4)
+    for (let y = room.y1; y <= room.y2; y++) {
+      const v = this.getAt(room.x1, y);
+      if (v !== -1 && (v & 4) === 0) return true;
+    }
+    // NORTH 辺: 北向き壁ビット (8)
+    for (let x = room.x1; x <= room.x2; x++) {
+      const v = this.getAt(x, room.y1);
+      if (v !== -1 && (v & 8) === 0) return true;
+    }
+    return false;
+  }
+
+  /**
    * 出入口が 1 つしかない部屋から 1 部屋抽選し、指定確率で扉を壁に偽装する
    *
    * - chance が 0 以下なら何もしない
    * - 候補（出入口 1 つの部屋）が無ければ何もしない
+   * - 隣接部屋と壁無しで直結している部屋は候補から除外する（_hasOpenBoundary）
    * - 候補から 1 部屋ランダム抽選 → `Math.random() < chance` で隠し化判定
    * - 採用した部屋の扉セル両側に "x,y,dir" キーを `_disguisedDoors` に登録
    * - 部屋自体を `_secretRoomRects` に登録（オブジェクト配置除外用）
@@ -327,6 +361,7 @@ export class DungeonMap {
     if (chance <= 0) return;
     const candidates: Rect[] = [];
     for (const room of this._rooms) {
+      if (this._hasOpenBoundary(room)) continue;
       const doors = builder.findDoorsInRoom(room);
       if (doors.length === 1) candidates.push(room);
     }
