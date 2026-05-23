@@ -60,6 +60,17 @@
     - least: 2
       rate: 0.4
 
+- name: analyze
+  label: 分析
+  description: 敵の詳細情報を表示する
+  target: front
+  cost:
+    magic: 1
+  action:
+    - analyze
+  mastery:
+    - exact: 3
+
 # 敵専用パッシブスキル（trigger: on_attack）
 - name: stun_strike
   label: スタン打撃

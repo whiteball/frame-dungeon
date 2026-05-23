@@ -9,6 +9,7 @@ import { executeDamageAction } from './actions/DamageAction';
 import { executeHealAction } from './actions/HealAction';
 import { executeRevealTrapAction } from './actions/RevealTrapAction';
 import { executeApplyEffectAction } from './actions/ApplyEffectAction';
+import { executeAnalyzeAction } from './actions/AnalyzeAction';
 
 /**
  * コスト formula を評価し、各ステータスの差分（負値）を返す。
@@ -118,6 +119,9 @@ export function executeActions(
                     break;
                 }
                 executeApplyEffectAction(dungeon, caster, cells, param as string | Record<string, number | string>);
+                break;
+            case 'analyze':
+                executeAnalyzeAction(dungeon, caster, cells);
                 break;
             default:
                 console.warn(`Unknown skill action "${name}" in skill "${compiled.definition.name}"`);

@@ -161,6 +161,8 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
   
   `rate` が数式の場合は `expr-eval-fork` で実行時評価し [0,1] にクランプする。付与結果は `applyStatusEffect()` の戻り値（`'applied'` / `'resisted'` / `'unknown'`）に従ってログを出力する。effect 名の存在チェックは `YamlCrossValidator` が起動時に実施する。
 
+- **`analyze`**（`src/lib/skills/actions/AnalyzeAction.ts`）：target スコープ内の生存敵について、ラベル・説明・ステータス・経験値・保有スキルを `--` で囲ったブロック形式でメッセージログに出力する。表示対象のステータスは `stats.yml` の各 stat について `getMaxStat > 0` のもののみ（未定義の 0/0 スロットは省略）。`fluctuation: true` のステータスは `current/max`、それ以外は実効値のみを表示。`description` ラベルは `StatsLoader.getDescription` を使用する。保有スキルは `enemies.yml` の `skills[]` を参照し、`skills.yml` の `label` と `description` を `ラベル（説明）` 形式で出力。複数敵が範囲内にいる場合は敵ごとに独立したブロックが発行される。caster ステータスは参照しない。
+
 未知の action 名は警告ログのみで継続する。
 
 ## 敵のパッシブスキル（on_attack trigger）
