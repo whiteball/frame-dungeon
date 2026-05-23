@@ -41,6 +41,22 @@
 - UI 表示：装備変更ダイアログ・ステータスダイアログ・インベントリ・メッセージログは全て `Item.getLabelWithModifiers()` 経由で suffix 表示
 - セーブ：`ItemSaveData.modifiers?: Record<string,number>`（旧セーブでは省略、deserialize 時に空 Map）。未知 modifier 名はロード時にスキップ（警告ログ）
 
+### 隠し部屋の宝箱（TreasureObject）
+
+隠し部屋に確率で配置される `TreasureObject`（`src/lib/map/MapObjects.ts`）。中身は確定アイテム（modifier 強制付与）でリターンが大きい一方、開封時に確率でフロアのトラップが発動するリスクを伴う。
+
+- 設定は `base.yml` フロア配下の `treasure: { rate, trapRate, items[] }`（[data.md](./data.md#フロア毎構成-floors) 参照）。`secretRoom` が無効なフロアでは配置されない
+- 配置: マップ生成時、各隠し部屋について `rate` 判定 → 当選なら部屋内の「扉前以外の通行可能セル」（`DungeonMap.findDoorsInRoom` で扉セルを除外）から 1 セル抽選し `TreasureObject` を配置。階段・敵・トラップ・床アイテムと座標が重ならないよう `excludePositionList` でガード
+- 抽選: `Game.pickTreasureItem` が `items[].bias` を重みとして 1 アイテム決定。`Player.createItem(name)` を modifier ロール無しで呼び、`items[].modifiers[].name`/`count` を `Item.setModifierCount` で**そのまま強制付与**する（フロアの `itemModifierChance` とは独立）
+- 進入禁止: 宝箱セルは敵セルと同等に通行不可。`DungeonMap.isCellBlocked(x, y)` が `getEnemy` と `TreasureObject` を統一判定し、プレイヤー前進 (`movePlayer`) と敵移動 (`tryMoveEnemy`) の両方から参照される
+- 開封: C キー → `trySearch` の方向選択 UI を経由。`Game.executeSearch` が対象セルに `TreasureObject` を検出すると `openTreasure(treasure, x, y)` を呼出
+  1. `「宝箱を開けた！」` をメッセージログ
+  2. `Math.random() < trapRate && trapPool.length > 0` のとき `trapPool` からランダム 1 つを `applyTrapEffects(trapDef)` に渡して効果適用（既存トラップ発動と同じメッセージ・ダメージ計算）
+  3. `removeMapObject(treasure)` で宝箱を消去 → 抽選アイテムを `ItemObject` として同セルに `placeObject`（常に床配置。インベントリには直接入れない）
+  4. `「<アイテム名>が出てきた」` をメッセージログ
+  5. `dispatchObjectEvent()` でターン進行（`searchAt` と同じポリシー）
+- セーブ: `MapObjectSaveData` の `type: 'treasure'` ケース（`item: ItemSaveData`, `trapRate`, `trapPool`）で永続化。`MapGenerator.deserialize` が `TreasureObject` を復元
+
 ### Player.getEffectiveStat の適用順序
 
 `getEquipmentBonuses()` は装備の生ボーナス（modifier 含まず）を返す。`getEffectiveStat(key)` 内では:

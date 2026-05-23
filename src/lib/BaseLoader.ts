@@ -36,6 +36,32 @@ export interface FloorConfigRaw {
      * 「出入口が 1 つしかない部屋」から 1 部屋抽選し扉を壁に偽装する。
      */
     secretRoom?: boolean | number | string;
+    /** 隠し部屋に置く宝箱の設定。secretRoom が無効なら無視される */
+    treasure?: TreasureConfigRaw;
+}
+
+export interface TreasureItemEntryRaw {
+    name: string;
+    modifiers?: { name: string; count: number }[];
+    bias?: number;
+}
+
+export interface TreasureConfigRaw {
+    rate: number;
+    trapRate: number;
+    items: TreasureItemEntryRaw[];
+}
+
+export interface ResolvedTreasureItemEntry {
+    name: string;
+    modifiers: { name: string; count: number }[];
+    bias: number;
+}
+
+export interface ResolvedTreasureConfig {
+    rate: number;
+    trapRate: number;
+    items: ResolvedTreasureItemEntry[];
 }
 
 export interface ResolvedFloorConfig {
@@ -52,6 +78,8 @@ export interface ResolvedFloorConfig {
     enemyDropPool: EnemyDropEntry[];
     /** 隠し部屋抽選確率（0..1）。0 なら無効。boolean true は 0.5 に正規化される */
     secretRoomChance: number;
+    /** 隠し部屋宝箱設定。なければ undefined */
+    treasure?: ResolvedTreasureConfig;
 }
 
 export class BaseLoader {
@@ -429,6 +457,41 @@ export class BaseLoader {
             }
         }
 
+        let treasure: ResolvedTreasureConfig | undefined;
+        if (raw.treasure && typeof raw.treasure === 'object') {
+            const tRaw = raw.treasure;
+            const rate = typeof tRaw.rate === 'number' && isFinite(tRaw.rate)
+                ? Math.max(0, Math.min(1, tRaw.rate)) : 0;
+            const trapRate = typeof tRaw.trapRate === 'number' && isFinite(tRaw.trapRate)
+                ? Math.max(0, Math.min(1, tRaw.trapRate)) : 0;
+            const items: ResolvedTreasureItemEntry[] = [];
+            if (Array.isArray(tRaw.items)) {
+                for (const entry of tRaw.items) {
+                    if (!entry || typeof entry !== 'object') continue;
+                    if (typeof entry.name !== 'string' || !entry.name) continue;
+                    const bias = typeof entry.bias === 'number' && isFinite(entry.bias) && entry.bias > 0
+                        ? entry.bias : 1;
+                    const modifiers: { name: string; count: number }[] = [];
+                    if (Array.isArray(entry.modifiers)) {
+                        for (const m of entry.modifiers) {
+                            if (!m || typeof m !== 'object') continue;
+                            if (typeof m.name !== 'string' || !m.name) continue;
+                            const count = typeof m.count === 'number' && isFinite(m.count)
+                                ? Math.floor(m.count) : 1;
+                            if (count <= 0) continue;
+                            modifiers.push({ name: m.name, count });
+                        }
+                    }
+                    items.push({ name: entry.name, modifiers, bias });
+                }
+            }
+            if (rate > 0 && items.length > 0) {
+                treasure = { rate, trapRate, items };
+            } else if (rate > 0 && items.length === 0) {
+                console.warn(`base.yml floors[${key}]: treasure.rate=${rate} ですが items が空です。宝箱は配置されません`);
+            }
+        }
+
         return {
             width, height,
             enemyCount: raw.enemyCount ?? 0,
@@ -438,6 +501,7 @@ export class BaseLoader {
             itemModifierPool,
             enemyDropPool,
             secretRoomChance,
+            treasure,
         };
     }
 }

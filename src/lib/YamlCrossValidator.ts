@@ -83,6 +83,68 @@ export class YamlCrossValidator {
                     }
                 }
             }
+            if (rawConfig.treasure !== undefined) {
+                const t = rawConfig.treasure;
+                if (typeof t !== 'object' || Array.isArray(t)) {
+                    errors.push(`base.yml floors[${floorKey}]: treasure はオブジェクトである必要があります`);
+                } else {
+                    if (typeof t.rate !== 'number' || t.rate < 0 || t.rate > 1) {
+                        errors.push(`base.yml floors[${floorKey}]: treasure.rate は 0..1 の数値である必要があります`);
+                    }
+                    if (typeof t.trapRate !== 'number' || t.trapRate < 0 || t.trapRate > 1) {
+                        errors.push(`base.yml floors[${floorKey}]: treasure.trapRate は 0..1 の数値である必要があります`);
+                    }
+                    if (!Array.isArray(t.items)) {
+                        errors.push(`base.yml floors[${floorKey}]: treasure.items は配列である必要があります`);
+                    } else {
+                        for (let i = 0; i < t.items.length; i++) {
+                            const it = t.items[i];
+                            if (!it || typeof it !== 'object') {
+                                errors.push(`base.yml floors[${floorKey}]: treasure.items[${i}] はオブジェクトである必要があります`);
+                                continue;
+                            }
+                            if (typeof it.name !== 'string' || !items.getItem(it.name)) {
+                                errors.push(`base.yml floors[${floorKey}]: treasure.items[${i}].name "${it.name}" が items.yml に存在しません`);
+                            }
+                            if (it.bias !== undefined && (typeof it.bias !== 'number' || it.bias <= 0)) {
+                                errors.push(`base.yml floors[${floorKey}]: treasure.items[${i}].bias は正の数値である必要があります`);
+                            }
+                            if (it.modifiers !== undefined) {
+                                if (!Array.isArray(it.modifiers)) {
+                                    errors.push(`base.yml floors[${floorKey}]: treasure.items[${i}].modifiers は配列である必要があります`);
+                                } else {
+                                    for (let j = 0; j < it.modifiers.length; j++) {
+                                        const m = it.modifiers[j];
+                                        if (!m || typeof m !== 'object') {
+                                            errors.push(`base.yml floors[${floorKey}]: treasure.items[${i}].modifiers[${j}] はオブジェクトである必要があります`);
+                                            continue;
+                                        }
+                                        if (typeof m.name !== 'string' || !itemModifiers.has(m.name)) {
+                                            errors.push(`base.yml floors[${floorKey}]: treasure.items[${i}].modifiers[${j}].name "${m.name}" が item_modifiers.yml に存在しません`);
+                                        }
+                                        if (typeof m.count !== 'number' || m.count <= 0) {
+                                            errors.push(`base.yml floors[${floorKey}]: treasure.items[${i}].modifiers[${j}].count は正の数値である必要があります`);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // info: secretRoom 未設定なのに treasure 設定あり
+                    const secretEnabled = rawConfig.secretRoom === true
+                        || rawConfig.secretRoom === 'yes'
+                        || rawConfig.secretRoom === 'true'
+                        || (typeof rawConfig.secretRoom === 'number' && rawConfig.secretRoom > 0);
+                    if (!secretEnabled) {
+                        infos.push(`base.yml floors[${floorKey}]: treasure が設定されていますが secretRoom が無効なため宝箱は配置されません`);
+                    }
+                    // info: trapRate > 0 なのに trapPool が空
+                    const trapPoolEmpty = !rawConfig.traps || rawConfig.traps.length === 0;
+                    if (typeof t.trapRate === 'number' && t.trapRate > 0 && trapPoolEmpty) {
+                        infos.push(`base.yml floors[${floorKey}]: treasure.trapRate=${t.trapRate} ですがフロアに traps がないため宝箱開封時のトラップは発動しません`);
+                    }
+                }
+            }
             if (rawConfig.enemyDropPool !== undefined) {
                 if (!Array.isArray(rawConfig.enemyDropPool)) {
                     errors.push(`base.yml floors[${floorKey}]: enemyDropPool は配列である必要があります`);

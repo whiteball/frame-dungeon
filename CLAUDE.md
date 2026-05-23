@@ -31,7 +31,7 @@
 ゲームロジックは `src/lib/` 配下のモジュール群と `src/game/scenes/Game.ts` で構成されます。各モジュールの責務と関係性の詳細は [docs/architecture.md](docs/architecture.md) を起点に、トピック別に [docs/architecture/](docs/architecture/) 配下の各ファイル（`overview.md` / `data.md` / `combat.md` / `items.md` / `gameplay.md` / `skills.md`）を参照のこと。
 
 - **Vue-Phaser通信**: `EventBus.emit` / `EventBus.on` を介する（`src/game/EventBus.ts`）
-- **マップ上のオブジェクト**: 階段・トラップ・敵・落ちているアイテムなどは全て `MapObject` を継承し、`MapObjectStore`（`DungeonMap` 経由でアクセス）で統一管理（`instanceof` で型別フィルタ）。`around-0` は踏んだとき自動発火、`around-0-self` は「足下」ボタンで明示発火（`dispatchSelfEvent`）
+- **マップ上のオブジェクト**: 階段・トラップ・敵・落ちているアイテム・隠し部屋の宝箱（`TreasureObject`）などは全て `MapObject` を継承し、`MapObjectStore`（`DungeonMap` 経由でアクセス）で統一管理（`instanceof` で型別フィルタ）。`around-0` は踏んだとき自動発火、`around-0-self` は「足下」ボタンで明示発火（`dispatchSelfEvent`）。宝箱は敵と同様に進入禁止扱い（`DungeonMap.isCellBlocked`）で、C キー（`trySearch`）の方向選択 → `Game.openTreasure` で開封 → `trapRate` 判定 → アイテムを床に配置（`base.yml` の `treasure: { rate, trapRate, items }` で設定）
 - **モーダルモード**: `isModalMode`（`currentSceneActions !== defaultSceneActions`）が真のとき全キー入力をブロック。攻撃方向選択・階段確認・トラップ確認・アイテム使用一覧・装備変更などがこれを使用
 - **データ駆動 (`base.yml` 中心)**: `public/data/*.yml` を対応する Loader クラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`、`ItemModifiersLoader`）が読み込む。**`base.yml` がゲーム全体の中核設定**で、ダメージ計算式・経験値必要量・レベルアップボーナス・フロア別構成（マップサイズ・敵プール・トラップ数）を formula 文字列として保持する（`expr-eval-fork` で評価）。ハードコードされた戦闘式やレベル式は存在しない
 - **カスタムデータ**: ローカル ZIP から YAML 群を差し込む機構（`CustomDataStore` + `PhaserGame.vue` の ZIP UI）。タイトルから「カスタムデータで開始」を選んだ場合 `public/data/` の代わりにこのストアの内容を使用

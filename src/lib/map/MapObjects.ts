@@ -24,6 +24,20 @@ export class TrapObject extends MapObject {
   }
 }
 
+export class TreasureObject extends MapObject {
+  constructor(
+    public readonly item: Item,
+    public readonly trapRate: number,
+    public readonly trapPool: string[],
+  ) {
+    super();
+    this.mark = MapMark.SQUARE;
+    this.color = 0xFFD700;
+    this.shape = MapShape.CUBE;
+    this.visible = true;
+  }
+}
+
 export class ItemObject extends MapObject {
   constructor(public readonly item: Item) {
     super();

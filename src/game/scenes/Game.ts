@@ -19,10 +19,10 @@ import { getFrontCandidates, formatTargetSummary } from '../../lib/skills/Target
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
-import { ItemObject } from '../../lib/map/MapObjects';
+import { ItemObject, TreasureObject } from '../../lib/map/MapObjects';
 import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
 import { BaseLoader } from '../../lib/BaseLoader';
-import type { ResolvedFloorConfig } from '../../lib/BaseLoader';
+import type { ResolvedFloorConfig, ResolvedTreasureItemEntry } from '../../lib/BaseLoader';
 import { SaveManager } from '../../lib/SaveManager';
 import { YamlCrossValidator } from '../../lib/YamlCrossValidator';
 import type { SaveData } from '../../lib/SaveManager';
@@ -216,6 +216,40 @@ export class Game extends Scene {
                 stairsObj.y = step[1];
                 dungeon.placeObject(stairsObj);
                 excludePositionList.push(step);
+            }
+
+            // 隠し部屋の宝箱配置（base.yml の treasure 設定に従う）
+            if (floorConfig.treasure && floorConfig.treasure.items.length > 0) {
+                const t = floorConfig.treasure;
+                for (const room of dungeon.getSecretRoomRects()) {
+                    if (Math.random() >= t.rate) continue;
+
+                    const doorCells = new Set<string>();
+                    for (const d of dungeon.findDoorsInRoom(room)) {
+                        doorCells.add(`${d.x},${d.y}`);
+                    }
+
+                    const candidates: integer[][] = [];
+                    for (let y = room.y1; y <= room.y2; y++) {
+                        for (let x = room.x1; x <= room.x2; x++) {
+                            if (dungeon.getAt(x, y) === -1) continue;
+                            if (doorCells.has(`${x},${y}`)) continue;
+                            if (excludePositionList.some(p => p[0] === x && p[1] === y)) continue;
+                            candidates.push([x, y]);
+                        }
+                    }
+                    if (candidates.length === 0) continue;
+
+                    const item = this.pickTreasureItem(t.items);
+                    if (!item) continue;
+
+                    const [tx, ty] = candidates[Phaser.Math.Between(0, candidates.length - 1)];
+                    const treasureObj = new TreasureObject(item, t.trapRate, [...floorConfig.trapPool]);
+                    treasureObj.x = tx;
+                    treasureObj.y = ty;
+                    dungeon.placeObject(treasureObj);
+                    excludePositionList.push([tx, ty]);
+                }
             }
 
             // トラップ配置（base.yml の設定に従う）
@@ -1393,9 +1427,72 @@ export class Game extends Scene {
     private executeSearch(directionLabel: string, targetX: integer, targetY: integer): void {
         const turnCount = this.dungeon.getTurnCount();
         EventBus.emit('message-log', `${directionLabel}を調べた。`, turnCount);
+
+        const objects = this.dungeon.getObject(targetX, targetY);
+        const treasure = objects.find(o => o instanceof TreasureObject) as TreasureObject | undefined;
+        if (treasure) {
+            this.openTreasure(treasure, targetX, targetY);
+            this.render();
+            this.exitAttackDirectionMode();
+            return;
+        }
+
         this.dungeon.searchAt(targetX, targetY);
         this.render();
         this.exitAttackDirectionMode();
+    }
+
+    /**
+     * treasure.items の重み付き抽選で 1 アイテムを決定し、指定 modifier を強制付与する。
+     * フロアの itemModifierChance とは独立。
+     */
+    private pickTreasureItem(entries: ResolvedTreasureItemEntry[]): Item | null {
+        if (entries.length === 0) return null;
+        const total = entries.reduce((s, e) => s + e.bias, 0);
+        if (total <= 0) return null;
+        let r = Math.random() * total;
+        let picked: ResolvedTreasureItemEntry | undefined;
+        for (const e of entries) {
+            r -= e.bias;
+            if (r < 0) { picked = e; break; }
+        }
+        if (!picked) picked = entries[entries.length - 1];
+
+        const item = Player.createItem(picked.name);
+        if (!item) return null;
+        for (const m of picked.modifiers) {
+            item.setModifierCount(m.name, m.count);
+        }
+        return item;
+    }
+
+    /**
+     * 宝箱を開封する。
+     * 1. メッセージログを出力
+     * 2. trapRate でトラップ発動判定し、trapPool 非空ならランダム1つ選んで applyTrapEffects
+     * 3. TreasureObject を削除し、抽選アイテムを ItemObject として同セルに配置
+     * 4. dispatchObjectEvent でターン進行
+     */
+    private openTreasure(treasure: TreasureObject, x: integer, y: integer): void {
+        const turn = this.dungeon.getTurnCount();
+        EventBus.emit('message-log', `宝箱を開けた！`, turn);
+
+        if (Math.random() < treasure.trapRate && treasure.trapPool.length > 0) {
+            const trapName = treasure.trapPool[Phaser.Math.Between(0, treasure.trapPool.length - 1)];
+            const trapDef = TrapsLoader.getInstance().getTrap(trapName);
+            if (trapDef) {
+                this.applyTrapEffects(trapDef);
+            }
+        }
+
+        this.dungeon.removeMapObject(treasure);
+        const itemObj = new ItemObject(treasure.item);
+        itemObj.x = x;
+        itemObj.y = y;
+        this.dungeon.placeObject(itemObj);
+        EventBus.emit('message-log', `${treasure.item.getLabelWithModifiers()}が出てきた`, turn);
+
+        this.dungeon.dispatchObjectEvent();
     }
 
     private enterStairMode(dungeon: DungeonMap): void {

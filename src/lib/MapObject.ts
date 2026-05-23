@@ -20,6 +20,8 @@ export const MapMark = {
   CROSS: '+',
   /** 斜め十字形 */
   X_CROSS: 'x',
+  /** 正方形 */
+  SQUARE: '[]',
 } as const;
 export type MapMark = typeof MapMark[keyof typeof MapMark];
 

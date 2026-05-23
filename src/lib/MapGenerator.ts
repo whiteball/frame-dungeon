@@ -12,7 +12,7 @@ import * as PlayerActions from './map/PlayerActions';
 import { dumpDungeon } from './map/MapDebug';
 import { findPath, findContainingZone, isInZone, hasLineOfSight, type FindPathOptions } from './map/Pathfinding';
 import { BaseLoader } from './BaseLoader';
-import { StairsObject, TrapObject, ItemObject } from './map/MapObjects';
+import { StairsObject, TrapObject, ItemObject, TreasureObject } from './map/MapObjects';
 import { ItemsLoader } from './ItemsLoader';
 import { Item } from './Item';
 import { TrapsLoader } from './TrapsLoader';
@@ -376,6 +376,49 @@ export class DungeonMap {
   }
 
   /**
+   * 指定された部屋の境界上にある「扉セル」を、部屋側座標で列挙する。
+   * 扉ビットの規約は `16 << direction`（EAST=16, SOUTH=32, WEST=64, NORTH=128）。
+   * MapBuilder.findDoorsInRoom と同等のロジックを DungeonMap 側に保持し、
+   * build 後にも呼び出し可能にする。
+   */
+  public findDoorsInRoom(room: Rect): { x: integer, y: integer, dir: MapDirection }[] {
+    const result: { x: integer, y: integer, dir: MapDirection }[] = [];
+    // EAST 辺
+    for (let y = room.y1; y <= room.y2; y++) {
+      const v = this.getAt(room.x2, y);
+      if (v !== -1 && (v & 16) !== 0) result.push({ x: room.x2, y, dir: MapDirection.EAST });
+    }
+    // SOUTH 辺
+    for (let x = room.x1; x <= room.x2; x++) {
+      const v = this.getAt(x, room.y2);
+      if (v !== -1 && (v & 32) !== 0) result.push({ x, y: room.y2, dir: MapDirection.SOUTH });
+    }
+    // WEST 辺
+    for (let y = room.y1; y <= room.y2; y++) {
+      const v = this.getAt(room.x1, y);
+      if (v !== -1 && (v & 64) !== 0) result.push({ x: room.x1, y, dir: MapDirection.WEST });
+    }
+    // NORTH 辺
+    for (let x = room.x1; x <= room.x2; x++) {
+      const v = this.getAt(x, room.y1);
+      if (v !== -1 && (v & 128) !== 0) result.push({ x, y: room.y1, dir: MapDirection.NORTH });
+    }
+    return result;
+  }
+
+  /**
+   * 指定セルが何らかのオブジェクトで通行不可になっているかを返す。
+   * 敵が占有しているセル、TreasureObject が置かれているセルが対象。
+   */
+  public isCellBlocked(x: integer, y: integer): boolean {
+    if (this.getEnemy(x, y)) return true;
+    for (const obj of this._objectStore.getAt(x, y)) {
+      if (obj instanceof TreasureObject) return true;
+    }
+    return false;
+  }
+
+  /**
    * 指定セル・指定方向の扉が「通過可能な扉」かを返す。
    * 扉ビットがあっても隠し扉（壁偽装中）なら false を返す。
    * 通行/攻撃/経路探索/視界判定が共通で参照する。
@@ -652,8 +695,8 @@ export class DungeonMap {
         break;
     }
 
-    // 移動先に敵がいる場合は移動できない
-    if (this.getEnemy(nx, ny)) {
+    // 移動先に敵がいる、または宝箱で塞がれている場合は移動できない
+    if (this.isCellBlocked(nx, ny)) {
       return 0;
     }
 
@@ -958,7 +1001,7 @@ export class DungeonMap {
 
     if (this.getAt(nx, ny) === -1) return false;
     if (this._player.x === nx && this._player.y === ny) return false;
-    if (this.getEnemy(nx, ny)) return false;
+    if (this.isCellBlocked(nx, ny)) return false;
 
     enemy.x = nx;
     enemy.y = ny;
@@ -1213,6 +1256,15 @@ export class DungeonMap {
         objects.push({ type: 'trap', x: obj.x, y: obj.y, trapName: obj.trapDef.name, visible: obj.visible });
       } else if (obj instanceof ItemObject) {
         objects.push({ type: 'item', x: obj.x, y: obj.y, item: obj.item.serialize() });
+      } else if (obj instanceof TreasureObject) {
+        objects.push({
+          type: 'treasure',
+          x: obj.x,
+          y: obj.y,
+          item: obj.item.serialize(),
+          trapRate: obj.trapRate,
+          trapPool: [...obj.trapPool],
+        });
       }
     }
 
@@ -1308,6 +1360,14 @@ export class DungeonMap {
         }
         if (!item) continue;
         const obj = new ItemObject(item);
+        obj.x = objData.x;
+        obj.y = objData.y;
+        this._objectStore.add(obj);
+      } else if (objData.type === 'treasure') {
+        const def = itemsLoader.getItem(objData.item.name);
+        if (!def) continue;
+        const item = Item.deserialize(objData.item, def);
+        const obj = new TreasureObject(item, objData.trapRate, [...objData.trapPool]);
         obj.x = objData.x;
         obj.y = objData.y;
         this._objectStore.add(obj);

@@ -140,6 +140,17 @@ floors:
           rate: 0.05            # ドロップ確率 (0..1) 独立判定
           modifierChance: 0.5   # 任意。当該ドロップの modifier 付与確率上書き
       secretRoom: yes           # 任意。true/'yes' で 50%、数値ならその確率で隠し部屋を生成
+      treasure:                 # 任意。隠し部屋に出現する宝箱の設定（secretRoom 有効時のみ機能）
+        rate: 0.5               # 各隠し部屋ごとの宝箱出現確率 (0..1)
+        trapRate: 0.5           # 開封時にトラップ発動する確率 (0..1)
+        items:                  # 中身候補。bias を重みとして 1 つ抽選
+          - name: iron sword    # items.yml のアイテム名
+            modifiers:          # 任意。抽選後に必ず付与される modifier
+              - name: power_reinforced
+                count: 2
+            bias: 3
+          - name: round shield
+            bias: 2
 ```
 
 `enemies` 内で `enemies.yml` に存在しない名前は warn + スキップ。`traps` も同様。`trapCount > 0` で `traps` が空の場合は warn のみ。
@@ -158,6 +169,14 @@ floors:
 - 隠し部屋には階段・アイテム・トラップ・敵・プレイヤー初期位置を配置しない（`DungeonMap.getRandomPos({ withoutSecretRoom: true })`）。ただし非隠し部屋に置けない場合は `setPlayerRandom` が隠し部屋へのフォールバック配置を許可する
 - 偽装中の扉は MainView / MiniMapView の両方で壁として描画され、フォグ可視判定でも壁扱いされる。プレイヤーが隣接して「調べる」（C キー → `trySearch`）で正しい方向を選ぶと `PlayerActions.searchAt` が `dungeon.revealDisguisedDoor` を呼び `「隠し扉を発見した！」` を message-log に流して通常扉に戻す
 - 偽装状態は `DungeonSaveData.disguisedDoors` / `secretRoomRects` でセーブ/ロードに永続化される
+
+**`treasure`:**
+
+- 隠し部屋ごとに `rate` で配置抽選。配置先は **扉前以外の通行可能セル**（`DungeonMap.findDoorsInRoom` で扉セルを除外し、敵/階段/トラップ等の `excludePositionList` 上のセルも除外）
+- 中身は `items[].bias` を重みとした重み付き抽選で 1 アイテム決定（`Game.pickTreasureItem`）。`Player.createItem(name)` で modifier ロール無しでインスタンス化したうえで、`items[].modifiers[].name`/`count` をそのまま `setModifierCount` で適用する（フロアの `itemModifierChance` とは独立）
+- 宝箱セルは敵と同様に進入禁止（`DungeonMap.isCellBlocked` が `TreasureObject` を判定）
+- 開封操作: C キー → `trySearch` の方向選択 → 対象セルに `TreasureObject` があれば `Game.openTreasure` が起動。`trapRate` で判定し、当該フロアの `trapPool` からランダム 1 つ選んで `applyTrapEffects` を呼出（trapPool 空なら何も起こらない）。その後 `TreasureObject` を削除し抽選アイテムを `ItemObject` として同セルに配置 → `dispatchObjectEvent()` でターン進行
+- セーブ/ロードは `MapObjectSaveData` の `type: 'treasure'` ケース（item / trapRate / trapPool）で永続化される
 
 ### 敵自動湧き判定 (`autoSpawner`)
 

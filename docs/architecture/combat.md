@@ -9,7 +9,7 @@
 マップ上に配置されるオブジェクト（階段、トラップ、敵など）は`MapObject`基底クラスで統一管理されます：
 
 - **MapObject**（`src/lib/MapObject.ts`）: 全オブジェクトの基底クラス。座標、表示マーク、色、イベントハンドラなどを保持
-- **MapMark定数**: オブジェクトの表示形状を定義（`CIRCLE`, `STAR`, `DIAMOND`, `CROSS`, `X_CROSS`）
+- **MapMark定数**: オブジェクトの表示形状を定義（`CIRCLE`, `STAR`, `DIAMOND`, `CROSS`, `X_CROSS`, `SQUARE`）
 - **MapShape定数**: `MainView` でブロック中心に重ねて描画する立体形状を排他選択（`NONE` / `SPHERE` / `CUBE` / `BOX` / `CYLINDER` / `PYRAMID`）。`MapObject.shape` に設定すると `MainView.render()` が `object.color` で陰影付き描画する。`BOX`・`CYLINDER`・`PYRAMID` は床接地型（高さ = セル高さ/4、底面一辺または直径 = セル辺長/2）で、浮遊型の `SPHERE`・`CUBE` と異なり下部が床面に接する
 - **MapObject.concentricCircle**: `MainView` の床マーカー描画形状フラグ。`true` で内側2層（`inner1` / `inner2`）を同心円（透視トラペゾイドにインスクライブした回転楕円）で描画し、X 字対角線も省略する。最外層（alpha 0.3）はセルからはみ出さないよう常に polygon。床に置かれた静的オブジェクトの表現に使う。楕円は `drawInscribedEllipse()` が多角形の対辺中点を結ぶ2本のベクトルを共役半直径 `a`, `b` として扱い、`M = [a b]` の `M·Mᵀ` の固有分解から主軸長と回転角度を計算し、`translateCanvas`+`rotateCanvas`+`fillEllipse` で描画する。平行四辺形なら4辺の中点が楕円上に厳密に乗る
 - **MapObjectStore**（`src/lib/map/MapObjectStore.ts`）: 全オブジェクトを `Map<integer, MapObject>` で一元管理。`instanceof` で型別のフィルタリングが可能。`DungeonMap` は同名の薄い委譲メソッド（`addEnemy`、`getEnemy`、`removeEnemy` など）を公開する

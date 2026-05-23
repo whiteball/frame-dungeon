@@ -186,6 +186,12 @@ export class MiniMapView {
                 .rotateCanvas(-Math.PI / 4).translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2)
             }
             break;
+          case MapMark.SQUARE:
+            graph.translateCanvas(baseX + blockWidth / 2, baseY + blockWidth / 2)
+              .fillRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2 - 1, blockWidth / 2 - 1)
+              .strokeRect(-blockWidth / 4, -blockWidth / 4, blockWidth / 2 - 1, blockWidth / 2 - 1)
+              .translateCanvas(-baseX - blockWidth / 2, -baseY - blockWidth / 2);
+            break;
           default:
             graph.fillRect(baseX + blockWidth / 5, baseY + blockWidth / 5, blockWidth * 3 / 5, blockWidth * 3 / 5)
               .strokeRect(baseX + blockWidth / 5, baseY + blockWidth / 5, blockWidth * 3 / 5, blockWidth * 3 / 5);
