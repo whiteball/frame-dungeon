@@ -141,6 +141,7 @@ floors:
           modifierChance: 0.5   # 任意。当該ドロップの modifier 付与確率上書き
       secretRoom: yes           # 任意。true/'yes' で 50%、数値ならその確率で隠し部屋を生成
       extraDoorRate: 0.3        # 任意。MST 連結後に冗長隣接へ扉を追加する確率 (0..1)。未指定で 0.3
+      respawnCycle: 20          # 任意。敵リスポーン間隔ターン数。未指定で 20
       treasure:                 # 任意。隠し部屋に出現する宝箱の設定（secretRoom 有効時のみ機能）
         rate: 0.5               # 各隠し部屋ごとの宝箱出現確率 (0..1)
         trapRate: 0.5           # 開封時にトラップ発動する確率 (0..1)
@@ -169,6 +170,15 @@ floors:
 - `MapBuilder.setWall` の扉配置フェーズで `Phase A の壁開放 + 通路同士接続` 後の連結性をセル単位 Union-Find で判定し、両側セルが別コンポーネントなら必ず扉を設置（MST により全非進入禁止部屋の連結を保証）。同一コンポーネントの冗長な隣接ペアに対しては `extraDoorRate` の確率で追加扉を生やす
 - `0` に近いほど一本道寄りの迷路、`1` で従来通り全隣接ペアに扉が生える状態となる
 - 既存ロジックの「ランダム y/x 抽選で扉位置を決定」は維持しつつ、境界上の有効セルを全列挙してから抽選する形に変更されているため、抽選失敗による扉欠落が発生しない
+
+**`respawnCycle`:**
+
+- 値域は正の整数。0以下や非数値・未指定なら既定 `20` が採用される
+- `DungeonMap.dispatchObjectEvent()` 内、ターンカウントを増やす直前に `_tryRespawnEnemy()` が走り、`getFloorTurnCount() % respawnCycle === 0` のとき判定する
+- 生存敵数 `aliveCount` が `enemyCount` 未満なら `(enemyCount - aliveCount) / enemyCount` の確率で抽選 → `randomEnemyPool`（`count` 未指定エントリ）からランダムに1体を選び、`getRespawnCandidatePositions()` の候補セルに配置する。固定敵 (`fixedEnemies`) はリスポーン対象外
+- 配置候補の除外条件：プレイヤーのいる部屋ゾーン（接続通路含む）、プレイヤー部屋に8方向隣接する部屋ゾーン、隠し部屋、通路セル全般、`StairsObject` / `TrapObject` / `ItemObject` / `TreasureObject` の真上、`isCellBlocked` が真のセル、プレイヤーセル。候補が0個の場合はリスポーンしない
+- 8方向隣接判定：プレイヤーゾーンを構成する全矩形（部屋＋接続通路）を1セル分外側に拡張し、いずれかが他部屋矩形と重なれば隣接とみなす。プレイヤーが通路に立っているとき、通路1セルを挟んで壁越しに隣接する部屋へリスポーンしてしまうのを防ぐため
+- リスポーン成功時はメッセージログを発行しない（探索の緊張感を保つため）
 
 **`secretRoom`:**
 

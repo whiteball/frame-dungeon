@@ -55,6 +55,19 @@
 - `hasLineOfSight(x1, y1, x2, y2)`: 2点間に壁・扉がなく視線が通るかを直線走査（DDA）で判定
 - `getDoorTargetsInZone(enemyX, enemyY)`: 敵位置から壁・扉のない境界を BFS で展開し、視覚的に繋がった開放空間内の全扉から1マス外側の座標リストを返す
 
+### 敵リスポーン
+
+フロア滞在中の緊張感を維持するため、`DungeonMap.dispatchObjectEvent()` の末尾（`_turnCount++` の直前）で `_tryRespawnEnemy()` が走り、一定ターンごとに敵を補充します：
+
+- 発火条件: `getFloorTurnCount() % floorConfig.respawnCycle === 0`（`respawnCycle` は `base.yml` floor 設定、未指定で 20）
+- 抽選確率: `(enemyCount - 現在の生存敵数) / enemyCount`。生存敵数が `enemyCount` 以上のときは何もしない
+- 対象プール: `randomEnemyPool`（`enemies` の文字列エントリ＝`count` 未指定）のみ。`fixedEnemies` はリスポーン対象外
+- 配置候補: `DungeonMap.getRespawnCandidatePositions()` が列挙する。除外領域は「プレイヤーのいる部屋（接続通路含むゾーン全体）」「プレイヤーゾーンに8方向隣接する部屋（接続通路含むゾーン全体）」「隠し部屋」「通路セル全般」「`StairsObject` / `TrapObject` / `ItemObject` / `TreasureObject` の真上」「`isCellBlocked` が真のセル」「プレイヤーセル」。8方向隣接判定はプレイヤーゾーン側の全矩形（部屋＋接続通路）を1セル外側に拡張し、いずれかが他部屋矩形と重なれば隣接とみなす（プレイヤーが通路に立っているとき壁越しの近距離リスポーンを防ぐため）
+- 候補が0個ならリスポーンしない（通知も発行しない）
+- 成功時のメッセージログは発行せず、プレイヤーに気付かれずに「奥の部屋に敵が湧いている」演出とする
+
+`fixedEnemies`（固定敵）は初期スポーン時のみ配置され、リスポーンによる補充では再出現しません。
+
 ## 戦闘システム
 
 ### ターンの流れ

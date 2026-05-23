@@ -2,7 +2,7 @@
 
 import { Enemy } from './Enemy';
 import { MapObject, MapShape, newMapEvent, type ObjectEvent } from './MapObject';
-import type { Player } from './Player';
+import { Player } from './Player';
 import { getRandomInt } from './util/random';
 import { Rect } from './map/Rect';
 import { MapDirection, getRandomDirection, rotateDirection, getDirectionOffset } from './map/MapDirection';
@@ -444,6 +444,63 @@ export class DungeonMap {
       if (v !== -1 && (v & 128) !== 0) result.push({ x, y: room.y1, dir: MapDirection.NORTH });
     }
     return result;
+  }
+
+  /**
+   * 敵リスポーン用の有効な配置候補セルを列挙する。
+   * 除外：プレイヤーのゾーン、プレイヤー部屋に8方向隣接する部屋のゾーン、
+   *       隠し部屋、通路、StairsObject/TrapObject/ItemObject の真上、
+   *       isCellBlocked が真のセル（敵・宝箱を含む）、プレイヤーセル。
+   */
+  public getRespawnCandidatePositions(): [integer, integer][] {
+    const playerZone = findContainingZone(this._player.x, this._player.y, this._roomsWithCorridors);
+    const excludedZones = new Set<RoomWithCorridors>();
+    if (playerZone) {
+      excludedZones.add(playerZone);
+      // 8方向隣接判定：プレイヤーゾーンの矩形群（部屋＋接続通路）を1セル分外側に拡張し、
+      // 他部屋矩形と重なれば隣接とみなす。プレイヤーが通路に立っている場合に、
+      // 通路1セルを挟んで壁越しに隣接する部屋へリスポーンしてしまうのを防ぐ。
+      const playerRects: Rect[] = [playerZone.room, ...playerZone.corridors];
+      for (const rwc of this._roomsWithCorridors) {
+        if (rwc === playerZone) continue;
+        const r = rwc.room;
+        for (const p of playerRects) {
+          if (r.x1 - 1 <= p.x2 && r.x2 + 1 >= p.x1 &&
+              r.y1 - 1 <= p.y2 && r.y2 + 1 >= p.y1) {
+            excludedZones.add(rwc);
+            break;
+          }
+        }
+      }
+    }
+
+    const candidates: [integer, integer][] = [];
+    for (const rwc of this._roomsWithCorridors) {
+      if (excludedZones.has(rwc)) continue;
+      // 隠し部屋を含むゾーンを除外（room 矩形が _secretRoomRects に含まれるか）
+      const isSecret = this._secretRoomRects.some(s =>
+        s.x1 === rwc.room.x1 && s.y1 === rwc.room.y1 &&
+        s.x2 === rwc.room.x2 && s.y2 === rwc.room.y2);
+      if (isSecret) continue;
+      // 通路は含めず、room 矩形内のみ列挙
+      for (let y = rwc.room.y1; y <= rwc.room.y2; y++) {
+        for (let x = rwc.room.x1; x <= rwc.room.x2; x++) {
+          if (this.getAt(x, y) === -1) continue;
+          if (x === this._player.x && y === this._player.y) continue;
+          if (this.isCellBlocked(x, y)) continue;
+          let hasObj = false;
+          for (const obj of this._objectStore.getAt(x, y)) {
+            if (obj instanceof StairsObject || obj instanceof TrapObject || obj instanceof ItemObject) {
+              hasObj = true;
+              break;
+            }
+          }
+          if (hasObj) continue;
+          candidates.push([x, y]);
+        }
+      }
+    }
+    return candidates;
   }
 
   /**
@@ -1020,7 +1077,35 @@ export class DungeonMap {
       this._playerInstance.addStat(target, delta < 1 ? 1 : delta);
     }
 
+    // 敵リスポーン判定（ターンカウントを増やす前）
+    this._tryRespawnEnemy();
+
     this._turnCount++;
+  }
+
+  /**
+   * フロア経過ターン数が respawnCycle の倍数のとき、現在敵数とフロア敵数上限の差に応じた
+   * 確率で敵を1体補充する。配置候補が無ければ何もしない。リスポーン成功時の通知ログは出さない。
+   */
+  private _tryRespawnEnemy(): void {
+    const floorConfig = BaseLoader.getInstance().getFloorConfig(this._currentFloor);
+    if (floorConfig.randomEnemyPool.length === 0) return;
+    if (floorConfig.enemyCount <= 0) return;
+    if (this.getFloorTurnCount() % floorConfig.respawnCycle !== 0) return;
+
+    const aliveCount = this.getEnemyCount();
+    if (aliveCount >= floorConfig.enemyCount) return;
+
+    const probability = (floorConfig.enemyCount - aliveCount) / floorConfig.enemyCount;
+    if (Math.random() >= probability) return;
+
+    const candidates = this.getRespawnCandidatePositions();
+    if (candidates.length === 0) return;
+
+    const [x, y] = candidates[Math.floor(Math.random() * candidates.length)];
+    const name = floorConfig.randomEnemyPool[Math.floor(Math.random() * floorConfig.randomEnemyPool.length)];
+    const enemy = Player.createEnemyByName(name, x, y);
+    if (enemy) this.addEnemy(enemy);
   }
 
   /**

@@ -43,6 +43,11 @@ export interface FloorConfigRaw {
      * 未指定なら既定値 0.3 が使用される。0 なら一本道寄りの迷路、1 で従来通り全隣接接続。
      */
     extraDoorRate?: number;
+    /**
+     * 敵リスポーン間隔（ターン数）。未指定なら 20。
+     * フロア経過ターン数が本値の倍数のとき、`(enemyCount - 現在敵数) / enemyCount` の確率で敵を1体補充する。
+     */
+    respawnCycle?: number;
 }
 
 export interface TreasureItemEntryRaw {
@@ -87,6 +92,8 @@ export interface ResolvedFloorConfig {
     treasure?: ResolvedTreasureConfig;
     /** MST で連結確保後、冗長な隣接ペアに追加で扉を生やす確率（0..1）。既定 0.3 */
     extraDoorRate: number;
+    /** 敵リスポーン間隔（ターン数）。既定 20。経過ターン数が本値の倍数のとき確率判定でリスポーン */
+    respawnCycle: number;
 }
 
 export class BaseLoader {
@@ -503,6 +510,10 @@ export class BaseLoader {
             ? Math.max(0, Math.min(1, raw.extraDoorRate))
             : 0.3;
 
+        const respawnCycle = typeof raw.respawnCycle === 'number' && isFinite(raw.respawnCycle) && raw.respawnCycle > 0
+            ? Math.floor(raw.respawnCycle)
+            : 20;
+
         return {
             width, height,
             enemyCount: raw.enemyCount ?? 0,
@@ -514,6 +525,7 @@ export class BaseLoader {
             secretRoomChance,
             treasure,
             extraDoorRate,
+            respawnCycle,
         };
     }
 }
