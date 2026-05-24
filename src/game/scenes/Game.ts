@@ -7,14 +7,10 @@ import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
 import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
-import type { Item } from '../../lib/Item';
-import { formatItemTypeLabel, formatItemEffect } from '../../lib/ItemDescriptionFormatter';
 import { TrapsLoader } from '../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { EffectsLoader } from '../../lib/EffectsLoader';
-import { SkillsLoader } from '../../lib/SkillsLoader';
-import { evaluateCost, canPayCost, formatCostSummary } from '../../lib/skills/SkillExecutor';
-import { getFrontCandidates, formatTargetSummary } from '../../lib/skills/TargetResolver';
+import { getFrontCandidates } from '../../lib/skills/TargetResolver';
 import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
@@ -24,6 +20,7 @@ import { populateFloor } from './game/FloorPopulator';
 import { SceneModeController } from './game/SceneModeController';
 import type { SceneAction } from './game/SceneModeController';
 import { buildDisplayParams, buildStatusText, buildResultText } from './game/StatusReportBuilder';
+import { ItemListController } from './game/ItemListController';
 import { BaseLoader } from '../../lib/BaseLoader';
 import { SaveManager } from '../../lib/SaveManager';
 import { YamlCrossValidator } from '../../lib/YamlCrossValidator';
@@ -54,9 +51,8 @@ export class Game extends Scene {
     params: Map<string, number | string>;
     player: Player;
 
-    private listMode: 'item' | 'equip' | 'drop' | 'skill' | null = null;
-    private pendingPickup: { mapObject: MapObject, item: Item } | null = null;
     private mode = new SceneModeController(this);
+    private list = new ItemListController(this);
     private viewRange = 3;
     private enableFog = true;
     private revealAll = false;
@@ -132,16 +128,11 @@ export class Game extends Scene {
         EventBus.removeAllListeners('update-view');
         EventBus.removeAllListeners('game-over');
         EventBus.removeAllListeners('game-clear');
-        EventBus.removeAllListeners('use-item');
-        EventBus.removeAllListeners('use-skill');
-        EventBus.removeAllListeners('equip-item');
-        EventBus.removeAllListeners('close-item-list-request');
-        EventBus.removeAllListeners('open-drop-list-for-pickup');
-        EventBus.removeAllListeners('drop-item');
         EventBus.removeAllListeners('save-to-slot');
         EventBus.removeAllListeners('export-save');
         EventBus.removeAllListeners('close-save-dialog');
         EventBus.removeAllListeners('long-stay-warning');
+        this.list.register();
 
         this.floor = 1;
         const dun = new DungeonMap(15, 15, this.viewRange, this.enableFog);
@@ -339,105 +330,14 @@ export class Game extends Scene {
         })
 
         EventBus.on('game-over', () => {
-            this.closeList();
+            this.list.closeList();
             this.scene.start('GameOver', { resultText: this.composeResultText() });
         })
 
         EventBus.on('game-clear', () => {
-            this.closeList();
+            this.list.closeList();
             this.scene.start('GameClear', { resultText: this.composeResultText() });
         })
-
-        EventBus.on('use-item', (payload: { instanceId: string }) => {
-            if (this.dungeon.useConsumableItem(payload.instanceId)) {
-                const rest = this.player.getInventory().getConsumableItems();
-                if (rest.length === 0) {
-                    this.closeList();
-                } else {
-                    EventBus.emit('open-item-list', {
-                        items: this.buildItemListPayload(rest),
-                        mode: 'item',
-                        actionLabel: '使用',
-                    });
-                }
-                this.render();
-            }
-        });
-
-        EventBus.on('use-skill', (payload: { skillName: string }) => {
-            const def = SkillsLoader.getInstance().getSkill(payload.skillName);
-            if (!def) return;
-
-            if (def.target === 'front') {
-                // リストを閉じて方向選択モードに移行
-                this.closeList();
-                this.enterSkillTargetSelectMode(payload.skillName);
-                return;
-            }
-
-            // それ以外（self / around / room / map）は即発動
-            if (this.dungeon.useSkill(payload.skillName)) {
-                // スキル発動成功時は一覧を再描画して開いたままにする
-                // （アイテム使用と同じ思想。スキルは消費しないため常に同じ一覧）
-                const learned = this.player.getLearnedSkillNames();
-                EventBus.emit('open-item-list', {
-                    items: this.buildSkillListPayload(learned),
-                    mode: 'skill',
-                    actionLabel: '発動',
-                });
-                this.render();
-            }
-        });
-
-        EventBus.on('equip-item', (payload: { instanceId: string }) => {
-            const result = this.dungeon.changeEquipment(payload.instanceId);
-            if (result.success) {
-                const rest = this.player.getInventory().getEquippableItems();
-                if (rest.length === 0) {
-                    this.closeList();
-                } else {
-                    EventBus.emit('open-item-list', {
-                        items: this.buildItemListPayload(rest),
-                        mode: 'equip',
-                        actionLabel: '装備',
-                    });
-                }
-                this.render();
-            }
-        });
-
-        EventBus.on('close-item-list-request', () => {
-            this.closeList();
-        });
-
-        EventBus.on('open-drop-list-for-pickup', (payload: { mapObject: MapObject, item: Item }) => {
-            this.pendingPickup = payload;
-            this.openDropList();
-        });
-
-        EventBus.on('drop-item', (payload: { instanceId: string }) => {
-            const inventory = this.player.getInventory();
-            const droppedItem = inventory.getItemById(payload.instanceId);
-            if (!droppedItem) return;
-            const pos = this.dungeon.getPlayerPos();
-            inventory.removeItemById(payload.instanceId);
-            const pending = this.pendingPickup;
-            if (pending) {
-                if (inventory.addItem(pending.item)) {
-                    EventBus.emit('message-log', `${pending.item.getLabelWithModifiers()}を入手した`, this.dungeon.getTurnCount());
-                }
-                this.dungeon.removeMapObject(pending.mapObject);
-            }
-            const droppedObj = new ItemObject(droppedItem);
-            droppedObj.x = pos.x;
-            droppedObj.y = pos.y;
-            this.dungeon.placeObject(droppedObj);
-            EventBus.emit('message-log', `${droppedItem.getLabelWithModifiers()}を置いた`, this.dungeon.getTurnCount());
-            this.closeList();
-            // 置く/入れ換えはターン非消費（dispatchObjectEvent を呼ばない）。
-            // 呼んでしまうと置いた直後の around-0 で自動拾得が走り、置いたアイテムを即回収してしまう
-            this.render();
-        });
 
         EventBus.on('save-to-slot', async ({ slot, memo }: { slot: number; memo: string }) => {
             try {
@@ -491,11 +391,11 @@ export class Game extends Scene {
         }
 
         this.mode.initDefaultActions([
-            { label: 'スキル', onClick: () => this.toggleList('skill') },
-            { label: 'アイテム使用', onClick: () => this.toggleList('item') },
-            { label: '装備変更', onClick: () => this.toggleList('equip') },
+            { label: 'スキル', onClick: () => this.list.toggleList('skill') },
+            { label: 'アイテム使用', onClick: () => this.list.toggleList('item') },
+            { label: '装備変更', onClick: () => this.list.toggleList('equip') },
             { label: 'ステータス', onClick: () => this.openStatus() },
-            { label: '足下', onClick: () => this.onUnderfoot() },
+            { label: '足下', onClick: () => this.list.onUnderfoot() },
             { label: 'セーブ', onClick: () => this.openSaveDialog() },
         ]);
 
@@ -586,22 +486,6 @@ export class Game extends Scene {
         }
     }
 
-    private buildItemListPayload(items: Item[]): Array<{ id: string; label: string; description: string; isEquipped: boolean; typeLabel: string; effectSummary: string }> {
-        const equippedIds = new Set(
-            this.player.getAllEquippedItems()
-                .filter((it): it is Item => it !== null)
-                .map(it => it.getInstanceId())
-        );
-        return items.map(it => ({
-            id: it.getInstanceId(),
-            label: it.getLabelWithModifiers(),
-            description: it.getDescription(),
-            isEquipped: equippedIds.has(it.getInstanceId()),
-            typeLabel: formatItemTypeLabel(it.getType()),
-            effectSummary: formatItemEffect(it.getEffectSpecs()),
-        }));
-    }
-
     private openStatus(): void {
         EventBus.emit('open-status', buildStatusText({
             floor: this.floor,
@@ -622,181 +506,6 @@ export class Game extends Scene {
                 debugCommands: this.debugCommands,
             },
         });
-    }
-
-    private toggleList(mode: 'item' | 'equip' | 'skill'): void {
-        if (this.listMode === mode) {
-            this.closeList();
-        } else {
-            this.openList(mode);
-        }
-    }
-
-    private onUnderfoot(): void {
-        if (this.listMode === 'drop') {
-            this.closeList();
-            return;
-        }
-        if (this.listMode !== null) {
-            this.closeList();
-        }
-        const dispatched = this.dungeon.dispatchSelfEvent();
-        if (!dispatched) {
-            // 足下に対応オブジェクトなし → 設置フロー（ターン非消費）
-            this.openDropList();
-            return;
-        }
-        // 足下アクションによる拾得・入替え・設置はすべてターン非消費
-        this.render();
-    }
-
-    private openList(mode: 'item' | 'equip' | 'drop' | 'skill'): void {
-        if (this.listMode !== null) this.closeList();
-
-        if (mode === 'skill') {
-            const learned = this.player.getLearnedSkillNames();
-            this.listMode = 'skill';
-            if (this.input.keyboard) this.input.keyboard.enabled = false;
-            EventBus.emit('open-item-list', {
-                items: this.buildSkillListPayload(learned),
-                mode: 'skill',
-                actionLabel: '発動',
-            });
-            return;
-        }
-
-        let items: Item[];
-        let actionLabel: string;
-        if (mode === 'item') {
-            items = this.player.getInventory().getConsumableItems();
-            actionLabel = '使用';
-        } else if (mode === 'equip') {
-            items = this.player.getInventory().getEquippableItems();
-            actionLabel = '装備';
-        } else {
-            const equippedIds = new Set(
-                this.player.getAllEquippedItems()
-                    .filter((it): it is Item => it !== null)
-                    .map(it => it.getInstanceId())
-            );
-            items = this.player.getInventory().getItems()
-                .filter(it => !equippedIds.has(it.getInstanceId()));
-            actionLabel = '置く';
-        }
-        this.listMode = mode;
-        if (this.input.keyboard) this.input.keyboard.enabled = false;
-        EventBus.emit('open-item-list', {
-            items: this.buildItemListPayload(items),
-            mode,
-            actionLabel,
-        });
-    }
-
-    private buildSkillListPayload(skillNames: string[]): Array<{
-        id: string; label: string; description: string;
-        costSummary?: string; targetSummary?: string;
-        disabled?: boolean; disabledReason?: string;
-    }> {
-        const stunned = this.player.getPlayerActionDirective() === 'skip';
-        const loader = SkillsLoader.getInstance();
-        const result: Array<{
-            id: string; label: string; description: string;
-            costSummary?: string; targetSummary?: string;
-            disabled?: boolean; disabledReason?: string;
-        }> = [];
-        for (const name of skillNames) {
-            const compiled = loader.getCompiledSkill(name);
-            if (!compiled) continue;
-            const def = compiled.definition;
-            const triggerValue = def.trigger ?? 'active';
-            if (triggerValue !== 'active') {
-                // パッシブ全種（on_attack / on_turn / on_damage / passive）は手動発動不可
-                const passiveLabel = this.getPassiveTargetSummary(triggerValue, compiled);
-                const passiveReason = this.getPassiveDisabledReason(triggerValue);
-                result.push({
-                    id: name,
-                    label: def.label,
-                    description: def.description,
-                    costSummary: triggerValue === 'passive' ? '' : formatCostSummary(evaluateCost(this.player, compiled)),
-                    targetSummary: passiveLabel,
-                    disabled: true,
-                    disabledReason: passiveReason,
-                });
-                continue;
-            }
-            const deltas = evaluateCost(this.player, compiled);
-            const canPay = canPayCost(this.player, deltas);
-            const disabled = stunned || !canPay;
-            const disabledReason = stunned ? '動けない' : (canPay ? '' : 'コスト不足');
-            result.push({
-                id: name,
-                label: def.label,
-                description: def.description,
-                costSummary: formatCostSummary(deltas),
-                targetSummary: def.target ? formatTargetSummary(def.target) : '',
-                disabled,
-                disabledReason,
-            });
-        }
-        return result;
-    }
-
-    private getPassiveTargetSummary(trigger: string, compiled: ReturnType<typeof SkillsLoader.prototype.getCompiledSkill>): string {
-        switch (trigger) {
-            case 'on_attack': return '攻撃時';
-            case 'on_turn': return 'ターン経過';
-            case 'on_damage': return '被ダメージ';
-            case 'passive': {
-                // add_stats のサマリを生成（"攻+5 / HPmax+10" 形式）
-                if (!compiled || compiled.addStats.size === 0) return '常時';
-                const baseVars = this.player.getFormulaVars();
-                const parts: string[] = [];
-                for (const [stat, expr] of compiled.addStats) {
-                    try {
-                        const isMax = stat.endsWith('_max');
-                        const baseKey = isMax ? stat.slice(0, -'_max'.length) : stat;
-                        baseVars[stat] = isMax ? this.player.getMaxStat(baseKey) : this.player.getStat(baseKey);
-                        const raw = expr.evaluate(baseVars);
-                        if (typeof raw === 'number' && Number.isFinite(raw)) {
-                            const v = Math.floor(raw);
-                            const sign = v >= 0 ? '+' : '';
-                            parts.push(`${stat}${sign}${v}`);
-                        }
-                    } catch {
-                        parts.push(`${stat}=?`);
-                    }
-                }
-                return parts.length ? `常時 (${parts.join(', ')})` : '常時';
-            }
-            default: return 'パッシブ';
-        }
-    }
-
-    private getPassiveDisabledReason(trigger: string): string {
-        switch (trigger) {
-            case 'on_attack': return '攻撃時に自動発動';
-            case 'on_turn': return 'ターン経過で自動発動';
-            case 'on_damage': return '被ダメージで自動発動';
-            case 'passive': return '常時発動';
-            default: return 'パッシブスキル';
-        }
-    }
-
-    private openDropList(): void {
-        this.openList('drop');
-    }
-
-    private closeList(): void {
-        if (this.listMode === null) return;
-        this.listMode = null;
-        this.pendingPickup = null;
-        if (this.input.keyboard) {
-            // enabled=false の間に取りこぼした keyup で Key.isDown が true 固定になるのを解消
-            // （次回同じキー押下時に down が発火しない問題の対策）
-            this.input.keyboard.resetKeys();
-            this.input.keyboard.enabled = true;
-        }
-        EventBus.emit('close-item-list');
     }
 
     // update(time: number, delta: number): void {
@@ -874,8 +583,10 @@ export class Game extends Scene {
      * target: front スキルの方向選択モードに移行する。
      * 左/中央/右/キャンセル の 4 ボタンを表示し、選択でスキル発動、
      * キャンセルでコスト未消費でデフォルトモードに復帰する。
+     *
+     * ItemListController から use-skill ハンドラ経由で呼ばれるため public。
      */
-    private enterSkillTargetSelectMode(skillName: string): void {
+    enterSkillTargetSelectMode(skillName: string): void {
         const candidates = getFrontCandidates(this.dungeon);
         this.mode.enterSkillTargetSelectMode(candidates, (cell) => {
             this.executeAction(() => this.dungeon.useSkill(skillName, cell));
