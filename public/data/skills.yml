@@ -71,6 +71,41 @@
   mastery:
     - exact: 3
 
+# プレイヤー側パッシブスキル群
+- name: critical_strike
+  label: 会心
+  description: 通常攻撃時に攻撃力相当の追加ダメージを与える
+  trigger: on_attack
+  target: hit
+  action:
+    - damage: "power"
+
+- name: meditate
+  label: 瞑想
+  description: 毎ターン魔力を1消費して体力を3回復する
+  trigger: on_turn
+  target: self
+  cost:
+    magic: 1
+  action:
+    - heal: 3
+
+- name: thorns
+  label: 棘の鎧
+  description: 被ダメージ時、攻撃元に受けたダメージの半分を反射する
+  trigger: on_damage
+  target: hit
+  action:
+    - damage: "incoming_damage * 0.5"
+
+- name: vigor
+  label: 活力
+  description: 攻撃力・体力上限が常時上昇する
+  trigger: passive
+  add_stats:
+    power: 3
+    life_max: "level * 2"
+
 # 敵専用パッシブスキル（trigger: on_attack）
 - name: stun_strike
   label: スタン打撃

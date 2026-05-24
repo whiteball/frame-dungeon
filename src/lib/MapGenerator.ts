@@ -9,6 +9,7 @@ import { MapDirection, getRandomDirection, rotateDirection, getDirectionOffset }
 import { MapBuilder, type RoomWithCorridors } from './map/MapBuilder';
 import { MapObjectStore } from './map/MapObjectStore';
 import * as PlayerActions from './map/PlayerActions';
+import { executePlayerOnTurnSkill, isPlayerPassiveBlocked, isPlayerDead } from './skills/PlayerSkillExecutor';
 import { dumpDungeon } from './map/MapDebug';
 import { findPath, findContainingZone, isInZone, hasLineOfSight, type FindPathOptions } from './map/Pathfinding';
 import { BaseLoader } from './BaseLoader';
@@ -1085,6 +1086,20 @@ export class DungeonMap {
 
     // 敵リスポーン判定（ターンカウントを増やす前）
     this._tryRespawnEnemy();
+
+    // プレイヤーの on_turn パッシブスキル（スタン中は封じる）
+    if (this._playerInstance
+        && !isPlayerDead(this._playerInstance)
+        && !isPlayerPassiveBlocked(this._playerInstance)) {
+      const passives = this._playerInstance.getActivePassivesByTrigger('on_turn');
+      for (const p of passives) {
+        executePlayerOnTurnSkill(this, this._playerInstance, p.skillName, p.rate);
+        if (isPlayerDead(this._playerInstance)) {
+          EventBus.emit('game-over');
+          break;
+        }
+      }
+    }
 
     this._turnCount++;
 

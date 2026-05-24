@@ -694,7 +694,7 @@ export class Game extends Scene {
                     const damage = -delta;
                     EventBus.emit('attack-flash', 0xFF2222);
                     EventBus.emit('message-log',
-                        `${damage}のダメージ！(残り${statsLoader.getAbbreviation(target)}: ${this.player.getStat(target)}/${this.player.getMaxStat(target)})`,
+                        `${damage}のダメージ！(残り${statsLoader.getAbbreviation(target)}: ${this.player.getStat(target)}/${this.player.getEffectiveMaxStat(target)})`,
                         turn);
                     const cleared = this.player.notifyDamageTaken();
                     for (const c of cleared) {
@@ -924,15 +924,19 @@ export class Game extends Scene {
             const compiled = loader.getCompiledSkill(name);
             if (!compiled) continue;
             const def = compiled.definition;
-            if ((def.trigger ?? 'active') === 'on_attack') {
+            const triggerValue = def.trigger ?? 'active';
+            if (triggerValue !== 'active') {
+                // パッシブ全種（on_attack / on_turn / on_damage / passive）は手動発動不可
+                const passiveLabel = this.getPassiveTargetSummary(triggerValue, compiled);
+                const passiveReason = this.getPassiveDisabledReason(triggerValue);
                 result.push({
                     id: name,
                     label: def.label,
                     description: def.description,
-                    costSummary: '',
-                    targetSummary: 'パッシブ',
+                    costSummary: triggerValue === 'passive' ? '' : formatCostSummary(evaluateCost(this.player, compiled)),
+                    targetSummary: passiveLabel,
                     disabled: true,
-                    disabledReason: 'パッシブスキル',
+                    disabledReason: passiveReason,
                 });
                 continue;
             }
@@ -945,12 +949,53 @@ export class Game extends Scene {
                 label: def.label,
                 description: def.description,
                 costSummary: formatCostSummary(deltas),
-                targetSummary: formatTargetSummary(def.target),
+                targetSummary: def.target ? formatTargetSummary(def.target) : '',
                 disabled,
                 disabledReason,
             });
         }
         return result;
+    }
+
+    private getPassiveTargetSummary(trigger: string, compiled: ReturnType<typeof SkillsLoader.prototype.getCompiledSkill>): string {
+        switch (trigger) {
+            case 'on_attack': return '攻撃時';
+            case 'on_turn': return 'ターン経過';
+            case 'on_damage': return '被ダメージ';
+            case 'passive': {
+                // add_stats のサマリを生成（"攻+5 / HPmax+10" 形式）
+                if (!compiled || compiled.addStats.size === 0) return '常時';
+                const baseVars = this.player.getFormulaVars();
+                const parts: string[] = [];
+                for (const [stat, expr] of compiled.addStats) {
+                    try {
+                        const isMax = stat.endsWith('_max');
+                        const baseKey = isMax ? stat.slice(0, -'_max'.length) : stat;
+                        baseVars[stat] = isMax ? this.player.getMaxStat(baseKey) : this.player.getStat(baseKey);
+                        const raw = expr.evaluate(baseVars);
+                        if (typeof raw === 'number' && Number.isFinite(raw)) {
+                            const v = Math.floor(raw);
+                            const sign = v >= 0 ? '+' : '';
+                            parts.push(`${stat}${sign}${v}`);
+                        }
+                    } catch {
+                        parts.push(`${stat}=?`);
+                    }
+                }
+                return parts.length ? `常時 (${parts.join(', ')})` : '常時';
+            }
+            default: return 'パッシブ';
+        }
+    }
+
+    private getPassiveDisabledReason(trigger: string): string {
+        switch (trigger) {
+            case 'on_attack': return '攻撃時に自動発動';
+            case 'on_turn': return 'ターン経過で自動発動';
+            case 'on_damage': return '被ダメージで自動発動';
+            case 'passive': return '常時発動';
+            default: return 'パッシブスキル';
+        }
     }
 
     private openDropList(): void {

@@ -172,9 +172,9 @@ export class Player {
         const current = this.stats.get(key) || 0;
         const newValue = current + value;
 
-        // fluctuation許可の能力値は最大値でクランプ
+        // fluctuation許可の能力値は実効最大値でクランプ（passive add_stats の <stat>_max を含む）
         if (Player.statsLoader?.isFluctuationAllowed(key)) {
-            const maxValue = this.getMaxStat(key);
+            const maxValue = this.getEffectiveMaxStat(key);
             this.stats.set(key, Math.min(newValue, maxValue));
         } else {
             this.stats.set(key, newValue);
@@ -424,7 +424,51 @@ export class Player {
             }
         }
 
+        // passive スキル add_stats を最終層として適用
+        value += this.evaluatePassiveAddStats(key, value);
+
         return value;
+    }
+
+    /**
+     * 最大値の実効値を返す。base max + passive スキルの `<stat>_max` add_stats を加算したもの。
+     * 装備ボーナス / continuous 効果 / 状態異常 permanent は max には適用されない（既存仕様）。
+     */
+    getEffectiveMaxStat(key: string): number {
+        const baseMax = this.getMaxStat(key);
+        return baseMax + this.evaluatePassiveAddStats(`${key}_max`, baseMax);
+    }
+
+    /**
+     * 指定 targetKey（例: 'life' / 'life_max'）に対する passive スキルの add_stats を合算する。
+     * 変数：base stats（raw）+ level + exp + targetKey = currentValue。
+     * passive 自身は対象キーをこの formula 経由で増減するため、`<targetKey>` 変数を
+     * 「現在値（passive 適用前）」として注入し、formula から自己参照を可能にする。
+     */
+    private evaluatePassiveAddStats(targetKey: string, currentValue: number): number {
+        if (!Player.skillsLoader) return 0;
+        const passives = this.getActivePassivesByTrigger('passive');
+        if (passives.length === 0) return 0;
+
+        const baseVars = this.getFormulaVars();
+        baseVars[targetKey] = currentValue;
+
+        let delta = 0;
+        for (const p of passives) {
+            const compiled = Player.skillsLoader.getCompiledSkill(p.skillName);
+            if (!compiled) continue;
+            const expr = compiled.addStats.get(targetKey);
+            if (!expr) continue;
+            try {
+                const raw = expr.evaluate(baseVars);
+                if (typeof raw === 'number' && Number.isFinite(raw)) {
+                    delta += Math.floor(raw);
+                }
+            } catch (e) {
+                console.warn(`Failed to evaluate passive add_stats for skill "${p.skillName}", stat "${targetKey}":`, e);
+            }
+        }
+        return delta;
     }
 
     /**
@@ -548,7 +592,7 @@ export class Player {
                 let next = Math.floor(evaluated);
                 // life などの fluctuation 許可ステータスは [0, max] でクランプ
                 if (Player.statsLoader?.isFluctuationAllowed(spec.target)) {
-                    next = Math.max(0, Math.min(next, this.getMaxStat(spec.target)));
+                    next = Math.max(0, Math.min(next, this.getEffectiveMaxStat(spec.target)));
                 } else {
                     next = Math.max(0, next);
                 }
@@ -678,6 +722,39 @@ export class Player {
      */
     forgetSkill(name: string): boolean {
         return this.learnedSkills.delete(name);
+    }
+
+    /**
+     * 指定 trigger のアクティブなパッシブスキル一覧を返す。
+     * - 学習済みスキル：trigger 一致なら rate=1.0 として返す
+     * - 装備中アイテムの passive_skills：trigger 一致なら item 定義の rate で返す
+     * 同一スキル名が学習＋装備の両方にある場合は両方独立にカウント（重複発動）。
+     */
+    getActivePassivesByTrigger(trigger: 'active' | 'on_attack' | 'on_turn' | 'on_damage' | 'passive'): Array<{ skillName: string; rate: number }> {
+        const result: Array<{ skillName: string; rate: number }> = [];
+        if (!Player.skillsLoader) return result;
+
+        // 学習済みスキル
+        for (const name of this.learnedSkills) {
+            const def = Player.skillsLoader.getSkill(name);
+            if (!def) continue;
+            if ((def.trigger ?? 'active') !== trigger) continue;
+            result.push({ skillName: name, rate: 1.0 });
+        }
+
+        // 装備中アイテムの passive_skills
+        for (const item of this.getAllEquippedItems()) {
+            if (!item) continue;
+            const entries = item.getDefinition().passive_skills ?? [];
+            for (const ps of entries) {
+                const def = Player.skillsLoader.getSkill(ps.name);
+                if (!def) continue;
+                if ((def.trigger ?? 'active') !== trigger) continue;
+                result.push({ skillName: ps.name, rate: ps.rate });
+            }
+        }
+
+        return result;
     }
 
     getEnemiesDefeated(): number {
@@ -887,7 +964,7 @@ export class Player {
     getEffectiveFormulaVarsWithMax(): Record<string, number> {
         const vars = this.getEffectiveFormulaVars();
         for (const [key] of this.stats) {
-            vars[`${key}_max`] = this.getMaxStat(key);
+            vars[`${key}_max`] = this.getEffectiveMaxStat(key);
         }
         return vars;
     }
@@ -964,7 +1041,7 @@ export class Player {
         return newlyLearned;
     }
 
-    // 表示用の能力値を取得（略称付き、装備ボーナス・持続効果ボーナス込み）
+    // 表示用の能力値を取得（実効値ベース：装備ボーナス・modifier add_stats・持続効果・permanent・passive add_stats を全て反映）
     getDisplayStats(): Map<string, {
         value: number;
         abbreviation: string;
@@ -975,19 +1052,17 @@ export class Player {
         hasFluctuation: boolean;
     }> {
         const displayStats = new Map();
-        const equipmentBonuses = this.getEquipmentBonuses();
-        const continuousBonuses = this.getContinuousBonuses();
 
         for (const [key, baseValue] of this.stats) {
-            const equipBonus = equipmentBonuses.get(key) || 0;
-            const continuousBonus = continuousBonuses.get(key) || 0;
-            const bonus = equipBonus + continuousBonus;
-            const totalValue = baseValue + bonus;
+            const effectiveValue = this.getEffectiveStat(key);
+            const bonus = effectiveValue - baseValue;
             const abbreviation = Player.statsLoader?.getAbbreviation(key) || key.toUpperCase();
             const description = Player.statsLoader?.getDescription(key) || key;
             const hasFluctuation = Player.statsLoader?.isFluctuationAllowed(key) ?? false;
-            const maxValue = hasFluctuation ? (this.maxStats.get(key) ?? null) : null;
-            displayStats.set(key, { value: totalValue, abbreviation, description, currentValue: baseValue, bonus, maxValue, hasFluctuation });
+            const maxValue = hasFluctuation
+                ? (this.maxStats.has(key) ? this.getEffectiveMaxStat(key) : null)
+                : null;
+            displayStats.set(key, { value: effectiveValue, abbreviation, description, currentValue: baseValue, bonus, maxValue, hasFluctuation });
         }
 
         return displayStats;

@@ -38,10 +38,23 @@
 
 | 値 | 意味 |
 | --- | --- |
-| `active`（省略可） | プレイヤーが能動的に使用するスキル（既存の全スキル） |
-| `on_attack` | 通常攻撃後に自動発動するパッシブスキル。現在は敵専用（将来: 装備効果等） |
+| `active`（省略可） | プレイヤーが能動的に使用するスキル |
+| `on_attack` | 通常攻撃後に自動発動するパッシブ。プレイヤー / 敵双方が保有可能。target=`hit` で被弾セルに作用 |
+| `on_turn` | プレイヤーのターン終了時に自動発動するパッシブ。target=`self` 限定 |
+| `on_damage` | プレイヤーが攻撃を受けた直後に発動するパッシブ。target=`self` または `hit`（`hit`=攻撃元の敵） |
+| `passive` | 常時 stat 修飾を行うパッシブ。`add_stats` フィールドで具体的な加算式を記述する |
 
-`on_attack` スキルはプレイヤーのスキルリストで `disabled: true`（表示名「パッシブスキル」）として表示され、手動発動はできない。`PlayerActions.useSkill` にもガードがある。
+パッシブ全種類（active 以外）はプレイヤーのスキルリストで `disabled: true` として表示され、手動発動はできない。`PlayerActions.useSkill` 冒頭でも `trigger !== 'active'` をガードしている。
+
+各パッシブの target 制約：
+
+| trigger | 許可される target |
+| --- | --- |
+| `active` | `front` / `around` / `room` / `map` / `self` |
+| `on_attack` | `hit` のみ |
+| `on_turn` | `self` のみ |
+| `on_damage` | `self` または `hit` |
+| `passive` | 省略可（意味なし） |
 
 `mastery` の各エントリは `exact: N`（`{ least: N, rate: 1 }` のシュガー）または `least: N, rate: R`（0〜1）の形式。複数エントリがある場合、レベルアップ抽選時は post-level >= `least` を満たすうち `least` が最大のエントリのレートを使用する。
 
@@ -206,8 +219,94 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 「キャスター（敵）に隣接するプレイヤー」であり、プレイヤー向け実装の
 「キャスター自身がプレイヤーセルにいるなら caster に適用」という意味論と逆転するため。
 
+`EnemySkillExecutor` がサポートする action：
+
+- `apply_effect`：プレイヤーに状態異常を付与（rate 評価あり）
+- `damage`：プレイヤーへの追加ダメージ。formula 変数は caster（敵）側が `<stat>` / `<stat>_max`、target（プレイヤー）側が `target_<stat>` / `target_<stat>_max`。`attack-flash` の二重発火を避けるため、追加ダメージのみメッセージログに `${敵label}の追撃で${N}のダメージ！` 形式で出力する
+
 クロスバリデーション（`YamlCrossValidator`）：`enemies.yml` の `skills[].name` が
 `skills.yml` に存在し、かつ `trigger: on_attack` であることを起動時に確認する。
+
+## プレイヤーのパッシブスキル
+
+プレイヤーは以下の経路でパッシブスキルを保有できる：
+
+1. **学習スキル**：`learnedSkills` に格納された skills.yml 定義のスキル
+2. **装備の `passive_skills`**：items.yml の各アイテムに `passive_skills: [{ name, rate }]` を定義し、装備中の間だけ有効化される
+
+`Player.getActivePassivesByTrigger(trigger)` がこの 2 経路を平坦化して `{ skillName, rate }[]` を返す。学習＋装備で同一スキルが重複した場合は両方独立に発動する。
+
+### 発動経路と注入される変数
+
+| trigger | 発動タイミング | target 解決 | 追加 contextVars |
+| --- | --- | --- | --- |
+| `on_attack` | `PlayerActions.attackEnemyAt` で通常攻撃のダメージ適用後、敵生存時 | `hit` → 攻撃した敵セル | なし |
+| `on_turn` | `MapGenerator.dispatchObjectEvent` のターン終了時（`_turnCount++` 前） | `self` → プレイヤー位置 | なし |
+| `on_damage` | `Enemy.attackPlayer` で被弾後（`notifyDamageTaken` 直後）、プレイヤー生存時 | `self` → プレイヤー位置 / `hit` → 攻撃元の敵セル | `incoming_damage`（受けたダメージ） |
+| `passive` | 発動イベントなし。`Player.getEffectiveStat` / `getEffectiveMaxStat` に常時組み込まれる | — | — |
+
+`PlayerSkillExecutor`（`src/lib/skills/PlayerSkillExecutor.ts`）が `on_attack` / `on_turn` / `on_damage` を共通フローで処理する：
+
+1. `Math.random() < rate` 抽選
+2. trigger 一致確認
+3. cost 評価 → `canPayCost` で支払い可否を確認（不可なら**静かに skip**、ログも出さずターン消費もしない）
+4. cost 支払い（`payCost`）
+5. target セル解決（trigger に応じた自動解決）
+6. `executeActions(dungeon, player, compiled, cells, contextVars)` を呼び出して action 実行
+
+### 連鎖中の中断条件
+
+- **on_attack 複数保有**：途中で敵が倒れたら以降の on_attack はスキップ
+- **on_damage 複数保有**：途中でプレイヤーが死亡したら以降の on_damage はスキップ + `game-over` 発火
+- **on_turn 複数保有**：途中でプレイヤーが死亡（cost 支払い等）したら以降スキップ + `game-over`
+
+### スタンとの相互作用
+
+スタン中（`_action: skip`）は `on_attack` / `on_turn` / `on_damage` も封じる。`passive` の `add_stats` のみスタン非依存に常時適用される（stat 修飾は能動操作ではないため）。
+
+## 常時 stat 修飾パッシブ（`trigger: passive`）
+
+```yaml
+- name: vigor
+  label: 活力
+  description: 攻撃力・体力上限が常時上昇する
+  trigger: passive
+  add_stats:
+    power: 3
+    life_max: "level * 2"
+
+# ラベル用途（stat 修飾なし。将来の「対飛行特攻」等で参照する想定）
+- name: flying
+  label: 飛行
+  trigger: passive
+  description: 地形に依存しない移動を持つ
+  add_stats: {}    # 省略も可
+```
+
+**仕様：**
+
+- `add_stats` のキーは stat 名（`power`、`life` 等）、または `<stat>_max` サフィックス形式（`life_max` / `magic_max` 等）。
+- formula の使用可能変数：base raw stats（`getFormulaVars()` の中身）、`level` / `exp`、および対象キー自身（`<key>` = passive 適用前の値）
+- 端数は `Math.floor`、非有限値は警告 + 0 クランプ
+- `add_stats` を省略 or 空オブジェクトで定義したパッシブはラベルとしてのみ存在する（将来の formula 参照やイベント条件で利用される想定）
+- passive は `action` を持てない（持つと `SkillsLoader.validateSkill` が拒否）
+- cost フィールドも省略可。仮に指定しても `passive` では消費機会がない（参考情報のみ）
+
+### `getEffectiveStat` の合算順序（passive を含む最終形）
+
+1. base stat
+2. 装備の生ボーナス（`getEquipmentBonuses`）を加算
+3. 装備 modifier の `add_stats`（formula 評価）を加算
+4. 持続効果ボーナス（continuous）を加算
+5. 状態異常の `permanent`（formula(x)）を加算
+6. **passive スキルの `add_stats[stat]`** を加算（最終層）
+
+### `getEffectiveMaxStat` の合算順序
+
+1. base max（`getMaxStat`）
+2. passive スキルの `add_stats[<stat>_max]` を加算
+
+`Player.addStat` の fluctuation クランプは `getEffectiveMaxStat` を参照する。`passive` 経由で `life_max` を増やすと、対応する HP 回復の上限も連動して上がる。
 
 ## 状態異常との相互作用
 

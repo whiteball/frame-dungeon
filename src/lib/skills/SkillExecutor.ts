@@ -89,8 +89,9 @@ export function executeActions(
     caster: Player,
     compiled: CompiledSkill,
     cells: TargetCell[],
+    contextVars?: Record<string, number>,
 ): void {
-    for (const entry of compiled.definition.action) {
+    for (const entry of compiled.definition.action ?? []) {
         const { name, param } = parseActionEntry(entry);
         switch (name) {
             case 'attack':
@@ -101,14 +102,14 @@ export function executeActions(
                     console.warn(`damage action requires a scalar parameter in skill "${compiled.definition.name}"`);
                     break;
                 }
-                executeDamageAction(dungeon, caster, cells, param);
+                executeDamageAction(dungeon, caster, cells, param, contextVars);
                 break;
             case 'heal':
                 if (param === null || typeof param === 'object') {
                     console.warn(`heal action requires a scalar parameter in skill "${compiled.definition.name}"`);
                     break;
                 }
-                executeHealAction(dungeon, caster, cells, param);
+                executeHealAction(dungeon, caster, cells, param, contextVars);
                 break;
             case 'reveal_trap':
                 executeRevealTrapAction(dungeon, caster, cells);

@@ -1,10 +1,28 @@
+import { Parser, type Expression } from 'expr-eval-fork';
 import { SkillsLoader } from '../SkillsLoader';
 import { EffectsLoader } from '../EffectsLoader';
 import { BaseLoader } from '../BaseLoader';
 import { EventBus } from '../../game/EventBus';
 import type { DungeonMap } from '../MapGenerator';
 import type { Enemy } from '../Enemy';
+import type { Player } from '../Player';
 import { parseActionEntry } from './SkillExecutor';
+
+const parser = new Parser();
+const damageFormulaCache = new Map<string, Expression>();
+
+function getDamageFormula(src: string): Expression | null {
+    let expr = damageFormulaCache.get(src);
+    if (expr) return expr;
+    try {
+        expr = parser.parse(src);
+        damageFormulaCache.set(src, expr);
+        return expr;
+    } catch (e) {
+        console.warn(`Failed to parse enemy damage formula "${src}":`, e);
+        return null;
+    }
+}
 
 /**
  * on_attack パッシブスキルを実行する。
@@ -32,13 +50,64 @@ export function executeEnemyOnAttackSkill(
 
     const turn = dungeon.getTurnCount();
 
-    for (const entry of def.action) {
+    for (const entry of def.action ?? []) {
         const { name, param } = parseActionEntry(entry);
         if (name === 'apply_effect') {
             applyEffectToPlayer(enemy, player, param, turn);
+        } else if (name === 'damage') {
+            if (param === null || typeof param === 'object') {
+                console.warn(`EnemySkillExecutor: damage action requires a scalar parameter in skill "${skillName}"`);
+                continue;
+            }
+            applyAdditionalDamageToPlayer(enemy, player, param, turn);
+            // ダメージで死亡したら以降の action は無意味
+            if (BaseLoader.getInstance().isDead(player.getFormulaVars())) break;
         }
-        // 将来拡張: 'damage' → プレイヤーへの追加ダメージ など
     }
+}
+
+/**
+ * 敵の追加ダメージを計算してプレイヤーに適用する。
+ * 通常攻撃のダメージとは別に message-log を発行する（attack-flash は二重発火を避けるため省略）。
+ *
+ * 変数：
+ *   - caster（敵）側：<stat> / <stat>_max（生ステータス）
+ *   - target（プレイヤー）側：target_<stat> / target_<stat>_max（実効値 + 実効最大）
+ */
+function applyAdditionalDamageToPlayer(
+    enemy: Enemy,
+    player: Player,
+    param: number | string,
+    turn: number,
+): void {
+    const src = typeof param === 'number' ? String(param) : param;
+    const formula = getDamageFormula(src);
+    if (!formula) return;
+
+    const vars: Record<string, number> = {};
+    for (const k of enemy.getStats().keys()) {
+        vars[k] = enemy.getEffectiveStat(k);
+        vars[`${k}_max`] = enemy.getMaxStat(k);
+    }
+    for (const k of player.getStats().keys()) {
+        vars[`target_${k}`] = player.getEffectiveStat(k);
+        vars[`target_${k}_max`] = player.getEffectiveMaxStat(k);
+    }
+
+    let raw: unknown;
+    try {
+        raw = formula.evaluate(vars);
+    } catch (e) {
+        console.warn(`Failed to evaluate enemy damage formula "${src}":`, e);
+        return;
+    }
+    const damage = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : 0;
+    if (damage === 0) return;
+
+    const baseLoader = BaseLoader.getInstance();
+    const targetStat = baseLoader.getDefaultDamageStat();
+    player.addStat(targetStat, -damage);
+    EventBus.emit('message-log', `${enemy.getLabel()}の追撃で${damage}のダメージ！`, turn);
 }
 
 function applyEffectToPlayer(

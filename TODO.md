@@ -191,11 +191,12 @@
   - [x] action: attack / damage / heal / reveal_trap
   - [x] スタン (`_action: skip`) 連携（UI/ライブラリ 2 段ガード）
   - [x] 敵のパッシブスキル（`trigger: on_attack`）：`enemies.yml` の `skills[]` から `EnemySkillExecutor` 経由で発動
-  - [ ] パッシブスキルの拡張
-    - [ ] `trigger: on_turn` — 毎ターン終了時に自動発動するパッシブ
-    - [ ] `trigger: on_damage` — ダメージを受けた際に発動するリアクション
-    - [ ] プレイヤーの装備・アイテムから `on_attack` パッシブを付与する機能
-    - [ ] `EnemySkillExecutor` への `damage` アクション対応（追加ダメージ型スキル）
+  - [x] パッシブスキルの拡張
+    - [x] `trigger: on_turn` — 毎ターン終了時に自動発動するパッシブ
+    - [x] `trigger: on_damage` — ダメージを受けた際に発動するリアクション（`incoming_damage` 変数を露出、target=hit で攻撃元へ反撃可能）
+    - [x] プレイヤーの装備・アイテムから `on_attack` パッシブを付与する機能（`items.yml` の `passive_skills: [{name, rate}]`、`on_turn` / `on_damage` / `passive` も同フィールドで付与可能）
+    - [x] `EnemySkillExecutor` への `damage` アクション対応（`target_<stat>` 変数で player ステータス参照可）
+    - [x] `trigger: passive` — 常時 stat 修飾のパッシブ（`add_stats: { stat: formula }`、`<stat>_max` も対応、空 add_stats でラベル用途も可）（追加ダメージ型スキル）
   - [ ] スキル定義のクロスバリデーション強化（YamlCrossValidator で skills.yml 内の cost / damage / heal formula の変数や効果参照を事前検証）
 
 ## 技術的改善

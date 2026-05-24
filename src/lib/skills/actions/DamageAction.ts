@@ -41,6 +41,7 @@ export function executeDamageAction(
     caster: Player,
     cells: TargetCell[],
     param: number | string,
+    contextVars?: Record<string, number>,
 ): void {
     const enemies: Enemy[] = [];
     for (const { x, y } of cells) {
@@ -64,6 +65,9 @@ export function executeDamageAction(
         for (const k of enemy.getStats().keys()) {
             vars[`target_${k}`] = enemy.getEffectiveStat(k);
             vars[`target_${k}_max`] = enemy.getMaxStat(k);
+        }
+        if (contextVars) {
+            for (const [k, v] of Object.entries(contextVars)) vars[k] = v;
         }
 
         let raw: unknown;

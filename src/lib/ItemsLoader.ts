@@ -55,6 +55,16 @@ export interface ItemEffectSpec {
  */
 export type ItemEffect = ItemEffectSpec | ItemEffectSpec[];
 
+/**
+ * 装備中にプレイヤーへ付与するパッシブスキルのエントリ
+ * - name: skills.yml のスキル名（trigger は on_attack / on_turn / on_damage / passive のいずれか）
+ * - rate: 発動率 0..1（passive 系の常時 stat 加算は事実上 1 のみが意味を持つ）
+ */
+export interface ItemPassiveSkillEntry {
+    name: string;
+    rate: number;
+}
+
 export interface ItemDefinition {
     /**
      * アイテム内部ID（英語）
@@ -76,6 +86,10 @@ export interface ItemDefinition {
      * アイテム説明文
      */
     description: string;
+    /**
+     * 装備中に付与されるパッシブスキル一覧（省略可）
+     */
+    passive_skills?: ItemPassiveSkillEntry[];
 }
 
 export class ItemsLoader {
@@ -152,6 +166,23 @@ export class ItemsLoader {
         }
         if (!item.description || typeof item.description !== 'string') {
             throw new Error(`Invalid item '${item.name}': missing or invalid 'description' field`);
+        }
+        if (item.passive_skills !== undefined) {
+            if (!Array.isArray(item.passive_skills)) {
+                throw new Error(`Invalid item '${item.name}': 'passive_skills' must be an array`);
+            }
+            for (let i = 0; i < item.passive_skills.length; i++) {
+                const ps = item.passive_skills[i];
+                if (!ps || typeof ps !== 'object' || Array.isArray(ps)) {
+                    throw new Error(`Invalid item '${item.name}': passive_skills[${i}] must be an object`);
+                }
+                if (typeof ps.name !== 'string' || !ps.name) {
+                    throw new Error(`Invalid item '${item.name}': passive_skills[${i}].name must be a non-empty string`);
+                }
+                if (typeof ps.rate !== 'number' || ps.rate < 0 || ps.rate > 1) {
+                    throw new Error(`Invalid item '${item.name}': passive_skills[${i}].rate must be a number in [0, 1]`);
+                }
+            }
         }
     }
 

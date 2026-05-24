@@ -320,10 +320,40 @@ export class YamlCrossValidator {
             }
         }
 
+        // items.yml passive_skills[].name → skills.yml（パッシブ系 trigger 必須）
+        for (const item of items.getItems()) {
+            const passiveList = item.passive_skills ?? [];
+            for (let i = 0; i < passiveList.length; i++) {
+                const ps = passiveList[i];
+                const skillDef = skills.getSkill(ps.name);
+                if (!skillDef) {
+                    errors.push(`items.yml "${item.name}": passive_skills[${i}].name "${ps.name}" が skills.yml に存在しません`);
+                    continue;
+                }
+                const trig = skillDef.trigger ?? 'active';
+                if (trig === 'active') {
+                    errors.push(`items.yml "${item.name}": passive_skills[${i}].name "${ps.name}" は active スキルのため装備パッシブとして使用できません`);
+                }
+            }
+        }
+
+        // skills.yml add_stats.<key> → stats.yml（_max サフィックスを許容）
+        for (const skill of skills.getSkills()) {
+            if (!skill.add_stats) continue;
+            for (const key of Object.keys(skill.add_stats)) {
+                const isMax = key.endsWith('_max');
+                const baseKey = isMax ? key.slice(0, -'_max'.length) : key;
+                if (!stats.getStat(baseKey)) {
+                    errors.push(`skills.yml "${skill.name}": add_stats."${key}" の対応 stat が stats.yml に存在しません`);
+                }
+            }
+        }
+
         // skills.yml apply_effect.effect → effects.yml
         for (const skill of skills.getSkills()) {
-            for (let i = 0; i < skill.action.length; i++) {
-                const entry = skill.action[i];
+            const skillActionArray = skill.action ?? [];
+            for (let i = 0; i < skillActionArray.length; i++) {
+                const entry = skillActionArray[i];
                 if (typeof entry === 'string') continue;
                 const keys = Object.keys(entry);
                 if (keys[0] !== 'apply_effect') continue;

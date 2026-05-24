@@ -3,10 +3,10 @@ import { YamlDefinitionStore } from './YamlDefinitionStore';
 import { CustomDataStore } from './CustomDataStore';
 
 export type SkillTarget = 'front' | 'around' | 'room' | 'map' | 'self' | 'hit';
-export type SkillTrigger = 'active' | 'on_attack';
+export type SkillTrigger = 'active' | 'on_attack' | 'on_turn' | 'on_damage' | 'passive';
 
 const VALID_TARGETS: ReadonlySet<SkillTarget> = new Set<SkillTarget>(['front', 'around', 'room', 'map', 'self', 'hit']);
-const VALID_TRIGGERS: ReadonlySet<SkillTrigger> = new Set<SkillTrigger>(['active', 'on_attack']);
+const VALID_TRIGGERS: ReadonlySet<SkillTrigger> = new Set<SkillTrigger>(['active', 'on_attack', 'on_turn', 'on_damage', 'passive']);
 
 /**
  * スキル内 action 配列の 1 エントリ
@@ -33,19 +33,25 @@ export interface SkillDefinition {
     description: string;
     /** 省略時は 'active' として扱う */
     trigger?: SkillTrigger;
-    target: SkillTarget;
+    /** trigger='passive' のときは省略可（target は意味を持たない） */
+    target?: SkillTarget;
     cost?: Record<string, number | string>;
-    action: SkillActionEntry[];
+    /** trigger='passive' のときは省略可（action 配列も空でよい） */
+    action?: SkillActionEntry[];
     mastery?: SkillMasteryEntry[];
+    /** trigger='passive' 専用：常時 stat に加算する formula（省略可・空オブジェクト可） */
+    add_stats?: Record<string, number | string>;
 }
 
 /**
  * パース済みコスト式付きのスキル定義
  * - cost: ステータス名 → コンパイル済み Expression（数値リテラルも文字列化して統一）
+ * - addStats: stat 名 → コンパイル済み add_stats Expression（passive 専用）
  */
 interface CompiledSkill {
     definition: SkillDefinition;
     cost: Map<string, Expression>;
+    addStats: Map<string, Expression>;
 }
 
 export class SkillsLoader {
@@ -87,7 +93,18 @@ export class SkillsLoader {
                 }
             }
         }
-        return { definition: def, cost };
+        const addStats = new Map<string, Expression>();
+        if (def.add_stats) {
+            for (const [stat, formulaOrNum] of Object.entries(def.add_stats)) {
+                const src = typeof formulaOrNum === 'number' ? String(formulaOrNum) : formulaOrNum;
+                try {
+                    addStats.set(stat, this.parser.parse(src));
+                } catch (e) {
+                    console.warn(`Failed to parse add_stats formula "${src}" for skill "${def.name}":`, e);
+                }
+            }
+        }
+        return { definition: def, cost, addStats };
     }
 
     private validateSkill(skill: any): void {
@@ -103,17 +120,59 @@ export class SkillsLoader {
         if (skill.trigger !== undefined && !VALID_TRIGGERS.has(skill.trigger)) {
             throw new Error(`Invalid skill '${skill.name}': 'trigger' must be one of ${Array.from(VALID_TRIGGERS).join(', ')}`);
         }
-        if (!skill.target || !VALID_TARGETS.has(skill.target)) {
+        const triggerValue: SkillTrigger = (skill.trigger ?? 'active');
+        const isPassiveTrigger = triggerValue === 'passive';
+
+        if (skill.target !== undefined && !VALID_TARGETS.has(skill.target)) {
             throw new Error(`Invalid skill '${skill.name}': 'target' must be one of ${Array.from(VALID_TARGETS).join(', ')}`);
         }
-        if (skill.target === 'hit' && (skill.trigger ?? 'active') !== 'on_attack') {
-            throw new Error(`Invalid skill '${skill.name}': target 'hit' requires trigger 'on_attack'`);
+        if (!isPassiveTrigger && !skill.target) {
+            throw new Error(`Invalid skill '${skill.name}': 'target' is required for trigger '${triggerValue}'`);
         }
-        if (!Array.isArray(skill.action) || skill.action.length === 0) {
-            throw new Error(`Invalid skill '${skill.name}': 'action' must be a non-empty array`);
+        if (skill.target === 'hit' && triggerValue !== 'on_attack' && triggerValue !== 'on_damage') {
+            throw new Error(`Invalid skill '${skill.name}': target 'hit' requires trigger 'on_attack' or 'on_damage'`);
         }
-        for (let i = 0; i < skill.action.length; i++) {
-            const entry = skill.action[i];
+        if (triggerValue === 'on_turn' && skill.target !== 'self') {
+            throw new Error(`Invalid skill '${skill.name}': trigger 'on_turn' requires target 'self'`);
+        }
+        if (triggerValue === 'on_damage' && skill.target !== 'self' && skill.target !== 'hit') {
+            throw new Error(`Invalid skill '${skill.name}': trigger 'on_damage' requires target 'self' or 'hit'`);
+        }
+        if (triggerValue === 'on_attack' && skill.target !== 'hit') {
+            throw new Error(`Invalid skill '${skill.name}': trigger 'on_attack' requires target 'hit'`);
+        }
+
+        // passive: action は省略可・空配列可、add_stats は省略可・空オブジェクト可
+        if (isPassiveTrigger) {
+            if (skill.action !== undefined) {
+                if (!Array.isArray(skill.action)) {
+                    throw new Error(`Invalid skill '${skill.name}': 'action' must be an array (or omitted for passive)`);
+                }
+                if (skill.action.length > 0) {
+                    throw new Error(`Invalid skill '${skill.name}': 'passive' skills cannot have actions (use add_stats or remove action)`);
+                }
+            }
+            if (skill.add_stats !== undefined) {
+                if (typeof skill.add_stats !== 'object' || Array.isArray(skill.add_stats) || skill.add_stats === null) {
+                    throw new Error(`Invalid skill '${skill.name}': 'add_stats' must be an object`);
+                }
+                for (const [k, v] of Object.entries(skill.add_stats)) {
+                    if (typeof v !== 'number' && typeof v !== 'string') {
+                        throw new Error(`Invalid skill '${skill.name}': add_stats.${k} must be a number or formula string`);
+                    }
+                }
+            }
+        } else {
+            if (skill.add_stats !== undefined) {
+                throw new Error(`Invalid skill '${skill.name}': 'add_stats' is only allowed for trigger 'passive'`);
+            }
+            if (!Array.isArray(skill.action) || skill.action.length === 0) {
+                throw new Error(`Invalid skill '${skill.name}': 'action' must be a non-empty array`);
+            }
+        }
+        const actionArray: any[] = Array.isArray(skill.action) ? skill.action : [];
+        for (let i = 0; i < actionArray.length; i++) {
+            const entry = actionArray[i];
             if (typeof entry === 'string') continue;
             if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
                 const keys = Object.keys(entry);

@@ -43,6 +43,7 @@ export function executeHealAction(
     caster: Player,
     cells: TargetCell[],
     param: number | string,
+    contextVars?: Record<string, number>,
 ): void {
     const { x: px, y: py } = dungeon.getPlayerPos();
     const entities: Array<Player | Enemy> = [];
@@ -80,6 +81,9 @@ export function executeHealAction(
                 vars[`target_${k}`] = caster.getStat(k);
                 vars[`target_${k}_max`] = caster.getMaxStat(k);
             }
+        }
+        if (contextVars) {
+            for (const [k, v] of Object.entries(contextVars)) vars[k] = v;
         }
 
         let raw: unknown;

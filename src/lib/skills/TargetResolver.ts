@@ -63,6 +63,11 @@ export function resolveTarget(
             }
             return cells;
         }
+
+        case 'hit':
+            // 'hit' は PlayerSkillExecutor / EnemySkillExecutor が直接 cells を渡すため
+            // resolveTarget 経由では到達しないが、TS の網羅性チェックを満たすため空配列を返す
+            return preSelectedCell ? [{ x: preSelectedCell.x, y: preSelectedCell.y }] : [];
     }
 }
 
@@ -98,5 +103,6 @@ export function formatTargetSummary(target: SkillTarget): string {
         case 'room': return '部屋';
         case 'map': return '全体';
         case 'self': return '自分';
+        case 'hit': return '被弾セル';
     }
 }

@@ -10,6 +10,7 @@ import { getRandomInt } from './util/random';
 import type { ActiveStatusEffect, ApplyStatusEffectResult, StatusEffectTickResult } from './Player';
 import type { StatusEffectSaveData } from './SaveManager';
 import { executeEnemyOnAttackSkill } from './skills/EnemySkillExecutor';
+import { executePlayerOnDamageSkill } from './skills/PlayerSkillExecutor';
 
 /**
  * ゲーム内の敵インスタンスを表すクラス
@@ -215,10 +216,19 @@ export class Enemy extends MapObject {
         const targetStat = baseLoader.getDefaultDamageStat();
         player.addStat(targetStat, -damage);
         EventBus.emit('attack-flash', 0xFF2222);
-        EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残り${statsLoader.getAbbreviation(targetStat)}: ${player.getStat(targetStat)}/${player.getMaxStat(targetStat)})`, dungeon.getTurnCount());
+        EventBus.emit('message-log', `${this.getLabel()}の攻撃！ ${damage}のダメージ！ (残り${statsLoader.getAbbreviation(targetStat)}: ${player.getStat(targetStat)}/${player.getEffectiveMaxStat(targetStat)})`, dungeon.getTurnCount());
         const cleared = player.notifyDamageTaken();
         for (const c of cleared) {
             EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
+        }
+
+        // プレイヤーの on_damage パッシブを発動（生存中のみ。途中で死亡したら以降スキップ）
+        if (!baseLoader.isDead(player.getFormulaVars())) {
+            const passives = player.getActivePassivesByTrigger('on_damage');
+            for (const p of passives) {
+                executePlayerOnDamageSkill(dungeon, player, this, damage, p.skillName, p.rate);
+                if (baseLoader.isDead(player.getFormulaVars())) break;
+            }
         }
 
         const skillDefs = this.definition.skills ?? [];

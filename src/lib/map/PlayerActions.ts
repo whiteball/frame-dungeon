@@ -10,6 +10,7 @@ import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
 import { StairsObject, TrapObject, ItemObject } from './MapObjects';
 import { tryEnemyDrop } from './EnemyDropResolver';
+import { executePlayerOnAttackSkill } from '../skills/PlayerSkillExecutor';
 
 /**
  * プレイヤーのターン消費アクション群
@@ -77,6 +78,15 @@ export function attackEnemyAt(dungeon: DungeonMap, targetX: integer, targetY: in
   EventBus.emit('message-log', `${enemy.getLabel()}に${dealt}のダメージ！`, dungeon.getTurnCount());
   for (const c of cleared) {
     EventBus.emit('message-log', `${enemy.getLabel()}の${c.label}が解けた`, dungeon.getTurnCount());
+  }
+
+  // プレイヤーの on_attack パッシブを発動（敵生存時のみ）
+  if (enemy.isAlive()) {
+    const passives = player.getActivePassivesByTrigger('on_attack');
+    for (const p of passives) {
+      executePlayerOnAttackSkill(dungeon, player, enemy, p.skillName, p.rate);
+      if (!enemy.isAlive()) break;
+    }
   }
 
   if (!enemy.isAlive()) {
@@ -283,8 +293,9 @@ export function useSkill(
   if (!compiled) return false;
   const def = compiled.definition;
 
-  // on_attack パッシブスキルはプレイヤーが能動的に使用できない
-  if ((def.trigger ?? 'active') === 'on_attack') return false;
+  // パッシブスキル全般はプレイヤーが能動的に使用できない（on_attack/on_turn/on_damage/passive）
+  if ((def.trigger ?? 'active') !== 'active') return false;
+  if (!def.target) return false; // active 確定後は target 必須（SkillsLoader 側で保証）
 
   // target 解決（front は selectedTarget 必須）
   const targetCells = resolveTarget(def.target, dungeon, selectedTarget);
