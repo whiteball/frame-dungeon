@@ -8,7 +8,6 @@ import { InfoView } from '../../lib/InfoView';
 import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
 import type { Item } from '../../lib/Item';
-import { ItemsLoader } from '../../lib/ItemsLoader';
 import { formatItemTypeLabel, formatItemEffect } from '../../lib/ItemDescriptionFormatter';
 import { TrapsLoader } from '../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
@@ -20,12 +19,12 @@ import { makeStatFluctuatedMessage } from '../../lib/util/text';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
 import { ItemObject, TreasureObject } from '../../lib/map/MapObjects';
-import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
 import { setupDebugCommands } from './game/GameDebugCommands';
+import { populateFloor } from './game/FloorPopulator';
 import { SceneModeController } from './game/SceneModeController';
 import type { SceneAction } from './game/SceneModeController';
+import { buildDisplayParams, buildStatusText, buildResultText } from './game/StatusReportBuilder';
 import { BaseLoader } from '../../lib/BaseLoader';
-import type { ResolvedFloorConfig, ResolvedTreasureItemEntry } from '../../lib/BaseLoader';
 import { SaveManager } from '../../lib/SaveManager';
 import { YamlCrossValidator } from '../../lib/YamlCrossValidator';
 import type { SaveData } from '../../lib/SaveManager';
@@ -98,7 +97,7 @@ export class Game extends Scene {
     render() {
         this.miniMapView.render(this.dungeon, this.revealAll);
         this.mainView.render(this.dungeon, this.getOpenDoors());
-        this.params = this.getDisplayParams();
+        this.params = buildDisplayParams(this.player);
         this.infoView.render(this.floor, this.params);
         this.equipmentView.render({
             weapon: this.player.getEquippedWeapon(),
@@ -108,51 +107,6 @@ export class Game extends Scene {
         });
     }
 
-    private formatStatValue(data: { bonus: number; hasFluctuation: boolean; maxValue: number | null; currentValue: number }): number | string {
-        const bonusStr = data.bonus > 0 ? `(+${data.bonus})` : `(${data.bonus})`;
-        if (data.hasFluctuation && data.maxValue !== null) {
-            const maxPart = data.bonus !== 0 ? `${data.maxValue}${bonusStr}` : `${data.maxValue}`;
-            return `${data.currentValue}/${maxPart}`;
-        } else if (data.bonus !== 0) {
-            return `${data.currentValue}${bonusStr}`;
-        } else {
-            return data.currentValue;
-        }
-    }
-
-    private getDisplayParams(showAll = false): Map<string, number | string> {
-        const displayParams = new Map<string, number | string>();
-        const displayStats = this.player.getDisplayStats();
-        const statsLoader = StatsLoader.getInstance();
-
-        if (showAll) {
-            const sorted = [...statsLoader.getStats()].sort((a, b) => {
-                if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-                if (a.order !== undefined) return -1;
-                if (b.order !== undefined) return 1;
-                return 0;
-            });
-            for (const statDef of sorted) {
-                const data = displayStats.get(statDef.name);
-                if (!data) continue;
-                displayParams.set(data.abbreviation, this.formatStatValue(data));
-            }
-        } else {
-            for (const statDef of statsLoader.getDisplayOrderedStats()) {
-                const data = displayStats.get(statDef.name);
-                if (!data) continue;
-                if (statDef.default !== undefined && data.currentValue === statDef.default) continue;
-                displayParams.set(data.abbreviation, this.formatStatValue(data));
-            }
-        }
-
-        const statusEffects = this.player.getActiveStatusEffects();
-        if (statusEffects.length > 0) {
-            displayParams.set('状態', statusEffects.map(e => e.label).join('、'));
-        }
-
-        return displayParams;
-    }
 
     static fontFamily = '\'BIZ UDゴシック\', Consolas, monospace';
     playerInfo: Map<string, number>;
@@ -204,111 +158,13 @@ export class Game extends Scene {
         });
 
         EventBus.on('go-to-next-floor', (dungeon: DungeonMap) => {
-            // フロア設定を取得してマップをリサイズ
-            const floorConfig = BaseLoader.getInstance().getFloorConfig(this.floor);
-            dungeon.setCurrentFloor(this.floor);
-            dungeon.resize(floorConfig.width, floorConfig.height);
-            dungeon.build({
-                secretRoomChance: floorConfig.secretRoomChance,
-                extraDoorRate: floorConfig.extraDoorRate,
+            populateFloor({
+                dungeon,
+                floor: this.floor,
+                callbacks: this.buildDungeonRestoreCallbacks(),
             });
-            dungeon.resetFloorTurnCount();
-            // dungeon.dump();
-
-            // 敵をクリア
-            dungeon.clearEnemies();
-
-            const excludePositionList: integer[][] = [];
-            const step = dungeon.getRandomPos({ withoutCorridor: true, withoutDoor: true, withoutPlayer: true, withoutSecretRoom: true });
-            if (step.length >= 2) {
-                // 階段の追加
-                const stairsObj = buildStairsObject((d) => this.enterStairMode(d));
-                stairsObj.x = step[0];
-                stairsObj.y = step[1];
-                dungeon.placeObject(stairsObj);
-                excludePositionList.push(step);
-            }
-
-            // 隠し部屋の宝箱配置（base.yml の treasure 設定に従う）
-            if (floorConfig.treasure && floorConfig.treasure.items.length > 0) {
-                const t = floorConfig.treasure;
-                for (const room of dungeon.getSecretRoomRects()) {
-                    if (Math.random() >= t.rate) continue;
-
-                    const doorCells = new Set<string>();
-                    for (const d of dungeon.findDoorsInRoom(room)) {
-                        doorCells.add(`${d.x},${d.y}`);
-                    }
-
-                    const candidates: integer[][] = [];
-                    for (let y = room.y1; y <= room.y2; y++) {
-                        for (let x = room.x1; x <= room.x2; x++) {
-                            if (dungeon.getAt(x, y) === -1) continue;
-                            if (doorCells.has(`${x},${y}`)) continue;
-                            if (excludePositionList.some(p => p[0] === x && p[1] === y)) continue;
-                            candidates.push([x, y]);
-                        }
-                    }
-                    if (candidates.length === 0) continue;
-
-                    const item = this.pickTreasureItem(t.items);
-                    if (!item) continue;
-
-                    const [tx, ty] = candidates[Phaser.Math.Between(0, candidates.length - 1)];
-                    const treasureObj = new TreasureObject(item, t.trapRate, [...floorConfig.trapPool]);
-                    treasureObj.x = tx;
-                    treasureObj.y = ty;
-                    dungeon.placeObject(treasureObj);
-                    excludePositionList.push([tx, ty]);
-                }
-            }
-
-            // トラップ配置（base.yml の設定に従う）
-            const trapCount = Phaser.Math.Between(floorConfig.trapMin, floorConfig.trapMax);
-            const traps = dungeon.getRandomPosList(trapCount, false, { withoutPlayer: true, withoutSecretRoom: true, excludePositionList: [step] });
-            for (const trapPos of traps) {
-                if (floorConfig.trapPool.length === 0) break;
-                const trapName = floorConfig.trapPool[Phaser.Math.Between(0, floorConfig.trapPool.length - 1)];
-                const trapDef = TrapsLoader.getInstance().getTrap(trapName)!;
-                const trapObj = buildTrapObject(
-                    trapDef,
-                    (def) => this.applyTrapEffects(def),
-                    (def, obj) => this.enterTrapConfirmMode(def, obj),
-                );
-                trapObj.x = trapPos[0];
-                trapObj.y = trapPos[1];
-                this.dungeon.placeObject(trapObj);
-                excludePositionList.push(trapPos);
-            }
-
-            // アイテムの配置
-            const itemDefs = ItemsLoader.getInstance().getItems();
-            if (itemDefs.length > 0) {
-                const roomCount = dungeon.getRoomCount();
-                const itemCount = Math.max(0, Phaser.Math.Between(roomCount - 3, roomCount + 3));
-                const itemPositions = dungeon.getRandomPosList(itemCount, false, {
-                    withoutCorridor: true,
-                    withoutPlayer: true,
-                    withoutSecretRoom: true,
-                    excludePositionList,
-                });
-                for (const pos of itemPositions) {
-                    const itemDef = itemDefs[Phaser.Math.Between(0, itemDefs.length - 1)];
-                    const item = Player.createItem(itemDef.name, { rollModifiers: true, floor: this.floor });
-                    if (!item) continue;
-                    const itemObj = new ItemObject(item);
-                    itemObj.x = pos[0];
-                    itemObj.y = pos[1];
-                    this.dungeon.placeObject(itemObj);
-                    excludePositionList.push(pos);
-                }
-            }
-
-            // 敵の配置
-            this.spawnEnemies(dungeon, floorConfig, excludePositionList);
-
-            EventBus.emit('update-view')
-        })
+            EventBus.emit('update-view');
+        });
 
         // Player初期化前にシステムを初期化
         await Player.initializeAllSystems();
@@ -322,7 +178,7 @@ export class Game extends Scene {
         }
 
         this.player = new Player();
-        this.params = this.getDisplayParams();
+        this.params = buildDisplayParams(this.player);
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);
         const miniMapX = this.game.canvas.width - 10 - 200;
@@ -484,14 +340,12 @@ export class Game extends Scene {
 
         EventBus.on('game-over', () => {
             this.closeList();
-            const resultText = this.buildResultText();
-            this.scene.start('GameOver', { resultText });
+            this.scene.start('GameOver', { resultText: this.composeResultText() });
         })
 
         EventBus.on('game-clear', () => {
             this.closeList();
-            const resultText = this.buildResultText();
-            this.scene.start('GameClear', { resultText });
+            this.scene.start('GameClear', { resultText: this.composeResultText() });
         })
 
         EventBus.on('use-item', (payload: { instanceId: string }) => {
@@ -749,89 +603,25 @@ export class Game extends Scene {
     }
 
     private openStatus(): void {
-        const lines: string[] = [];
-
-        lines.push(`現在の階層：${this.floor}`);
-        lines.push(`総経過ターン数：${this.dungeon.getTurnCount()}`);
-        lines.push(`現在の階層のターン数：${this.dungeon.getFloorTurnCount()}`);
-        lines.push(`レベル：${this.player.level}`);
-        lines.push(`次のレベルまでの経験値：${this.player.expToNextLevel() - this.player.exp}`);
-        lines.push('');
-
-        const displayParams = this.getDisplayParams(true);
-        for (const [key, value] of displayParams) {
-            lines.push(`${key}：${value}`);
-        }
-        if (!displayParams.has('状態')) {
-            lines.push('状態：なし');
-        }
-        lines.push('');
-
-        lines.push(`武器：${this.player.getEquippedWeapon()?.getLabelWithModifiers() ?? 'なし'}`);
-        lines.push(`メイン防具：${this.player.getEquippedMainArmor()?.getLabelWithModifiers() ?? 'なし'}`);
-        lines.push(`サブ防具１：${this.player.getEquippedSubArmor1()?.getLabelWithModifiers() ?? 'なし'}`);
-        lines.push(`サブ防具２：${this.player.getEquippedSubArmor2()?.getLabelWithModifiers() ?? 'なし'}`);
-        lines.push('');
-
-        const inventory = this.player.getInventory();
-        lines.push(`アイテム(${inventory.getUsedCapacity()}/${inventory.getCapacity()})：`);
-        const items = inventory.getItems();
-        if (items.length > 0) {
-            for (const item of items) {
-                lines.push(item.getLabelWithModifiers());
-            }
-        } else {
-            lines.push('なし');
-        }
-
-        EventBus.emit('open-status', lines.join('\n'));
+        EventBus.emit('open-status', buildStatusText({
+            floor: this.floor,
+            dungeon: this.dungeon,
+            player: this.player,
+        }));
     }
 
-    private buildResultText(): string {
-        const lines: string[] = [];
-
-        lines.push(`最終到達階層：${this.floor}`);
-        lines.push(`総経過ターン数：${this.dungeon.getTurnCount()}`);
-        lines.push(`レベル：${this.player.level}`);
-        lines.push(`次のレベルまでの経験値：${this.player.expToNextLevel() - this.player.exp}`);
-        lines.push(`倒した敵の数：${this.player.getEnemiesDefeated()}`);
-        lines.push(`使ったアイテムの数：${this.player.getItemsUsed()}`);
-        lines.push('');
-
-        const displayParams = this.getDisplayParams(true);
-        for (const [key, value] of displayParams) {
-            lines.push(`${key}：${value}`);
-        }
-        if (!displayParams.has('状態')) {
-            lines.push('状態：なし');
-        }
-        lines.push('');
-
-        lines.push(`武器：${this.player.getEquippedWeapon()?.getLabelWithModifiers() ?? 'なし'}`);
-        lines.push(`メイン防具：${this.player.getEquippedMainArmor()?.getLabelWithModifiers() ?? 'なし'}`);
-        lines.push(`サブ防具１：${this.player.getEquippedSubArmor1()?.getLabelWithModifiers() ?? 'なし'}`);
-        lines.push(`サブ防具２：${this.player.getEquippedSubArmor2()?.getLabelWithModifiers() ?? 'なし'}`);
-        lines.push('');
-
-        const inventory = this.player.getInventory();
-        lines.push(`アイテム(${inventory.getUsedCapacity()}/${inventory.getCapacity()})：`);
-        const items = inventory.getItems();
-        if (items.length > 0) {
-            for (const item of items) {
-                lines.push(item.getLabelWithModifiers());
-            }
-        } else {
-            lines.push('なし');
-        }
-        lines.push('');
-
-        lines.push('設定');
-        lines.push(`プレイヤーの視界：${this.viewRange}`);
-        lines.push(`フォグの有無：${this.enableFog ? 'あり' : 'なし'}`);
-        lines.push(`常に敵を表示：${this.revealAll ? 'ON' : 'OFF'}`);
-        lines.push(`デバッグコマンド：${this.debugCommands ? 'ON' : 'OFF'}`);
-
-        return lines.join('\n');
+    private composeResultText(): string {
+        return buildResultText({
+            floor: this.floor,
+            dungeon: this.dungeon,
+            player: this.player,
+            settings: {
+                viewRange: this.viewRange,
+                enableFog: this.enableFog,
+                revealAll: this.revealAll,
+                debugCommands: this.debugCommands,
+            },
+        });
     }
 
     private toggleList(mode: 'item' | 'equip' | 'skill'): void {
@@ -1029,40 +819,6 @@ export class Game extends Scene {
     //     }
     // }
 
-    private spawnEnemies(dungeon: DungeonMap, config: ResolvedFloorConfig, excludePositions: integer[][] = []): void {
-        // 固定敵を先に配置
-        for (const { name, count } of config.fixedEnemies) {
-            const positions = dungeon.getRandomPosList(count, false, {
-                withoutPlayer: true,
-                withoutSecretRoom: true,
-                excludePositionList: excludePositions,
-            });
-            for (const pos of positions) {
-                const enemy = Player.createEnemyByName(name, pos[0], pos[1]);
-                if (enemy) dungeon.addEnemy(enemy);
-                excludePositions.push(pos);
-            }
-        }
-
-        // 残りスロットをランダムプールから配置
-        const fixedTotal = config.fixedEnemies.reduce((sum, e) => sum + e.count, 0);
-        const randomCount = Math.max(0, config.enemyCount - fixedTotal);
-        if (randomCount > 0 && config.randomEnemyPool.length > 0) {
-            const positions = dungeon.getRandomPosList(randomCount, false, {
-                withoutPlayer: true,
-                withoutSecretRoom: true,
-                excludePositionList: excludePositions,
-            });
-            for (const pos of positions) {
-                const name = config.randomEnemyPool[Math.floor(Math.random() * config.randomEnemyPool.length)];
-                const enemy = Player.createEnemyByName(name, pos[0], pos[1]);
-                if (enemy) dungeon.addEnemy(enemy);
-            }
-        }
-
-        console.log(`Spawned enemies on floor ${this.floor} (fixed: ${fixedTotal}, random: ${randomCount})`);
-    }
-
     /** ミニマップ表示更新（モードコントローラから呼ばれる）。 */
     renderMinimap(): void {
         this.miniMapView.render(this.dungeon, this.revealAll);
@@ -1173,30 +929,6 @@ export class Game extends Scene {
         this.dungeon.searchAt(targetX, targetY);
         this.render();
         this.mode.enterDefaultMode();
-    }
-
-    /**
-     * treasure.items の重み付き抽選で 1 アイテムを決定し、指定 modifier を強制付与する。
-     * フロアの itemModifierChance とは独立。
-     */
-    private pickTreasureItem(entries: ResolvedTreasureItemEntry[]): Item | null {
-        if (entries.length === 0) return null;
-        const total = entries.reduce((s, e) => s + e.bias, 0);
-        if (total <= 0) return null;
-        let r = Math.random() * total;
-        let picked: ResolvedTreasureItemEntry | undefined;
-        for (const e of entries) {
-            r -= e.bias;
-            if (r < 0) { picked = e; break; }
-        }
-        if (!picked) picked = entries[entries.length - 1];
-
-        const item = Player.createItem(picked.name);
-        if (!item) return null;
-        for (const m of picked.modifiers) {
-            item.setModifierCount(m.name, m.count);
-        }
-        return item;
     }
 
     /**
