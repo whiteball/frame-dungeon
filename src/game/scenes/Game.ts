@@ -7,20 +7,15 @@ import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
 import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
-import { TrapsLoader } from '../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
-import { EffectsLoader } from '../../lib/EffectsLoader';
 import { getFrontCandidates } from '../../lib/skills/TargetResolver';
-import { makeStatFluctuatedMessage } from '../../lib/util/text';
-import { StatsLoader } from '../../lib/StatsLoader';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
-import { ItemObject, TreasureObject } from '../../lib/map/MapObjects';
 import { setupDebugCommands } from './game/GameDebugCommands';
 import { populateFloor } from './game/FloorPopulator';
 import { SceneModeController } from './game/SceneModeController';
-import type { SceneAction } from './game/SceneModeController';
 import { buildDisplayParams, buildStatusText, buildResultText } from './game/StatusReportBuilder';
 import { ItemListController } from './game/ItemListController';
+import { MapInteractionHandler } from './game/MapInteractionHandler';
 import { BaseLoader } from '../../lib/BaseLoader';
 import { SaveManager } from '../../lib/SaveManager';
 import { YamlCrossValidator } from '../../lib/YamlCrossValidator';
@@ -51,8 +46,9 @@ export class Game extends Scene {
     params: Map<string, number | string>;
     player: Player;
 
-    private mode = new SceneModeController(this);
+    mode = new SceneModeController(this);
     private list = new ItemListController(this);
+    private interaction = new MapInteractionHandler(this);
     private viewRange = 3;
     private enableFog = true;
     private revealAll = false;
@@ -313,7 +309,7 @@ export class Game extends Scene {
         this.keys.keyC?.on('down', () => {
             if (this.mode.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
-            this.trySearch();
+            this.interaction.trySearch();
         })
 
         this.keys.keyEsc?.on('down', () => {
@@ -419,71 +415,6 @@ export class Game extends Scene {
                 if (a && !a.disabled) a.onClick();
             });
         });
-    }
-
-    /**
-     * トラップの effect 配列を順次適用する。damage で死亡した場合は早期 return
-     */
-    private applyTrapEffects(trapDef: TrapDefinition): void {
-        const turn = this.dungeon.getTurnCount();
-        EventBus.emit('message-log', `${trapDef.label}を踏んだ！`, turn);
-
-        for (const effect of trapDef.effect) {
-            if (effect.type === 'stat' && typeof effect.target === 'string' && typeof effect.value === 'number') {
-                const target = effect.target;
-                const value = effect.value;
-                const before = this.player.getStat(target);
-                this.player.addStat(target, value);
-                const delta = this.player.getStat(target) - before;
-                const statsLoader = StatsLoader.getInstance();
-
-                if (statsLoader.isFluctuationAllowed(target) && value < 0) {
-                    // 変動する値ならダメージ表記
-                    const damage = -delta;
-                    EventBus.emit('attack-flash', 0xFF2222);
-                    EventBus.emit('message-log',
-                        `${damage}のダメージ！(残り${statsLoader.getAbbreviation(target)}: ${this.player.getStat(target)}/${this.player.getEffectiveMaxStat(target)})`,
-                        turn);
-                    const cleared = this.player.notifyDamageTaken();
-                    for (const c of cleared) {
-                        EventBus.emit('message-log', `${c.label}が解けた`, turn);
-                    }
-                } else if (delta !== 0) {
-                    // それ以外は汎用的な変動ログ
-                    const statName = statsLoader.getAbbreviation(target) || target;
-                    EventBus.emit('message-log', makeStatFluctuatedMessage(statName, delta), turn);
-                }
-                const deadVars = {
-                    ...this.player.getFormulaVars(),
-                    currentFloor: this.floor,
-                    maxFloor: BaseLoader.getInstance().getGoalFloor(),
-                };
-                if (BaseLoader.getInstance().isDead(deadVars)) {
-                    EventBus.emit('game-over');
-                    return;
-                }
-            } else if (effect.type === 'addEffect' && typeof effect.value === 'string') {
-                const effName = effect.value;
-                const result = this.player.applyStatusEffect(effName);
-                const def = EffectsLoader.getInstance().getEffect(effName);
-                const label = def?.label ?? effName;
-                if (result === 'applied') {
-                    EventBus.emit('message-log', `${label}状態になった！`, turn);
-                } else if (result === 'resisted') {
-                    EventBus.emit('message-log', `${label}を耐性で防いだ！`, turn);
-                }
-            } else if (effect.type === 'unequip') {
-                // トラップによる強制装備解除は cannot_unequip を無視する（ローグライク慣例）
-                const slots: Array<'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2'> =
-                    ['weapon', 'main_armor', 'sub_armor1', 'sub_armor2'];
-                for (const slot of slots) {
-                    const removed = this.player.unequipItem(slot);
-                    if (removed) {
-                        EventBus.emit('message-log', `${removed.getLabelWithModifiers()}が外れた`, turn);
-                    }
-                }
-            }
-        }
     }
 
     private openStatus(): void {
@@ -593,84 +524,6 @@ export class Game extends Scene {
         });
     }
 
-    private trySearch(): void {
-        const { x, y, direction } = this.dungeon.getPlayerPos();
-        const [fdx, fdy] = getDirectionOffset(direction);
-        const [rdx, rdy] = getDirectionOffset(rotateDirection(direction, 1));
-        const centerCell: [integer, integer] = [x + fdx, y + fdy];
-        const rightCell: [integer, integer] = [centerCell[0] + rdx, centerCell[1] + rdy];
-        const leftCell: [integer, integer] = [centerCell[0] - rdx, centerCell[1] - rdy];
-
-        const actions: SceneAction[] = [
-            {
-                label: '左',
-                onClick: () => this.executeSearch('左', leftCell[0], leftCell[1]),
-            },
-            {
-                label: '中央',
-                onClick: () => this.executeSearch('中央', centerCell[0], centerCell[1]),
-            },
-            {
-                label: '右',
-                onClick: () => this.executeSearch('右', rightCell[0], rightCell[1]),
-            },
-            {
-                label: 'キャンセル',
-                onClick: () => this.mode.enterDefaultMode(),
-            },
-        ];
-
-        this.mode.setSceneActions(actions);
-        this.mode.setModeLabel('調査方向選択中');
-    }
-
-    private executeSearch(directionLabel: string, targetX: integer, targetY: integer): void {
-        const turnCount = this.dungeon.getTurnCount();
-        EventBus.emit('message-log', `${directionLabel}を調べた。`, turnCount);
-
-        const objects = this.dungeon.getObject(targetX, targetY);
-        const treasure = objects.find(o => o instanceof TreasureObject) as TreasureObject | undefined;
-        if (treasure) {
-            this.openTreasure(treasure, targetX, targetY);
-            this.render();
-            this.mode.enterDefaultMode();
-            return;
-        }
-
-        this.dungeon.searchAt(targetX, targetY);
-        this.render();
-        this.mode.enterDefaultMode();
-    }
-
-    /**
-     * 宝箱を開封する。
-     * 1. メッセージログを出力
-     * 2. trapRate でトラップ発動判定し、trapPool 非空ならランダム1つ選んで applyTrapEffects
-     * 3. TreasureObject を削除し、抽選アイテムを ItemObject として同セルに配置
-     * 4. dispatchObjectEvent でターン進行
-     */
-    private openTreasure(treasure: TreasureObject, x: integer, y: integer): void {
-        const turn = this.dungeon.getTurnCount();
-        EventBus.emit('message-log', `宝箱を開けた！`, turn);
-
-        if (Math.random() < treasure.trapRate && treasure.trapPool.length > 0) {
-            const trapName = treasure.trapPool[Phaser.Math.Between(0, treasure.trapPool.length - 1)];
-            const trapDef = TrapsLoader.getInstance().getTrap(trapName);
-            if (trapDef) {
-                this.applyTrapEffects(trapDef);
-            }
-        }
-
-        this.dungeon.removeMapObject(treasure);
-        const itemObj = new ItemObject(treasure.item);
-        itemObj.x = x;
-        itemObj.y = y;
-        this.dungeon.placeObject(itemObj);
-        EventBus.emit('message-log', `${treasure.item.getLabelWithModifiers()}が出てきた`, turn);
-
-        this.dungeon.dispatchObjectEvent();
-    }
-
     private enterStairMode(dungeon: DungeonMap): void {
         const goalFloor = BaseLoader.getInstance().getGoalFloor();
         if (this.floor >= goalFloor) {
@@ -694,7 +547,7 @@ export class Game extends Scene {
         this.mode.enterTrapConfirmMode(() => {
             trapObject.visible = true;
             this.executeAction(() => {
-                this.applyTrapEffects(trapDef);
+                this.interaction.applyTrapEffects(trapDef);
                 this.dungeon.dispatchObjectEvent();
                 return true;
             });
@@ -760,7 +613,7 @@ export class Game extends Scene {
     private buildDungeonRestoreCallbacks(): DungeonRestoreCallbacks {
         return {
             onEnterStair: (dungeon: DungeonMap) => this.enterStairMode(dungeon),
-            applyTrapEffects: (def: TrapDefinition) => this.applyTrapEffects(def),
+            applyTrapEffects: (def: TrapDefinition) => this.interaction.applyTrapEffects(def),
             enterTrapConfirmMode: (def: TrapDefinition, obj: MapObject) => this.enterTrapConfirmMode(def, obj),
         };
     }
