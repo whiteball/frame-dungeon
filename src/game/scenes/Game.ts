@@ -7,7 +7,6 @@ import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
 import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
-import type { Enemy } from '../../lib/Enemy';
 import type { Item } from '../../lib/Item';
 import { ItemsLoader } from '../../lib/ItemsLoader';
 import { formatItemTypeLabel, formatItemEffect } from '../../lib/ItemDescriptionFormatter';
@@ -22,14 +21,15 @@ import { StatsLoader } from '../../lib/StatsLoader';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
 import { ItemObject, TreasureObject } from '../../lib/map/MapObjects';
 import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
+import { setupDebugCommands } from './game/GameDebugCommands';
+import { SceneModeController } from './game/SceneModeController';
+import type { SceneAction } from './game/SceneModeController';
 import { BaseLoader } from '../../lib/BaseLoader';
 import type { ResolvedFloorConfig, ResolvedTreasureItemEntry } from '../../lib/BaseLoader';
 import { SaveManager } from '../../lib/SaveManager';
 import { YamlCrossValidator } from '../../lib/YamlCrossValidator';
 import type { SaveData } from '../../lib/SaveManager';
 import type { DungeonRestoreCallbacks } from '../../lib/MapGenerator';
-
-type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 
 export class Game extends Scene {
     keys: {
@@ -57,11 +57,7 @@ export class Game extends Scene {
 
     private listMode: 'item' | 'equip' | 'drop' | 'skill' | null = null;
     private pendingPickup: { mapObject: MapObject, item: Item } | null = null;
-    private defaultSceneActions: SceneAction[] = [];
-    private currentSceneActions: SceneAction[] = [];
-    private get isModalMode(): boolean {
-        return this.currentSceneActions !== this.defaultSceneActions;
-    }
+    private mode = new SceneModeController(this);
     private viewRange = 3;
     private enableFog = true;
     private revealAll = false;
@@ -69,7 +65,6 @@ export class Game extends Scene {
     private swapSandShiftS = false;
     private debugCommands = false;
     private pendingSaveData: SaveData | null = null;
-    private minimapMoveEnteredFromFullMap = false;
 
     constructor() {
         super('Game');
@@ -200,11 +195,11 @@ export class Game extends Scene {
         EventBus.on('long-stay-warning', (stage: number, message: string, turn: number) => {
             EventBus.emit('message-log', message, turn);
             if (stage === 3) {
-                this.exitStairMode();
+                this.mode.enterDefaultMode();
                 this.floor++;
                 EventBus.emit('go-to-next-floor', this.dungeon);
             } else {
-                this.enterLongStayWarningMode();
+                this.mode.enterLongStayWarningMode();
             }
         });
 
@@ -339,8 +334,8 @@ export class Game extends Scene {
         miniMapZone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
             if (pointer.rightButtonDown()) {
                 if (this.miniMapView.isMoveMode()) {
-                    this.exitMinimapMoveMode();
-                } else if (!this.isModalMode) {
+                    this.mode.exitMinimapMoveMode();
+                } else if (!this.mode.isModalMode) {
                     if (this.miniMapView.getFullMapMode()) {
                         // 全体マップモード: クリック座標からタイル座標を計算してズーム移動モードへ
                         const relX = pointer.x - miniMapX;
@@ -352,16 +347,16 @@ export class Game extends Scene {
                         const playerPos = this.dungeon.getPlayerPos();
                         this.miniMapView.toggleMapMode();
                         localStorage.setItem('frame_dungeon_minimap_full', 'false');
-                        this.enterMinimapMoveMode(tileX - playerPos.x, tileY - playerPos.y, true);
+                        this.mode.enterMinimapMoveMode(tileX - playerPos.x, tileY - playerPos.y, true);
                         this.miniMapView.render(this.dungeon, this.revealAll);
                     } else {
-                        this.enterMinimapMoveMode();
+                        this.mode.enterMinimapMoveMode();
                     }
                 }
                 return;
             }
-            if (this.isModalMode) return;
-            this.toggleMiniMapMode();
+            if (this.mode.isModalMode) return;
+            this.mode.toggleMiniMapMode();
         });
         this.infoView = new InfoView(this.add, this.game.canvas.width - 10 - 200, 220, 200, 180);
         this.equipmentView = new EquipmentView(this.add, this.game.canvas.width - 10 - 200, 405, 200, 130);
@@ -385,12 +380,12 @@ export class Game extends Scene {
                 this.miniMapView.render(this.dungeon, this.revealAll);
                 return;
             }
-            if (this.isModalMode) return;
+            if (this.mode.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.executeAction(() => this.dungeon.goPlayer() > 0);
         })
         this.keys.keySpace?.on('down', (event: KeyboardEvent) => {
-            if (this.isModalMode) return;
+            if (this.mode.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.tryAttackOrShowDirections(event.shiftKey);
         })
@@ -400,7 +395,7 @@ export class Game extends Scene {
                 this.miniMapView.render(this.dungeon, this.revealAll);
                 return;
             }
-            if (this.isModalMode) return;
+            if (this.mode.isModalMode) return;
             if (this.swapQEandAD) {
                 if (this.handlePlayerActionDirective()) return;
                 this.executeAction(() => this.dungeon.goLeftPlayer() > 0);
@@ -414,7 +409,7 @@ export class Game extends Scene {
                 this.miniMapView.render(this.dungeon, this.revealAll);
                 return;
             }
-            if (this.isModalMode) return;
+            if (this.mode.isModalMode) return;
             const doStrafeBack = this.swapSandShiftS ? !event.shiftKey : event.shiftKey;
             if (doStrafeBack) {
                 if (this.handlePlayerActionDirective()) return;
@@ -429,7 +424,7 @@ export class Game extends Scene {
                 this.miniMapView.render(this.dungeon, this.revealAll);
                 return;
             }
-            if (this.isModalMode) return;
+            if (this.mode.isModalMode) return;
             if (this.swapQEandAD) {
                 if (this.handlePlayerActionDirective()) return;
                 this.executeAction(() => this.dungeon.goRightPlayer() > 0);
@@ -438,7 +433,7 @@ export class Game extends Scene {
             }
         })
         this.keys.keyE?.on('down', () => {
-            if (this.isModalMode) return;
+            if (this.mode.isModalMode) return;
             if (this.swapQEandAD) {
                 this.executeAction(() => this.dungeon.turnRightPlayer());
             } else {
@@ -447,7 +442,7 @@ export class Game extends Scene {
             }
         })
         this.keys.keyQ?.on('down', () => {
-            if (this.isModalMode) return;
+            if (this.mode.isModalMode) return;
             if (this.swapQEandAD) {
                 this.executeAction(() => this.dungeon.turnLeftPlayer());
             } else {
@@ -458,25 +453,25 @@ export class Game extends Scene {
         this.keys.keyM?.on('down', (event: KeyboardEvent) => {
             if (event.shiftKey) {
                 if (this.miniMapView.isMoveMode()) {
-                    this.exitMinimapMoveMode();
-                } else if (!this.isModalMode && !this.miniMapView.getFullMapMode()) {
-                    this.enterMinimapMoveMode();
+                    this.mode.exitMinimapMoveMode();
+                } else if (!this.mode.isModalMode && !this.miniMapView.getFullMapMode()) {
+                    this.mode.enterMinimapMoveMode();
                 }
                 return;
             }
-            if (this.isModalMode) return;
-            this.toggleMiniMapMode();
+            if (this.mode.isModalMode) return;
+            this.mode.toggleMiniMapMode();
         })
 
         this.keys.keyC?.on('down', () => {
-            if (this.isModalMode) return;
+            if (this.mode.isModalMode) return;
             if (this.handlePlayerActionDirective()) return;
             this.trySearch();
         })
 
         this.keys.keyEsc?.on('down', () => {
             if (this.miniMapView.isMoveMode()) {
-                this.exitMinimapMoveMode();
+                this.mode.exitMinimapMoveMode();
             }
         })
 
@@ -601,7 +596,7 @@ export class Game extends Scene {
                 EventBus.emit('message-log', `セーブに失敗しました: ${msg}`, this.dungeon.getTurnCount());
                 EventBus.emit('close-save-dialog');
             }
-            this.setSceneActions(this.defaultSceneActions);
+            this.mode.enterDefaultMode();
         });
 
         EventBus.on('export-save', async ({ memo }: { memo: string }) => {
@@ -620,7 +615,7 @@ export class Game extends Scene {
                 this.input.keyboard.resetKeys();
                 this.input.keyboard.enabled = true;
             }
-            this.setSceneActions(this.defaultSceneActions);
+            this.mode.enterDefaultMode();
         });
 
         if (this.pendingSaveData) {
@@ -638,18 +633,17 @@ export class Game extends Scene {
         EventBus.emit('current-scene-ready', this);
 
         if (this.debugCommands) {
-            this.setupDebugCommands();
+            setupDebugCommands(this);
         }
 
-        this.defaultSceneActions = [
+        this.mode.initDefaultActions([
             { label: 'スキル', onClick: () => this.toggleList('skill') },
             { label: 'アイテム使用', onClick: () => this.toggleList('item') },
             { label: '装備変更', onClick: () => this.toggleList('equip') },
             { label: 'ステータス', onClick: () => this.openStatus() },
             { label: '足下', onClick: () => this.onUnderfoot() },
             { label: 'セーブ', onClick: () => this.openSaveDialog() },
-        ];
-        this.setSceneActions(this.defaultSceneActions);
+        ]);
 
         // 数字キー 1〜0 をアクションボタンの左から順に割り当てる
         // アイテム一覧表示中は keyboard.enabled = false により自動的に無効化される
@@ -667,7 +661,7 @@ export class Game extends Scene {
         ];
         numberKeyCodes.forEach((code, i) => {
             this.input.keyboard?.addKey(code)?.on('down', () => {
-                const a = this.currentSceneActions[i];
+                const a = this.mode.current[i];
                 if (a && !a.disabled) a.onClick();
             });
         });
@@ -1035,226 +1029,6 @@ export class Game extends Scene {
     //     }
     // }
 
-    /**
-     * DevTools コンソールから利用するデバッグ用関数を `window` に公開する。
-     * 全関数は `（debug）` プレフィックス付きでメッセージログに発行する。
-     */
-    private setupDebugCommands(): void {
-        const w = window as unknown as Record<string, unknown>;
-
-        // window.listMapItems() - 現在フロアの床アイテム一覧
-        w.listMapItems = () => {
-            const turn = this.dungeon.getTurnCount();
-            const result: Array<{ x: number; y: number; name: string; label: string; modifiers: Record<string, number> }> = [];
-            for (const obj of this.dungeon.getObjects().values()) {
-                if (obj instanceof ItemObject) {
-                    const modifiers = Object.fromEntries(obj.item.getModifiers());
-                    result.push({
-                        x: obj.x,
-                        y: obj.y,
-                        name: obj.item.getName(),
-                        label: obj.item.getLabelWithModifiers(),
-                        modifiers,
-                    });
-                }
-            }
-            console.log(`[listMapItems] 床アイテム ${result.length} 個 (floor=${this.floor}):`);
-            console.table(result);
-            EventBus.emit('message-log', `（debug）床アイテム ${result.length} 個（詳細はコンソール参照）`, turn);
-            return result;
-        };
-
-        // window.addItem('iron sword', 1) - 名前指定でアイテムをインベントリに追加（modifier 抽選なし）
-        w.addItem = (name: string, count: number = 1): number => {
-            const turn = this.dungeon.getTurnCount();
-            const inventory = this.player.getInventory();
-            let added = 0;
-            for (let i = 0; i < count; i++) {
-                const item = Player.createItem(name);
-                if (!item) {
-                    EventBus.emit('message-log', `（debug）${name} は未定義アイテム`, turn);
-                    break;
-                }
-                if (!inventory.addItem(item)) {
-                    EventBus.emit('message-log', `（debug）インベントリ満杯のため追加中断`, turn);
-                    break;
-                }
-                added++;
-            }
-            if (added > 0) {
-                EventBus.emit('message-log', `（debug）${name} を ${added} 個追加`, turn);
-                this.render();
-            }
-            return added;
-        };
-
-        // window.addTestItems() - 動作確認用の代表アイテムを一括追加
-        w.addTestItems = (): string[] => {
-            const turn = this.dungeon.getTurnCount();
-            const names = ['iron sword', 'round shield', 'silver ring', 'potion', 'power potion', 'mana potion'];
-            const inventory = this.player.getInventory();
-            const added: string[] = [];
-            for (const name of names) {
-                const item = Player.createItem(name);
-                if (!item) continue;
-                if (!inventory.addItem(item)) break;
-                added.push(name);
-            }
-            EventBus.emit('message-log', `（debug）テストアイテム ${added.length} 個を追加`, turn);
-            this.render();
-            return added;
-        };
-
-        // window.addItemModifier('weapon', 'power_reinforced', 2) - 装備中アイテムに modifier 付与
-        w.addItemModifier = (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string, count: number = 1): boolean => {
-            const target = this.player.getItemInSlot(slot);
-            const turn = this.dungeon.getTurnCount();
-            if (!target) {
-                EventBus.emit('message-log', `（debug）${slot} に装備中のアイテムがありません`, turn);
-                return false;
-            }
-            const ok = target.setModifierCount(name, count);
-            if (ok) {
-                EventBus.emit('message-log', `（debug）${target.getLabelWithModifiers()} に ${name} を付与`, turn);
-                this.render();
-            } else {
-                EventBus.emit('message-log', `（debug）${name} は未定義 or 対象 type 不一致`, turn);
-            }
-            return ok;
-        };
-
-        // window.removeItemModifier('weapon', 'cursed') - modifier 除去
-        w.removeItemModifier = (slot: 'weapon' | 'main_armor' | 'sub_armor1' | 'sub_armor2', name: string): boolean => {
-            const target = this.player.getItemInSlot(slot);
-            const turn = this.dungeon.getTurnCount();
-            if (!target) {
-                EventBus.emit('message-log', `（debug）${slot} に装備中のアイテムがありません`, turn);
-                return false;
-            }
-            const ok = target.removeModifier(name);
-            if (ok) {
-                EventBus.emit('message-log', `（debug）${target.getLabelWithModifiers()} から ${name} を除去`, turn);
-                this.render();
-            } else {
-                EventBus.emit('message-log', `（debug）${target.getLabel()} は ${name} を持っていません`, turn);
-            }
-            return ok;
-        };
-
-        // window.applyStatusEffect('poison') - プレイヤーに状態異常を付与
-        w.applyStatusEffect = (name: string): string => {
-            const result = this.player.applyStatusEffect(name);
-            if (result === 'applied') {
-                EventBus.emit('message-log', `（debug）${name} を付与`, this.dungeon.getTurnCount());
-                this.render();
-            } else if (result === 'resisted') {
-                EventBus.emit('message-log', `（debug）${name} を耐性で防いだ`, this.dungeon.getTurnCount());
-            } else {
-                EventBus.emit('message-log', `（debug）${name} は未定義 effect`, this.dungeon.getTurnCount());
-            }
-            return result;
-        };
-
-        // window.applyStatusEffectToEnemy('poison') - 敵に状態異常付与
-        // instanceId 未指定なら視界内で最も近い生存敵を選択
-        w.applyStatusEffectToEnemy = (name: string, instanceId?: string): string => {
-            const turn = this.dungeon.getTurnCount();
-            const enemies = this.dungeon.getEnemies().filter(e => e.isAlive());
-            let target: Enemy | null = (instanceId ? enemies.find(e => e.getInstanceId() === instanceId) : undefined) ?? null;
-            if (!target) {
-                const { x: px, y: py } = this.dungeon.getPlayerPos();
-                let best: Enemy | null = null;
-                let bestDist = Infinity;
-                for (const e of enemies) {
-                    if (!this.dungeon.hasLineOfSight(e.x, e.y, px, py)) continue;
-                    const d = Math.max(Math.abs(e.x - px), Math.abs(e.y - py));
-                    if (d < bestDist) { best = e; bestDist = d; }
-                }
-                target = best;
-            }
-            if (!target) {
-                EventBus.emit('message-log', `（debug）対象の敵が見つかりません`, turn);
-                return 'no-target';
-            }
-            const result = target.applyStatusEffect(name);
-            if (result === 'applied') {
-                EventBus.emit('message-log', `（debug）${target.getLabel()}に${name}を付与`, turn);
-                this.render();
-            } else if (result === 'resisted') {
-                EventBus.emit('message-log', `（debug）${target.getLabel()}は${name}を耐性で防いだ`, turn);
-            } else {
-                EventBus.emit('message-log', `（debug）${name} は未定義 effect`, turn);
-            }
-            return result;
-        };
-
-        // window.learnSkill('double_attack') - スキル習得
-        w.learnSkill = (name: string): boolean => {
-            const ok = this.player.learnSkill(name);
-            EventBus.emit('message-log',
-                ok ? `（debug）スキル「${name}」を習得` : `（debug）スキル「${name}」習得失敗（未定義 or 既習得）`,
-                this.dungeon.getTurnCount());
-            return ok;
-        };
-
-        // window.forgetSkill('double_attack') - スキル習得取り消し
-        w.forgetSkill = (name: string): boolean => {
-            const ok = this.player.forgetSkill(name);
-            EventBus.emit('message-log',
-                ok ? `（debug）スキル「${name}」を忘却` : `（debug）スキル「${name}」は未習得`,
-                this.dungeon.getTurnCount());
-            return ok;
-        };
-
-        // window.listSkills() - 習得済みスキル一覧
-        w.listSkills = (): string[] => this.player.getLearnedSkillNames();
-
-        // window.addExp(50) - 経験値加算（mastery 抽選含む）
-        w.addExp = (n: number) => {
-            const result = this.player.addExp(n);
-            EventBus.emit('message-log', `（debug）経験値+${n}`, this.dungeon.getTurnCount());
-            const skillsLoader = SkillsLoader.getInstance();
-            for (const lv of result.levels) {
-                EventBus.emit('message-log', `レベルアップ！Lv${lv.level}`, this.dungeon.getTurnCount());
-                for (const skillName of lv.learnedSkills) {
-                    const label = skillsLoader.getSkill(skillName)?.label ?? skillName;
-                    EventBus.emit('message-log', `スキル「${label}」を習得した！`, this.dungeon.getTurnCount());
-                }
-            }
-            this.render();
-            return result;
-        };
-
-        // window.levelUpN(3) - 経験値を介さず直接 n 回 levelUp（mastery 抽選確認用）
-        w.levelUpN = (n: number = 1): string[] => {
-            const allLearned: string[] = [];
-            for (let i = 0; i < n; i++) {
-                const learned = this.player.levelUp();
-                allLearned.push(...learned);
-                EventBus.emit('message-log', `（debug）レベルアップ！Lv${this.player.level}`, this.dungeon.getTurnCount());
-                for (const skillName of learned) {
-                    const label = SkillsLoader.getInstance().getSkill(skillName)?.label ?? skillName;
-                    EventBus.emit('message-log', `スキル「${label}」を習得した！`, this.dungeon.getTurnCount());
-                }
-            }
-            this.render();
-            return allLearned;
-        };
-
-        // window.findPath(1,1,2,7,false) - 経路探索結果をコンソール出力
-        w.findPath = (
-            startX: integer,
-            startY: integer,
-            endX: integer,
-            endY: integer,
-            room: boolean,
-            blacked: [number, number][] = []
-        ) => {
-            const result = this.dungeon.findPath(startX, startY, endX, endY, {scope: room ? 'room' : 'full', blockedPositions: blacked});
-            console.debug(result);
-        };
-    }
-
     private spawnEnemies(dungeon: DungeonMap, config: ResolvedFloorConfig, excludePositions: integer[][] = []): void {
         // 固定敵を先に配置
         for (const { name, count } of config.fixedEnemies) {
@@ -1289,40 +1063,8 @@ export class Game extends Scene {
         console.log(`Spawned enemies on floor ${this.floor} (fixed: ${fixedTotal}, random: ${randomCount})`);
     }
 
-    private setSceneActions(actions: SceneAction[]): void {
-        this.currentSceneActions = actions;
-        EventBus.emit('scene-actions', actions);
-    }
-
-    private setModeLabel(label: string): void {
-        EventBus.emit('set-mode-label', label);
-    }
-
-    private toggleMiniMapMode(): void {
-        const isFullMap = this.miniMapView.toggleMapMode();
-        localStorage.setItem('frame_dungeon_minimap_full', String(isFullMap));
-        this.miniMapView.render(this.dungeon, this.revealAll);
-    }
-
-    private enterMinimapMoveMode(initialOffsetX = 0, initialOffsetY = 0, fromFullMap = false): void {
-        this.minimapMoveEnteredFromFullMap = fromFullMap;
-        this.miniMapView.enterMoveMode(initialOffsetX, initialOffsetY);
-        this.setSceneActions([{
-            label: 'キャンセル',
-            onClick: () => this.exitMinimapMoveMode(),
-        }]);
-        this.setModeLabel('ミニマップズーム移動中');
-    }
-
-    private exitMinimapMoveMode(): void {
-        this.miniMapView.exitMoveMode();
-        if (this.minimapMoveEnteredFromFullMap) {
-            this.minimapMoveEnteredFromFullMap = false;
-            this.miniMapView.toggleMapMode();
-            localStorage.setItem('frame_dungeon_minimap_full', 'true');
-        }
-        this.setSceneActions(this.defaultSceneActions);
-        this.setModeLabel('');
+    /** ミニマップ表示更新（モードコントローラから呼ばれる）。 */
+    renderMinimap(): void {
         this.miniMapView.render(this.dungeon, this.revealAll);
     }
 
@@ -1363,95 +1105,25 @@ export class Game extends Scene {
             }
         }
 
-        const invalidPos:[number, number] = [-1, -1];
-        this.enterAttackDirectionMode(
+        const invalidPos: [number, number] = [-1, -1];
+        this.mode.enterAttackDirectionMode(
             hasCenterEnemy ? centerCell : invalidPos,
             hasRightEnemy ? rightCell : invalidPos,
             hasLeftEnemy ? leftCell : invalidPos,
+            (x, y) => this.executeAction(() => this.dungeon.attackEnemyAt(x, y)),
         );
-    }
-
-    private enterAttackDirectionMode(
-        centerCell: [integer, integer],
-        rightCell: [integer, integer],
-        leftCell: [integer, integer],
-    ): void {
-        const actions: SceneAction[] = [
-            {
-                label: '左',
-                disabled: leftCell[0] < 0,
-                onClick: () => this.executeAttackDirection(leftCell[0], leftCell[1]),
-            },
-            {
-                label: '中央',
-                disabled: centerCell[0] < 0,
-                onClick: () => this.executeAttackDirection(centerCell[0], centerCell[1]),
-            },
-            {
-                label: '右',
-                disabled: rightCell[0] < 0,
-                onClick: () => this.executeAttackDirection(rightCell[0], rightCell[1]),
-            },
-            {
-                label: 'キャンセル',
-                onClick: () => this.exitAttackDirectionMode(),
-            },
-        ];
-
-        this.setSceneActions(actions);
-        this.setModeLabel('攻撃方向選択中');
-    }
-
-    private executeAttackDirection(targetX: integer, targetY: integer): void {
-        this.exitAttackDirectionMode();
-        this.executeAction(() => this.dungeon.attackEnemyAt(targetX, targetY));
-    }
-
-    private exitAttackDirectionMode(): void {
-        this.setSceneActions(this.defaultSceneActions);
-        this.setModeLabel('');
     }
 
     /**
      * target: front スキルの方向選択モードに移行する。
      * 左/中央/右/キャンセル の 4 ボタンを表示し、選択でスキル発動、
-     * キャンセルでコスト未消費・defaultSceneActions に復帰する。
+     * キャンセルでコスト未消費でデフォルトモードに復帰する。
      */
     private enterSkillTargetSelectMode(skillName: string): void {
         const candidates = getFrontCandidates(this.dungeon);
-        const actions: SceneAction[] = [
-            {
-                label: '左',
-                disabled: !candidates[0].valid,
-                onClick: () => this.executeSkillWithFront(skillName, candidates[0].cell),
-            },
-            {
-                label: '中央',
-                disabled: !candidates[1].valid,
-                onClick: () => this.executeSkillWithFront(skillName, candidates[1].cell),
-            },
-            {
-                label: '右',
-                disabled: !candidates[2].valid,
-                onClick: () => this.executeSkillWithFront(skillName, candidates[2].cell),
-            },
-            {
-                label: 'キャンセル',
-                onClick: () => this.exitSkillTargetSelectMode(),
-            },
-        ];
-        this.setSceneActions(actions);
-        this.setModeLabel('スキル方向選択中');
-    }
-
-    private executeSkillWithFront(skillName: string, cell: { x: integer; y: integer }): void {
-        this.exitSkillTargetSelectMode();
-        this.executeAction(() => this.dungeon.useSkill(skillName, cell));
-    }
-
-    private exitSkillTargetSelectMode(): void {
-        this.setSceneActions(this.defaultSceneActions);
-        this.setModeLabel('');
+        this.mode.enterSkillTargetSelectMode(candidates, (cell) => {
+            this.executeAction(() => this.dungeon.useSkill(skillName, cell));
+        });
     }
 
     private trySearch(): void {
@@ -1477,12 +1149,12 @@ export class Game extends Scene {
             },
             {
                 label: 'キャンセル',
-                onClick: () => this.exitAttackDirectionMode(),
+                onClick: () => this.mode.enterDefaultMode(),
             },
         ];
 
-        this.setSceneActions(actions);
-        this.setModeLabel('調査方向選択中');
+        this.mode.setSceneActions(actions);
+        this.mode.setModeLabel('調査方向選択中');
     }
 
     private executeSearch(directionLabel: string, targetX: integer, targetY: integer): void {
@@ -1494,13 +1166,13 @@ export class Game extends Scene {
         if (treasure) {
             this.openTreasure(treasure, targetX, targetY);
             this.render();
-            this.exitAttackDirectionMode();
+            this.mode.enterDefaultMode();
             return;
         }
 
         this.dungeon.searchAt(targetX, targetY);
         this.render();
-        this.exitAttackDirectionMode();
+        this.mode.enterDefaultMode();
     }
 
     /**
@@ -1564,26 +1236,11 @@ export class Game extends Scene {
             return;
         }
         EventBus.emit('message-log', `${this.floor + 1}階への階段だ`, dungeon.getTurnCount());
-        const actions: SceneAction[] = [
-            {
-                label: '進む',
-                onClick: () => {
-                    this.exitStairMode();
-                    this.floor++;
-                    EventBus.emit('message-log', `${this.floor}階に移動した`, dungeon.getTurnCount());
-                    EventBus.emit('go-to-next-floor', dungeon);
-                },
-            },
-            {
-                label: 'やめる',
-                onClick: () => this.exitStairMode(),
-            },
-        ];
-        this.setSceneActions(actions);
-    }
-
-    private exitStairMode(): void {
-        this.setSceneActions(this.defaultSceneActions);
+        this.mode.enterStairConfirmMode(() => {
+            this.floor++;
+            EventBus.emit('message-log', `${this.floor}階に移動した`, dungeon.getTurnCount());
+            EventBus.emit('go-to-next-floor', dungeon);
+        });
     }
 
     private enterTrapConfirmMode(trapDef: TrapDefinition, trapObject: MapObject): void {
@@ -1591,43 +1248,14 @@ export class Game extends Scene {
         EventBus.emit('message-log', `トラップ：${trapDef.label}`, turn);
         EventBus.emit('message-log', `説明：${trapDef.description}`, turn);
         EventBus.emit('message-log', `このトラップを起動しますか？`, turn);
-        const actions: SceneAction[] = [
-            {
-                label: '起動',
-                onClick: () => {
-                    this.exitTrapConfirmMode();
-                    trapObject.visible = true;
-                    this.executeAction(() => {
-                        this.applyTrapEffects(trapDef);
-                        this.dungeon.dispatchObjectEvent();
-                        return true;
-                    });
-                },
-            },
-            {
-                label: 'やめる',
-                onClick: () => this.exitTrapConfirmMode(),
-            },
-        ];
-        this.setSceneActions(actions);
-    }
-
-    private exitTrapConfirmMode(): void {
-        this.setSceneActions(this.defaultSceneActions);
-    }
-
-    private enterLongStayWarningMode(): void {
-        const actions: SceneAction[] = [
-            {
-                label: '確認',
-                onClick: () => this.exitLongStayWarningMode(),
-            },
-        ];
-        this.setSceneActions(actions);
-    }
-
-    private exitLongStayWarningMode(): void {
-        this.setSceneActions(this.defaultSceneActions);
+        this.mode.enterTrapConfirmMode(() => {
+            trapObject.visible = true;
+            this.executeAction(() => {
+                this.applyTrapEffects(trapDef);
+                this.dungeon.dispatchObjectEvent();
+                return true;
+            });
+        });
     }
 
     /**
@@ -1663,7 +1291,7 @@ export class Game extends Scene {
     }
 
     private openSaveDialog(): void {
-        this.setSceneActions([]);
+        this.mode.setSceneActions([]);
         if (this.input.keyboard) this.input.keyboard.enabled = false;
         EventBus.emit('open-save-dialog', {
             floor: this.floor,
