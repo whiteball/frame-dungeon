@@ -16,6 +16,7 @@ YAML ファイルによるデータ定義の仕組みと、各 Loader、`base.ym
 - **traps.yml**（`public/data/traps.yml`）: トラップの定義（トゲの床、毒の沼、装備解除罠など）
 - **skills.yml**（`public/data/skills.yml`）: スキル定義（コスト・ターゲット・action 列・習得条件）。詳細は [skills.md](./skills.md) を参照
 - **item_modifiers.yml**（`public/data/item_modifiers.yml`）: アイテム修飾状態（呪い・強化・弱化など）の定義。`effect[].name` は `add_stats`（formula 評価結果を target stat に加算）/ `cannot_unequip`（装備解除ブロック）のいずれかをオブジェクト形式で記述。`target: [weapon|main_armor|sub_armor|consumable]` で適用可能 type を指定、`countable: true` の modifier は `max` と `initial.{min,max}` を伴い重ねがけ可能。`kind` タグで解呪等の一括除去対象を分類、`weight` はフロア床配置・敵ドロップ時の抽選重み。詳細は [items.md](./items.md) の「アイテム修飾状態（modifier）」節を参照。ZIP カスタムデータでは欠落許容（後方互換のため optional 扱い）
+- **events.yml**（`public/data/events.yml`）: 汎用イベントオブジェクト（回復ポイント・祭壇・能力依存判定・選択肢メニュー等）の定義。`base.yml.floors[].events` で参照し、`MapInteractionHandler.investigateEvent` が C キー調査経由で起動する。詳細は [events.md](./events.md) を参照
 
 各データファイルは対応するLoaderクラス（`BaseLoader`、`StatsLoader`、`ItemsLoader`、`EnemyLoader`、`EffectsLoader`、`TrapsLoader`、`SkillsLoader`、`ItemModifiersLoader`）によって読み込まれます。
 
@@ -168,6 +169,10 @@ floors:
       extraDoorRate: 0.3        # 任意。MST 連結後に冗長隣接へ扉を追加する確率 (0..1)。未指定で 0.3
       respawnCycle: 20          # 任意。敵リスポーン間隔ターン数。未指定で 20
       longStayTurns: 1500       # 任意。長居警告/強制移動の規定ターン数（絶対値）。指定時は longStayFactor より優先
+      eventCount: { min: 1, max: 2 }  # 任意。配置するイベント数（trapCount と同形：数値単独 or { min, max }）
+      events:                   # 任意。出現イベントプール（events.yml 参照）
+        - healing_fountain      # 文字列で重み 1
+        - { name: heavy_rock, weight: 2 }  # オブジェクトで重み指定
       treasure:                 # 任意。隠し部屋に出現する宝箱の設定（secretRoom 有効時のみ機能）
         rate: 0.5               # 各隠し部屋ごとの宝箱出現確率 (0..1)
         trapRate: 0.5           # 開封時にトラップ発動する確率 (0..1)
@@ -297,9 +302,10 @@ autoSpawner:
 
 `YamlCrossValidator.validate()`（`src/lib/YamlCrossValidator.ts`）は `GameDataLoader.loadAll()`（`src/lib/GameDataLoader.ts`）で全 Loader の `load()` を完了させた直後に走り、以下のクロス参照を検証する：
 
-- `base.yml` の `floors[].enemies` / `floors[].traps` 名が `enemies.yml` / `traps.yml` に存在するか
+- `base.yml` の `floors[].enemies` / `floors[].traps` / `floors[].events` 名が `enemies.yml` / `traps.yml` / `events.yml` に存在するか
 - `traps.yml` の `effect[].type === 'addEffect'` の `value` が `effects.yml` に存在するか
 - `items.yml` の `effect.immediate.learnSkill` が `skills.yml` に存在するか
+- `events.yml` action 内のクロス参照（`give_item` → items / `spawn_enemy` → enemies / `learn_skill` / `execute_skill` → skills / `add_modifier` → item_modifiers / `apply_effect.effect` → effects 等）
 - `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` 要素が `effects.yml` に存在するか
 - `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
 

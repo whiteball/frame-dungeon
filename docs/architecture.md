@@ -14,6 +14,7 @@
 | [architecture/items.md](./architecture/items.md) | アイテムシステム・アイテム修飾状態（modifier）・状態異常/強化システム・トラップシステム |
 | [architecture/gameplay.md](./architecture/gameplay.md) | シーンアクションボタン・セーブ/ロード・カスタムデータ機能（ZIP インポート） |
 | [architecture/skills.md](./architecture/skills.md) | スキルシステム全般（定義・コスト評価・target 解決・action 実行・パッシブスキル） |
+| [architecture/events.md](./architecture/events.md) | 汎用イベントオブジェクト（`events.yml` フォーマット・action 種別・選択肢/rate 分岐・配置） |
 
 ## トピック早見表
 
@@ -40,3 +41,4 @@
 | スキル `target` スコープ解決（front/around/room/map/self/hit） | [skills.md](./architecture/skills.md) |
 | 実装済み action（`attack` / `damage` / `heal` / `reveal_trap` / `apply_effect`） | [skills.md](./architecture/skills.md) |
 | 敵のパッシブスキル（`trigger: on_attack`） | [skills.md](./architecture/skills.md) |
+| 汎用イベントオブジェクト（回復ポイント / 祭壇 / 能力依存判定） | [events.md](./architecture/events.md) |
