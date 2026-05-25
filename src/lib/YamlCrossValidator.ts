@@ -148,6 +148,43 @@ export class YamlCrossValidator {
                     }
                 }
             }
+            // base.yml floors[].events / eventCount → events.yml
+            if (rawConfig.eventCount !== undefined) {
+                const ec = rawConfig.eventCount;
+                if (typeof ec === 'number') {
+                    if (!isFinite(ec) || ec < 0) {
+                        errors.push(`base.yml floors[${floorKey}]: eventCount は 0 以上の数値である必要があります`);
+                    }
+                } else if (ec && typeof ec === 'object' && !Array.isArray(ec)) {
+                    if (typeof (ec as any).min !== 'number' || typeof (ec as any).max !== 'number') {
+                        errors.push(`base.yml floors[${floorKey}]: eventCount は数値または { min, max } の形式で指定してください`);
+                    }
+                } else {
+                    errors.push(`base.yml floors[${floorKey}]: eventCount は数値または { min, max } の形式で指定してください`);
+                }
+            }
+            if (rawConfig.events !== undefined && rawConfig.events !== null) {
+                if (!Array.isArray(rawConfig.events)) {
+                    errors.push(`base.yml floors[${floorKey}]: events は配列である必要があります`);
+                } else {
+                    for (let i = 0; i < rawConfig.events.length; i++) {
+                        const entry = rawConfig.events[i];
+                        const name = typeof entry === 'string' ? entry : entry?.name;
+                        if (typeof name !== 'string' || !name) {
+                            errors.push(`base.yml floors[${floorKey}]: events[${i}] は文字列または { name, weight } である必要があります`);
+                            continue;
+                        }
+                        if (!events.has(name)) {
+                            errors.push(`base.yml floors[${floorKey}]: events[${i}].name "${name}" が events.yml に存在しません`);
+                        }
+                        if (entry && typeof entry === 'object' && entry.weight !== undefined) {
+                            if (typeof entry.weight !== 'number' || entry.weight <= 0) {
+                                errors.push(`base.yml floors[${floorKey}]: events[${i}].weight は正の数値である必要があります`);
+                            }
+                        }
+                    }
+                }
+            }
             if (rawConfig.enemyDropPool !== undefined) {
                 if (!Array.isArray(rawConfig.enemyDropPool)) {
                     errors.push(`base.yml floors[${floorKey}]: enemyDropPool は配列である必要があります`);

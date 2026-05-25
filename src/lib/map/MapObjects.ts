@@ -5,6 +5,8 @@ import type { ObjectEvent } from '../MapObject';
 import { EventBus } from '../../game/EventBus';
 import type { TrapDefinition } from '../TrapsLoader';
 import type { Item } from '../Item';
+import type { EventDefinition } from '../EventsLoader';
+import { applyAppearance } from '../AppearanceSpec';
 
 export class StairsObject extends MapObject {
   constructor() {
@@ -42,6 +44,30 @@ export class TreasureObject extends MapObject {
     this.color = 0xFFD700;
     this.shape = MapShape.CUBE;
     this.visible = true;
+  }
+}
+
+/**
+ * `events.yml` で定義された汎用イベントオブジェクト。
+ * 調査 (C キー方向選択経由) でのみ発動する。`blocking: true`（既定）の場合は
+ * 宝箱と同様に進入禁止セル化される（`DungeonMap.isCellBlocked` 経由）。
+ *
+ * イベントハンドラの差し込みは `buildEventObject` (mapObjectFactory) で行う。
+ */
+export class EventObject extends MapObject {
+  constructor(public readonly eventDef: EventDefinition) {
+    super();
+    // 既定の見た目（青系球体）。appearance 指定があれば上書きする
+    this.mark = MapMark.STAR;
+    this.color = 0x88CCFF;
+    this.shape = MapShape.SPHERE;
+    this.visible = true;
+    applyAppearance(this, eventDef.appearance);
+  }
+
+  /** blocking: true（既定）なら進入禁止セル化対象 */
+  get isBlocking(): boolean {
+    return this.eventDef.blocking ?? true;
   }
 }
 

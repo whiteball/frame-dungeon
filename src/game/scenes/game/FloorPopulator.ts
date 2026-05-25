@@ -2,9 +2,10 @@ import { BaseLoader } from '../../../lib/BaseLoader';
 import type { ResolvedFloorConfig, ResolvedTreasureItemEntry } from '../../../lib/BaseLoader';
 import { ItemsLoader } from '../../../lib/ItemsLoader';
 import { TrapsLoader } from '../../../lib/TrapsLoader';
+import { EventsLoader } from '../../../lib/EventsLoader';
 import { ItemFactory } from '../../../lib/ItemFactory';
 import { EnemyFactory } from '../../../lib/EnemyFactory';
-import { ItemObject, TreasureObject } from '../../../lib/map/MapObjects';
+import { EventObject, ItemObject, TreasureObject } from '../../../lib/map/MapObjects';
 import type { DungeonMap, DungeonRestoreCallbacks } from '../../../lib/MapGenerator';
 import type { Item } from '../../../lib/Item';
 import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
@@ -113,6 +114,29 @@ export function populateFloor(args: {
         excludePositionList.push(trapPos);
     }
 
+    // イベントオブジェクトの配置（base.yml の events / eventCount に従う）
+    if (floorConfig.eventPool.length > 0 && floorConfig.eventMax > 0) {
+        const eventCount = randInt(floorConfig.eventMin, floorConfig.eventMax);
+        const eventPositions = dungeon.getRandomPosList(eventCount, false, {
+            withoutCorridor: true,
+            withoutDoor: true,
+            withoutPlayer: true,
+            withoutSecretRoom: true,
+            excludePositionList,
+        });
+        for (const pos of eventPositions) {
+            const eventDef = pickWeightedEvent(floorConfig.eventPool);
+            if (!eventDef) continue;
+            const def = EventsLoader.getInstance().getEvent(eventDef);
+            if (!def) continue;
+            const eventObj = new EventObject(def);
+            eventObj.x = pos[0];
+            eventObj.y = pos[1];
+            dungeon.placeObject(eventObj);
+            excludePositionList.push(pos);
+        }
+    }
+
     // アイテムの配置
     const itemDefs = ItemsLoader.getInstance().getItems();
     if (itemDefs.length > 0) {
@@ -138,6 +162,21 @@ export function populateFloor(args: {
 
     // 敵の配置
     spawnEnemies(dungeon, floor, floorConfig, excludePositionList);
+}
+
+/**
+ * eventPool の重み付き抽選で 1 イベント名を決定する。
+ */
+function pickWeightedEvent(pool: { name: string; weight: number }[]): string | null {
+    if (pool.length === 0) return null;
+    const total = pool.reduce((s, e) => s + e.weight, 0);
+    if (total <= 0) return null;
+    let r = Math.random() * total;
+    for (const e of pool) {
+        r -= e.weight;
+        if (r < 0) return e.name;
+    }
+    return pool[pool.length - 1].name;
 }
 
 /**

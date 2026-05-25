@@ -14,7 +14,7 @@ import { executePlayerOnTurnSkill, isPlayerPassiveBlocked, isPlayerDead } from '
 import { dumpDungeon } from './map/MapDebug';
 import { findPath, findContainingZone, isInZone, hasLineOfSight, type FindPathOptions } from './map/Pathfinding';
 import { BaseLoader } from './BaseLoader';
-import { StairsObject, TrapObject, ItemObject, TreasureObject } from './map/MapObjects';
+import { StairsObject, TrapObject, ItemObject, TreasureObject, EventObject } from './map/MapObjects';
 import { ItemsLoader } from './ItemsLoader';
 import { Item } from './Item';
 import { TrapsLoader } from './TrapsLoader';
@@ -515,6 +515,7 @@ export class DungeonMap {
     if (this.getEnemy(x, y)) return true;
     for (const obj of this._objectStore.getAt(x, y)) {
       if (obj instanceof TreasureObject) return true;
+      if (obj instanceof EventObject && obj.isBlocking) return true;
     }
     return false;
   }

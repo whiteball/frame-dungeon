@@ -2,6 +2,7 @@ import yaml from 'js-yaml';
 import { Parser, type Expression } from 'expr-eval-fork';
 import { EnemyLoader, type EnemyDropEntry } from './EnemyLoader';
 import { TrapsLoader } from './TrapsLoader';
+import { EventsLoader } from './EventsLoader';
 
 interface RawLevelUpBonusSpec {
     target: string;
@@ -65,6 +66,16 @@ export interface FloorConfigRaw {
      * 指定があれば width*height*longStayFactor よりも優先される。
      */
     longStayTurns?: number;
+    /**
+     * このフロアに配置するイベントオブジェクト数。
+     * 数値単独で固定数、`{ min, max }` で範囲指定（trapCount と同形）。未指定は 0。
+     */
+    eventCount?: number | { min: number; max: number };
+    /**
+     * 出現するイベント名のプール。`string` で重み 1、`{ name, weight }` で重み指定可能。
+     * 未指定/空のとき eventCount > 0 であれば warn（trapPool と同様）。
+     */
+    events?: (string | { name: string; weight?: number })[] | null;
 }
 
 export interface TreasureItemEntryRaw {
@@ -116,6 +127,11 @@ export interface ResolvedFloorConfig {
      * null のときはトップレベルの longStayFactor を用いて width*height*factor で算出される。
      */
     longStayTurns: number | null;
+    /** 配置するイベント数の下限・上限。eventPool が空のとき eventMax は 0 にクランプ */
+    eventMin: number;
+    eventMax: number;
+    /** イベント名 → 抽選重みの正規化済みプール */
+    eventPool: { name: string; weight: number }[];
 }
 
 export class BaseLoader {
@@ -587,6 +603,39 @@ export class BaseLoader {
             ? Math.floor(raw.longStayTurns)
             : null;
 
+        // イベント配置の正規化
+        const eventPool: { name: string; weight: number }[] = [];
+        const eventsLoader = EventsLoader.getInstance();
+        for (const entry of raw.events ?? []) {
+            const name = typeof entry === 'string' ? entry : entry?.name;
+            if (typeof name !== 'string' || !name) continue;
+            if (!eventsLoader.has(name)) {
+                console.error(`base.yml floors[${key}]: イベント "${name}" が events.yml に存在しません。スキップします`);
+                continue;
+            }
+            const weight = typeof entry === 'string'
+                ? 1
+                : (typeof entry?.weight === 'number' && isFinite(entry.weight) && entry.weight > 0 ? entry.weight : 1);
+            eventPool.push({ name, weight });
+        }
+
+        let eventMin = 0;
+        let eventMax = 0;
+        if (typeof raw.eventCount === 'number' && isFinite(raw.eventCount)) {
+            eventMin = Math.max(0, Math.floor(raw.eventCount));
+            eventMax = eventMin;
+        } else if (raw.eventCount && typeof raw.eventCount === 'object') {
+            const min = typeof raw.eventCount.min === 'number' && isFinite(raw.eventCount.min) ? Math.floor(raw.eventCount.min) : 0;
+            const max = typeof raw.eventCount.max === 'number' && isFinite(raw.eventCount.max) ? Math.floor(raw.eventCount.max) : min;
+            eventMin = Math.max(0, Math.min(min, max));
+            eventMax = Math.max(0, Math.max(min, max));
+        }
+        if (eventMin > 0 && eventPool.length === 0) {
+            console.warn(`base.yml floors[${key}]: eventCount=${eventMin} ですが events リストが空です。イベントは配置されません`);
+            eventMin = 0;
+            eventMax = 0;
+        }
+
         return {
             width, height,
             enemyCount: raw.enemyCount ?? 0,
@@ -600,6 +649,7 @@ export class BaseLoader {
             extraDoorRate,
             respawnCycle,
             longStayTurns,
+            eventMin, eventMax, eventPool,
         };
     }
 }

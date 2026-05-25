@@ -110,6 +110,14 @@ floors:
       traps:
         - spike
         - healing_pad
+      eventCount:
+        min: 1
+        max: 2
+      events:
+        - healing_fountain
+        - mysterious_altar
+        - heavy_rock
+        - tempting_chest
       itemModifierChance: 0.25
       secretRoom: yes
       # フロア共通の敵ドロップ。enemies.yml の drop に additive
