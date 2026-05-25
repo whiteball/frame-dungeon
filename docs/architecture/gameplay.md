@@ -16,13 +16,18 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム使�
 
 ### モーダルモードとキーブロック（`isModalMode`）
 
-`Game` シーンは `isModalMode` ゲッター（`currentSceneActions !== defaultSceneActions`）でモーダル状態を判定し、W/A/S/D/スペースキーの入力を一律ブロックします。以下の状態が該当します：
+モーダル状態は `SceneModeController`（`src/game/scenes/game/SceneModeController.ts`）が管理します。`isModalMode` ゲッターは `currentSceneActions !== defaultSceneActions` で判定され、`Game` シーン側はキー入力ハンドラで `this.mode.isModalMode` を見て W/A/S/D/スペースキーの入力を一律ブロックします。以下の状態が該当します：
 
 - **攻撃方向選択**: 正面斜め方向に複数敵がいるとき「左/中央/右/キャンセル」を表示
+- **スキル方向選択**: `target: front` のスキル発動時に「左/中央/右/キャンセル」を表示
 - **階段確認**: 階段マスを踏む（`around-0`）または足下アクション（`around-0-self`）で `enterStairMode` → 「進む/やめる」
 - **トラップ確認**: 既知のトラップで足下アクションを使用したとき `enterTrapConfirmMode` → 「起動/やめる」
+- **長居警告**: フロアの規定ターン数を 50% / 75% 超過時に「確認」のみを表示
+- **ミニマップズーム移動**: 「キャンセル」のみを表示し、WASD でミニマップをスクロール
+- **調査方向選択**: C キーで「左/中央/右/キャンセル」を表示（`MapInteractionHandler.trySearch()`）
+- **セーブダイアログ表示中**: シーンアクション列を空に差し替えてキー入力をブロック
 
-各モードの終了（「やめる」「キャンセル」含む）で `setSceneActions(defaultSceneActions)` を呼び、`isModalMode` が偽に戻ります。
+各モードの終了（「やめる」「キャンセル」含む）で `SceneModeController.enterDefaultMode()` を呼び、`isModalMode` が偽に戻ります。
 
 ### `around-0-self` イベント
 

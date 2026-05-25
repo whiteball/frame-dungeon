@@ -16,8 +16,8 @@ import { SceneModeController } from './game/SceneModeController';
 import { buildDisplayParams, buildStatusText, buildResultText } from './game/StatusReportBuilder';
 import { ItemListController } from './game/ItemListController';
 import { MapInteractionHandler } from './game/MapInteractionHandler';
+import { SaveLoadController } from './game/SaveLoadController';
 import { BaseLoader } from '../../lib/BaseLoader';
-import { SaveManager } from '../../lib/SaveManager';
 import { YamlCrossValidator } from '../../lib/YamlCrossValidator';
 import type { SaveData } from '../../lib/SaveManager';
 import type { DungeonRestoreCallbacks } from '../../lib/MapGenerator';
@@ -49,6 +49,7 @@ export class Game extends Scene {
     mode = new SceneModeController(this);
     private list = new ItemListController(this);
     private interaction = new MapInteractionHandler(this);
+    private saveLoad = new SaveLoadController(this);
     private viewRange = 3;
     private enableFog = true;
     private revealAll = false;
@@ -124,11 +125,9 @@ export class Game extends Scene {
         EventBus.removeAllListeners('update-view');
         EventBus.removeAllListeners('game-over');
         EventBus.removeAllListeners('game-clear');
-        EventBus.removeAllListeners('save-to-slot');
-        EventBus.removeAllListeners('export-save');
-        EventBus.removeAllListeners('close-save-dialog');
         EventBus.removeAllListeners('long-stay-warning');
         this.list.register();
+        this.saveLoad.register();
 
         this.floor = 1;
         const dun = new DungeonMap(15, 15, this.viewRange, this.enableFog);
@@ -335,39 +334,6 @@ export class Game extends Scene {
             this.scene.start('GameClear', { resultText: this.composeResultText() });
         })
 
-        EventBus.on('save-to-slot', async ({ slot, memo }: { slot: number; memo: string }) => {
-            try {
-                const saveData = await this.buildSaveData(memo);
-                SaveManager.saveToSlot(slot, saveData);
-                EventBus.emit('close-save-dialog');
-                EventBus.emit('message-log', `スロット${slot}にセーブしました`, this.dungeon.getTurnCount());
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e);
-                EventBus.emit('message-log', `セーブに失敗しました: ${msg}`, this.dungeon.getTurnCount());
-                EventBus.emit('close-save-dialog');
-            }
-            this.mode.enterDefaultMode();
-        });
-
-        EventBus.on('export-save', async ({ memo }: { memo: string }) => {
-            try {
-                const saveData = await this.buildSaveData(memo);
-                SaveManager.downloadSaveFile(saveData);
-                EventBus.emit('message-log', 'セーブデータをエクスポートしました', this.dungeon.getTurnCount());
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e);
-                EventBus.emit('message-log', `エクスポートに失敗しました: ${msg}`, this.dungeon.getTurnCount());
-            }
-        });
-
-        EventBus.on('close-save-dialog', () => {
-            if (this.input.keyboard) {
-                this.input.keyboard.resetKeys();
-                this.input.keyboard.enabled = true;
-            }
-            this.mode.enterDefaultMode();
-        });
-
         if (this.pendingSaveData) {
             const sd = this.pendingSaveData;
             this.floor = sd.floor;
@@ -392,7 +358,7 @@ export class Game extends Scene {
             { label: '装備変更', onClick: () => this.list.toggleList('equip') },
             { label: 'ステータス', onClick: () => this.openStatus() },
             { label: '足下', onClick: () => this.list.onUnderfoot() },
-            { label: 'セーブ', onClick: () => this.openSaveDialog() },
+            { label: 'セーブ', onClick: () => this.saveLoad.openSaveDialog() },
         ]);
 
         // 数字キー 1〜0 をアクションボタンの左から順に割り当てる
@@ -584,30 +550,6 @@ export class Game extends Scene {
             }
             this.render();
         }
-    }
-
-    private openSaveDialog(): void {
-        this.mode.setSceneActions([]);
-        if (this.input.keyboard) this.input.keyboard.enabled = false;
-        EventBus.emit('open-save-dialog', {
-            floor: this.floor,
-            gameName: BaseLoader.getInstance().getName(),
-        });
-    }
-
-    private async buildSaveData(memo: string): Promise<SaveData> {
-        const yamlDigest = await SaveManager.calculateDigest();
-        return {
-            meta: {
-                savedAt: new Date().toISOString(),
-                memo,
-                gameName: BaseLoader.getInstance().getName(),
-                yamlDigest,
-            },
-            floor: this.floor,
-            player: this.player.serialize(),
-            dungeon: this.dungeon.serialize(),
-        };
     }
 
     private buildDungeonRestoreCallbacks(): DungeonRestoreCallbacks {

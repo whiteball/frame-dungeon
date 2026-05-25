@@ -35,7 +35,31 @@ Phaser のシーン構成は `src/game/main.ts` で定義：`Boot` → `Preloade
 - フロア進行とプレイヤー状態管理（`BaseLoader.getFloorConfig(floor)` でサイズ・敵プール・トラップ数を取得）
 - UIテキストの日本語フォントレンダリング
 
+`Game.ts` 本体は薄いオーケストレータに留め、責務ごとの実装は `src/game/scenes/game/` 配下のヘルパーモジュールへ委譲します（後述「Game シーンのヘルパーモジュール構成」）。
+
 **ゴール到達処理:** `enterStairMode()` で `this.floor >= BaseLoader.getGoalFloor()` のとき `GameClear` シーンへ遷移。それ以外は階段確認ダイアログ→`floor++`→マップ再生成。
+
+## Game シーンのヘルパーモジュール構成
+
+`src/game/scenes/game/` 配下に Game シーンの責務別ヘルパーを配置しています。`Game.ts` はこれらをフィールドとして保持し、入力ハンドラ・EventBus 受信・default シーンアクションのコールバックから呼び出します。
+
+- **SceneModeController**（`SceneModeController.ts`）: モーダルモード状態機械。`defaultSceneActions` / `currentSceneActions` / `isModalMode` を内部で保持し、攻撃方向選択 / スキル方向選択 / 階段確認 / トラップ確認 / 長居警告 / ミニマップズーム移動 の各 enter/exit を一手に提供。`SceneAction` 型もここから export
+- **ItemListController**（`ItemListController.ts`）: アイテム / 装備 / スキル / 設置（drop）一覧 UI の状態管理。`use-item` / `use-skill` / `equip-item` / `close-item-list-request` / `open-drop-list-for-pickup` / `drop-item` の各 EventBus ハンドラ登録と、`toggleList` / `onUnderfoot` / `closeList` の公開メソッドを提供
+- **MapInteractionHandler**（`MapInteractionHandler.ts`）: マップ上の対話可能オブジェクトとの相互作用処理（`applyTrapEffects` / `trySearch` / `executeSearch` / `openTreasure`）。「祭壇」「スイッチ」「看板」等の将来の調査ギミックもここに集約する想定。`applyTrapEffects` は踏み発動・トラップ起動モード起動・宝箱トラップ・セーブデータ復元の各経路から呼ばれる
+- **SaveLoadController**（`SaveLoadController.ts`）: セーブ / ロード周りの UI 制御。`save-to-slot` / `export-save` / `close-save-dialog` の EventBus ハンドラと、`openSaveDialog` / `buildSaveData` を提供
+- **FloorPopulator**（`FloorPopulator.ts`）: `populateFloor({dungeon, floor, callbacks})` 関数として、フロア入室時の初期配置（リサイズ・ビルド・階段・宝箱・トラップ・床アイテム・敵の配置）を一括実行。`go-to-next-floor` イベントハンドラから呼ばれる
+- **StatusReportBuilder**（`StatusReportBuilder.ts`）: 表示用 stat マップ構築（`buildDisplayParams`）とステータス画面・リザルト画面のテキスト組み立て（`buildStatusText` / `buildResultText`）を提供する関数群
+- **GameDebugCommands**（`GameDebugCommands.ts`）: `setupDebugCommands(game)` で DevTools コンソール用デバッグ関数（`window.listMapItems` / `addItem` / `applyStatusEffect` / `learnSkill` 等）を一括登録。設定ダイアログの「デバッグコマンド」フラグが ON のときのみ呼ばれる
+
+`Game.ts` には以下が残置されています：
+
+- Phaser Scene ライフサイクル（`init` / `create` / フィールド宣言）
+- キー入力ハンドラ（WASD / Space / Q / E / M / C / Esc / 数字キー）
+- ヘルパーのインスタンス生成と `register()` 呼び出し
+- `render()` と `executeAction(action)`（攻撃 flash キュー処理）、`renderMinimap()`
+- モード遷移の薄いラッパ（`enterStairMode` / `enterTrapConfirmMode` / `enterSkillTargetSelectMode` / `handlePlayerActionDirective` / `tryAttackOrShowDirections`）
+- `buildDungeonRestoreCallbacks()`（`populateFloor` とセーブ復元の双方で使用するため Game.ts に集約）
+- `pendingSaveData` の `init`→`create` フロー
 
 **マップオブジェクト生成:** `src/lib/map/MapObjects.ts` が `StairsObject` / `TrapObject` / `ItemObject` の `MapObject` 派生クラスを定義し、`src/game/scenes/mapObjectFactory.ts` の `buildStairsObject` / `buildTrapObject` が `Game.ts` 側のコールバックと組み合わせてイベントハンドラを差し込む。`ItemObject` は `Enemy` と同様にインスタンス（`Item`）を保持する（`ItemDefinition` ではない）。床に落ちているアイテム自体が個別の状態（修飾状態 modifier 等）を持てるようにするため、生成時に `Player.createItem(name, options?)` 経由で `Item` を作って `new ItemObject(item)` に渡し、拾得時はその `Item` を再生成せず直接インベントリへ追加する。
 
