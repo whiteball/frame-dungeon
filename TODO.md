@@ -207,6 +207,9 @@
 - [ ] エラーハンドリングの強化
 - [ ] パフォーマンス最適化
 - [ ] テストコードの作成
+- [ ] `src/lib/Player.ts` の更なる分割（武器・防具周りの機能追加が一段落した後に着手）
+  - [ ] 装備管理（`equippedWeapon` / `equippedMainArmor` / `equippedSubArmor1/2` スロットと `equipItem` / `unequipItem` / `predictEquipSlot` / `getEquippedSlotOf` 等）を `PlayerEquipment` に分離。`getEffectiveStat` / `applyAddModifierEffect` / `applyRemoveModifierKindEffect` が装備スロットに直接アクセスしているので、事前に `getAllEquippedItems()` / `getItemInSlot(slot)` 経由へ統一するリファクタリングが必要
+  - [ ] 状態異常・持続効果・実効値計算（`applyImmediateEffect` / `applyContinuousEffect` / `tickStatusEffects` / `notifyDamageTaken` / `getEffectiveStat` / `getEffectiveResists` などの約 460 行）を `PlayerEffectManager` に分離。`activeContinuousEffects` / `activeStatusEffects` の所有を移し、Player からは委譲する形にする
 
 ### ドキュメント
 
