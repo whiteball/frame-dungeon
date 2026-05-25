@@ -471,6 +471,20 @@ export class Game extends Scene {
         });
     }
 
+    /**
+     * アイテム（巻物）からの target='front' スキル発動用の方向選択モードに移行する。
+     * 確定時のみ useConsumableItem(instanceId, { skillTargetCell }) を呼び、
+     * アイテム消費とスキル発動を一括で行う。キャンセル時は何も起こらない（アイテム非消費）。
+     *
+     * ItemListController から use-item ハンドラ経由で呼ばれるため public。
+     */
+    enterSkillFromItemTargetSelectMode(instanceId: string): void {
+        const candidates = getFrontCandidates(this.dungeon);
+        this.mode.enterSkillTargetSelectMode(candidates, (cell) => {
+            this.executeAction(() => this.dungeon.useConsumableItem(instanceId, { skillTargetCell: cell }));
+        });
+    }
+
     private enterStairMode(dungeon: DungeonMap): void {
         const goalFloor = BaseLoader.getInstance().getGoalFloor();
         if (this.floor >= goalFloor) {

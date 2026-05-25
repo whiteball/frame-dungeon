@@ -850,9 +850,13 @@ export class DungeonMap {
 
   /**
    * プレイヤーが消耗品を使用する
+   * @param options skillTargetCell: executeSkill が target='front' のスキルを発動する場合の方向選択結果
    */
-  public useConsumableItem(instanceId: string): boolean {
-    return PlayerActions.useConsumableItem(this, instanceId);
+  public useConsumableItem(
+    instanceId: string,
+    options?: { skillTargetCell?: { x: integer; y: integer } },
+  ): boolean {
+    return PlayerActions.useConsumableItem(this, instanceId, options);
   }
 
   /**

@@ -79,6 +79,9 @@ function formatImmediateLines(imm: ImmediateEffect): string[] {
             case 'learnSkill':
                 lines.push(`${INDENT}スキル習得：${skillLabel(String(value))}`);
                 break;
+            case 'executeSkill':
+                lines.push(`${INDENT}スキル発動：${skillLabel(String(value))}`);
+                break;
             case 'add_modifier':
                 lines.push(`${INDENT}付与：${modifierLabel(String(value))}`);
                 break;

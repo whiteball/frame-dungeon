@@ -270,6 +270,15 @@ export class YamlCrossValidator {
                             if (typeof v === 'string' && !skills.hasSkill(v)) {
                                 errors.push(`items.yml "${item.name}": immediate.learnSkill "${v}" が skills.yml に存在しません`);
                             }
+                        } else if (k === 'executeSkill') {
+                            if (typeof v === 'string') {
+                                const skillDef = skills.getSkill(v);
+                                if (!skillDef) {
+                                    errors.push(`items.yml "${item.name}": immediate.executeSkill "${v}" が skills.yml に存在しません`);
+                                } else if ((skillDef.trigger ?? 'active') !== 'active') {
+                                    errors.push(`items.yml "${item.name}": immediate.executeSkill "${v}" はパッシブスキル（trigger=${skillDef.trigger}）のため指定できません`);
+                                }
+                            }
                         } else if (k === 'add_modifier') {
                             if (typeof v === 'string' && !itemModifiers.has(v)) {
                                 errors.push(`items.yml "${item.name}": immediate.add_modifier "${v}" が item_modifiers.yml に存在しません`);

@@ -1,9 +1,12 @@
 import { Player } from '../Player';
 import { BaseLoader } from '../BaseLoader';
 import { StatsLoader } from '../StatsLoader';
+import { SkillsLoader } from '../SkillsLoader';
 import type { CompiledSkill, SkillActionEntry } from '../SkillsLoader';
 import type { DungeonMap } from '../MapGenerator';
+import { resolveTarget } from './TargetResolver';
 import type { TargetCell } from './TargetResolver';
+import { EventBus } from '../../game/EventBus';
 import { executeAttackAction } from './actions/AttackAction';
 import { executeDamageAction } from './actions/DamageAction';
 import { executeHealAction } from './actions/HealAction';
@@ -128,6 +131,39 @@ export function executeActions(
                 console.warn(`Unknown skill action "${name}" in skill "${compiled.definition.name}"`);
         }
     }
+}
+
+/**
+ * アイテム（巻物等）からのスキル発動。
+ * - コスト評価・支払いは行わない
+ * - 未習得（hasSkill=false）でも発動できる
+ * - スタンチェックは行わない（呼び出し元の useConsumableItem 側でブロックされていない仕様に合わせる）
+ * - target='front' の場合は selectedTarget で対象セルを指定すること
+ *
+ * @returns 発動成功時 true。コンパイル失敗 / アクティブ以外 / front で selectedTarget 未指定の場合 false
+ */
+export function executeSkillFromItem(
+    dungeon: DungeonMap,
+    caster: Player,
+    skillName: string,
+    selectedTarget?: TargetCell,
+): boolean {
+    const compiled = SkillsLoader.getInstance().getCompiledSkill(skillName);
+    if (!compiled) return false;
+    const def = compiled.definition;
+    // フェイルセーフ: YamlCrossValidator で起動時に弾く想定だが、念のため
+    if ((def.trigger ?? 'active') !== 'active') return false;
+    if (!def.target) return false;
+
+    const targetCells = resolveTarget(def.target, dungeon, selectedTarget);
+    if (def.target === 'front' && targetCells.length === 0) return false;
+
+    EventBus.emit('message-log',
+        `スキル「${def.label}」を発動した！`,
+        dungeon.getTurnCount());
+
+    executeActions(dungeon, caster, compiled, targetCells);
+    return true;
 }
 
 export function parseActionEntry(entry: SkillActionEntry): { name: string; param: number | string | Record<string, number | string> | null } {

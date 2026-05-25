@@ -167,6 +167,8 @@ export class Player {
                         alreadyLearnedSkills.push(value);
                     }
                 }
+            } else if (key === 'executeSkill') {
+                // dungeon を必要とするため Player では処理せず、useConsumableItem 側で executeSkillFromItem を呼ぶ
             } else if (key === 'add_modifier') {
                 if (typeof value !== 'string') continue;
                 const result = this.applyAddModifierEffect(value);

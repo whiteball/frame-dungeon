@@ -77,6 +77,24 @@
 - **アイテム使用**：消耗品の `effect.immediate.learnSkill: <skillName>` で習得。既習得スキルでもアイテムは消費され、ログ「習得済み」を表示する。同 `immediate` 内に `life: 30` 等の他効果を併記すると両方適用される
 - **デバッグ用 `window.learnSkill(name)`**：DevTools コンソールから直接付与
 
+## アイテムからのスキル発動（巻物）
+
+消耗品の `effect.immediate.executeSkill: <skillName>` で、アクティブスキルをコスト無し・未習得不問・スタンチェック無しで発動できる。`SkillExecutor.executeSkillFromItem(dungeon, player, skillName, selectedTarget?)` が `evaluateCost` / `canPayCost` / `payCost` / `hasSkill` チェックをすべてスキップし、`resolveTarget` + `executeActions` だけを実行する。
+
+UI 連携は通常のスキル発動（`useSkill`）と分かれている：
+
+- `ItemListController.use-item` ハンドラがアイテムの `effect[].immediate.executeSkill` を走査し、対応スキルの `target` が `'front'` なら `Game.enterSkillFromItemTargetSelectMode(instanceId)` を呼び、リストを閉じて方向選択モードに移行
+  - 確定時：`dungeon.useConsumableItem(instanceId, { skillTargetCell: cell })` が呼ばれ、アイテム消費 + スキル発動を一括で行う
+  - キャンセル時：何も呼ばれず、アイテム非消費・defaultSceneActions に復帰
+- `target: self / around / room / map` のスキルは即時発動：通常の `useConsumableItem(instanceId)` 内で `executeSkillFromItem` が呼ばれ、アイテム消費とスキル発動が同期的に進む
+
+メッセージログは二行構成：
+
+- `useConsumableItem` の標準ログ「`<アイテム名>` を使った！（スキル「`<スキル名>`」が発動）」
+- `executeSkillFromItem` から発行される「スキル「`<スキル名>`」を発動した！」+ 各 action のログ
+
+`YamlCrossValidator` が起動時に `items.yml` の `executeSkill` 参照を検証し、`skills.yml` に存在しないスキル名 / パッシブ系スキル（`trigger: on_attack`/`on_turn`/`on_damage`/`passive`）を指定するとエラーで弾く。
+
 ## コスト評価・支払いフロー
 
 スキル発動時、`SkillsLoader.getCompiledSkill(name)` で `Expression` パース済みコスト式を取得し、`src/lib/skills/SkillExecutor.ts` の以下の関数で評価・適用する：

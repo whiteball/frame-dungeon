@@ -95,6 +95,7 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 | `applyEffect: <effectName>` | 状態異常を付与（`effects.yml` 参照）。`Player.getEffectiveResists()` に含まれる場合は付与せず `resistedEffects` に記録 |
 | `clearEffect: <effectName>` | 状態異常を解除 |
 | `learnSkill: <skillName>` | スキルを習得（`skills.yml` 参照、既習得時はログ「習得済み」のみだがアイテムは消費。同 `ImmediateEffect` 内で他効果と併記可） |
+| `executeSkill: <skillName>` | アクティブスキルを即時発動（コスト無し・未習得不問・スタンチェック無し）。`target: front` のスキルは UI が方向選択モードに切り替わり、確定時のみアイテム消費 + スキル発動／キャンセル時はアイテム非消費。パッシブ系（`trigger: on_attack`/`on_turn`/`on_damage`/`passive`）は `YamlCrossValidator` で起動エラー。サンプル: 爆発の巻物 (`executeSkill: explosion`) |
 | `add_modifier: <modifierName>` | 装備中で modifier の `target` type に一致する全アイテムに modifier を付与（countable は +1 でスタック、max クランプ。未付与なら count=1）。対象不在時はログ「しかし何も起こらなかった」 |
 | `remove_modifier_kind: { kind, target }` | `target` で指定したスロット（`all_equipped`/`weapon`/`main_armor`/`sub_armor`）の装備から `kind` タグ一致の modifier を一括除去。対象不在/該当 modifier なしで `modifierNoTarget` フラグが立つ |
 

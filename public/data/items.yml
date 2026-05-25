@@ -107,3 +107,10 @@
         kind: curse
         target: all_equipped
   description: 装備中の全アイテムから呪いを解く巻物
+- name: explosion scroll
+  label: 爆発の巻物
+  type: consumable
+  effect:
+    immediate:
+      executeSkill: explosion
+  description: 唱えるとスキル「爆発」が発動し、部屋全体に大ダメージを与える

@@ -59,6 +59,17 @@ export class ItemListController {
         EventBus.removeAllListeners('drop-item');
 
         EventBus.on('use-item', (payload: { instanceId: string }) => {
+            // executeSkill が target='front' のスキルなら方向選択モードへ移行する。
+            // 確定でアイテム消費 + スキル発動、キャンセルでアイテム非消費・モード解除のみ。
+            const item = this.game.player.getInventory().getItemById(payload.instanceId);
+            if (item) {
+                const skillName = this.findFrontExecuteSkill(item);
+                if (skillName !== null) {
+                    this.closeList();
+                    this.game.enterSkillFromItemTargetSelectMode(payload.instanceId);
+                    return;
+                }
+            }
             if (this.game.dungeon.useConsumableItem(payload.instanceId)) {
                 const rest = this.game.player.getInventory().getConsumableItems();
                 if (rest.length === 0) {
@@ -148,6 +159,22 @@ export class ItemListController {
             // 呼んでしまうと置いた直後の around-0 で自動拾得が走り、置いたアイテムを即回収してしまう
             this.game.render();
         });
+    }
+
+    /**
+     * 消耗品の immediate.executeSkill を走査し、target='front' のスキル名を返す。
+     * 該当する spec が無ければ null。複数 spec がある場合は最初に見つかったものを返す。
+     */
+    private findFrontExecuteSkill(item: Item): string | null {
+        if (!item.isConsumable()) return null;
+        const loader = SkillsLoader.getInstance();
+        for (const spec of item.getEffectSpecs()) {
+            const name = spec.immediate?.executeSkill;
+            if (typeof name !== 'string') continue;
+            const def = loader.getSkill(name);
+            if (def && def.target === 'front') return name;
+        }
+        return null;
     }
 
     /** 同じモードならクローズ、違うモードなら開き直す。drop は対象外（onUnderfoot 経由）。 */

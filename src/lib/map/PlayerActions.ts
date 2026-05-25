@@ -4,7 +4,7 @@ import type { DungeonMap } from '../MapGenerator';
 import { MapDirection, getDirectionOffset } from './MapDirection';
 import { EffectsLoader } from '../EffectsLoader';
 import { SkillsLoader } from '../SkillsLoader';
-import { evaluateCost, canPayCost, payCost, executeActions } from '../skills/SkillExecutor';
+import { evaluateCost, canPayCost, payCost, executeActions, executeSkillFromItem } from '../skills/SkillExecutor';
 import { resolveTarget, type TargetCell } from '../skills/TargetResolver';
 import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
@@ -122,9 +122,14 @@ export function attackPlayer(dungeon: DungeonMap): boolean {
 /**
  * プレイヤーが消耗品を使用する
  * @param instanceId 使用するアイテムのインスタンスID
+ * @param options skillTargetCell: executeSkill が target='front' のスキルを発動する場合の方向選択結果
  * @returns 使用に成功しターンを消費した場合true
  */
-export function useConsumableItem(dungeon: DungeonMap, instanceId: string): boolean {
+export function useConsumableItem(
+  dungeon: DungeonMap,
+  instanceId: string,
+  options?: { skillTargetCell?: TargetCell },
+): boolean {
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
 
@@ -206,6 +211,15 @@ export function useConsumableItem(dungeon: DungeonMap, instanceId: string): bool
   inventory.removeItemById(instanceId);
   player.incrementItemsUsed();
   EventBus.emit('message-log', `${item.getLabelWithModifiers()}を使った！${messageParts.length ? '（' + messageParts.join('、') + '）' : ''}`, dungeon.getTurnCount());
+
+  // executeSkill: アイテムからのスキル発動（コスト無し・未習得不問・dungeon 依存のため Player.applyImmediateEffect では処理しない）。
+  // 「<アイテム名>を使った！」ログの直後に executeSkillFromItem 内で
+  // 「スキル「Y」を発動した！」+ 各 action ログを順に流す二行構成
+  for (const spec of specs) {
+    if (typeof spec.immediate?.executeSkill === 'string') {
+      executeSkillFromItem(dungeon, player, spec.immediate.executeSkill, options?.skillTargetCell);
+    }
+  }
 
   dungeon.dispatchObjectEvent();
   return true;

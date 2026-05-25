@@ -20,6 +20,8 @@ export interface RemoveModifierKindSpec {
  * - applyEffect: <effectName> — 状態異常を付与
  * - clearEffect: <effectName> — 状態異常を解除
  * - learnSkill: <skillName> — スキルを習得（既習得ならログのみ・アイテムは消費）
+ * - executeSkill: <skillName> — アクティブスキルを即時発動（コスト無し・未習得不問）。
+ *   target=front のスキルは方向選択 UI に切替わり、確定時のみアイテム消費・キャンセル時は非消費
  * - add_modifier: <modifierName> — 装備中の対象 type 全アイテムに modifier を付与（countable は +1 でスタック、未付与なら count=1）
  * - remove_modifier_kind: { kind, target } — 指定スロットの装備から該当 kind の modifier を全て除去
  */
@@ -27,6 +29,7 @@ export interface ImmediateEffect {
     applyEffect?: string;
     clearEffect?: string;
     learnSkill?: string;
+    executeSkill?: string;
     add_modifier?: string;
     remove_modifier_kind?: RemoveModifierKindSpec;
     [statName: string]: number | string | RemoveModifierKindSpec | undefined;
