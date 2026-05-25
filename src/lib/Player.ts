@@ -3,9 +3,7 @@ import { StatsLoader } from './StatsLoader';
 import { Inventory } from './Inventory';
 import { Item } from './Item';
 import { ItemsLoader, type ImmediateEffect, type ContinuousEffect, type RemoveModifierKindSpec } from './ItemsLoader';
-import { EnemyLoader } from './EnemyLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
-import { TrapsLoader } from './TrapsLoader';
 import { BaseLoader } from './BaseLoader';
 import { SkillsLoader } from './SkillsLoader';
 import { ItemModifiersLoader } from './ItemModifiersLoader';
@@ -34,12 +32,6 @@ export class Player {
     private stats: Map<string, number>;
     private maxStats: Map<string, number>;
     private inventory: Inventory;
-    private static statsLoader: StatsLoader;
-    private static itemsLoader: ItemsLoader;
-    private static effectsLoader: EffectsLoader;
-    private static trapsLoader: TrapsLoader;
-    private static skillsLoader: SkillsLoader;
-    private static itemModifiersLoader: ItemModifiersLoader;
 
     level: number = 1;
     exp: number = 0;
@@ -70,69 +62,16 @@ export class Player {
         this.initializeStats();
     }
 
-    static async initializeStatsSystem(): Promise<void> {
-        this.statsLoader = StatsLoader.getInstance();
-        await this.statsLoader.loadStats();
-    }
-
-    static async initializeItemsSystem(): Promise<void> {
-        this.itemsLoader = ItemsLoader.getInstance();
-        await this.itemsLoader.loadItems();
-    }
-
-    static async initializeEnemySystem(): Promise<void> {
-        await EnemyLoader.getInstance().loadEnemies();
-    }
-
-    static async initializeEffectsSystem(): Promise<void> {
-        this.effectsLoader = EffectsLoader.getInstance();
-        await this.effectsLoader.loadEffects();
-    }
-
-    static async initializeTrapsSystem(): Promise<void> {
-        this.trapsLoader = TrapsLoader.getInstance();
-        await this.trapsLoader.loadTraps();
-    }
-
-    static async initializeBaseSystem(): Promise<void> {
-        await BaseLoader.getInstance().load();
-    }
-
-    static async initializeSkillsSystem(): Promise<void> {
-        this.skillsLoader = SkillsLoader.getInstance();
-        await this.skillsLoader.loadSkills();
-    }
-
-    static async initializeItemModifiersSystem(): Promise<void> {
-        this.itemModifiersLoader = ItemModifiersLoader.getInstance();
-        await this.itemModifiersLoader.load();
-    }
-
-    static async initializeAllSystems(): Promise<void> {
-        await this.initializeStatsSystem();
-        await this.initializeItemsSystem();
-        await this.initializeEnemySystem();
-        await this.initializeEffectsSystem();
-        await this.initializeTrapsSystem();
-        await this.initializeBaseSystem();
-        await this.initializeSkillsSystem();
-        await this.initializeItemModifiersSystem();
-    }
-
     private initializeStats(): void {
-        // stats.ymlが読み込まれている前提で初期化
-        if (Player.statsLoader) {
-            const statNames = Player.statsLoader.getStatNames();
-            for (const statName of statNames) {
-                // 初期値を設定（後で設定可能にするかもしれない）
-                const initialValue = this.getInitialValue(statName);
-                this.stats.set(statName, initialValue);
-                this.maxStats.set(statName, initialValue);
-            }
-        } else {
-            // statsLoaderが初期化されていない場合は警告
-            console.warn('StatsLoader not initialized. Call Player.initializeStatsSystem() first.');
-            throw new Error('StatsLoader not initialized. Game cannot start without stats configuration.');
+        // stats.yml が GameDataLoader.loadAll() で読み込まれている前提
+        const statNames = StatsLoader.getInstance().getStatNames();
+        if (statNames.length === 0) {
+            throw new Error('StatsLoader not loaded. Game cannot start without stats configuration.');
+        }
+        for (const statName of statNames) {
+            const initialValue = this.getInitialValue(statName);
+            this.stats.set(statName, initialValue);
+            this.maxStats.set(statName, initialValue);
         }
     }
 
@@ -170,7 +109,7 @@ export class Player {
         const newValue = current + value;
 
         // fluctuation許可の能力値は実効最大値でクランプ（passive add_stats の <stat>_max を含む）
-        if (Player.statsLoader?.isFluctuationAllowed(key)) {
+        if (StatsLoader.getInstance().isFluctuationAllowed(key)) {
             const maxValue = this.getEffectiveMaxStat(key);
             this.stats.set(key, Math.min(newValue, maxValue));
         } else {
@@ -222,7 +161,7 @@ export class Player {
                 if (typeof value === 'string') {
                     if (this.learnSkill(value)) {
                         learnedSkills.push(value);
-                    } else if (Player.skillsLoader?.hasSkill(value)) {
+                    } else if (SkillsLoader.getInstance().hasSkill(value)) {
                         // 既習得（スキル定義は存在するが既に持っている）
                         // skills.yml に存在しないスキル名は YamlCrossValidator で起動時に検出されるためここでは無視
                         alreadyLearnedSkills.push(value);
@@ -261,8 +200,7 @@ export class Player {
         applied: Array<{ itemLabel: string; modifierName: string; newCount: number; modifierLabel: string; countable: boolean }>;
     } {
         const applied: Array<{ itemLabel: string; modifierName: string; newCount: number; modifierLabel: string; countable: boolean }> = [];
-        if (!Player.itemModifiersLoader) return { applied };
-        const def = Player.itemModifiersLoader.getDefinition(modifierName);
+        const def = ItemModifiersLoader.getInstance().getDefinition(modifierName);
         if (!def) return { applied };
 
         for (const item of this.getAllEquippedItems()) {
@@ -410,14 +348,12 @@ export class Player {
 
         value += (this.getContinuousBonuses().get(key) ?? 0);
 
-        if (Player.effectsLoader) {
-            for (const entry of this.activeStatusEffects) {
-                const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
-                if (!compiled) continue;
-                for (const spec of compiled.permanent) {
-                    if (spec.target !== key) continue;
-                    value = Player.evaluateTargetSpec(spec, value, entry.count) ?? value;
-                }
+        for (const entry of this.activeStatusEffects) {
+            const compiled = EffectsLoader.getInstance().getCompiledEffect(entry.name);
+            if (!compiled) continue;
+            for (const spec of compiled.permanent) {
+                if (spec.target !== key) continue;
+                value = Player.evaluateTargetSpec(spec, value, entry.count) ?? value;
             }
         }
 
@@ -443,7 +379,6 @@ export class Player {
      * 「現在値（passive 適用前）」として注入し、formula から自己参照を可能にする。
      */
     private evaluatePassiveAddStats(targetKey: string, currentValue: number): number {
-        if (!Player.skillsLoader) return 0;
         const passives = this.getActivePassivesByTrigger('passive');
         if (passives.length === 0) return 0;
 
@@ -452,7 +387,7 @@ export class Player {
 
         let delta = 0;
         for (const p of passives) {
-            const compiled = Player.skillsLoader.getCompiledSkill(p.skillName);
+            const compiled = SkillsLoader.getInstance().getCompiledSkill(p.skillName);
             if (!compiled) continue;
             const expr = compiled.addStats.get(targetKey);
             if (!expr) continue;
@@ -510,10 +445,8 @@ export class Player {
             for (const r of entry.resists) resists.add(r);
         }
         // 付与中 status effect 自身の resist 付随効果
-        if (Player.effectsLoader) {
-            for (const entry of this.activeStatusEffects) {
-                for (const r of Player.effectsLoader.getResistsOf(entry.name)) resists.add(r);
-            }
+        for (const entry of this.activeStatusEffects) {
+            for (const r of EffectsLoader.getInstance().getResistsOf(entry.name)) resists.add(r);
         }
         return resists;
     }
@@ -527,11 +460,7 @@ export class Player {
      *  - 'unknown'  effects.yml に未定義の name だった（旧 false 相当）
      */
     applyStatusEffect(name: string): ApplyStatusEffectResult {
-        if (!Player.effectsLoader) {
-            console.warn('EffectsLoader not initialized');
-            return 'unknown';
-        }
-        if (!Player.effectsLoader.hasEffect(name)) {
+        if (!EffectsLoader.getInstance().hasEffect(name)) {
             console.warn(`Status effect not found: ${name}`);
             return 'unknown';
         }
@@ -552,9 +481,8 @@ export class Player {
      * 現状は _action: skip のみサポート
      */
     getPlayerActionDirective(): 'skip' | null {
-        if (!Player.effectsLoader) return null;
         for (const entry of this.activeStatusEffects) {
-            const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+            const compiled = EffectsLoader.getInstance().getCompiledEffect(entry.name);
             if (!compiled) continue;
             for (const spec of compiled.onAction) {
                 if (spec.target === '_action') {
@@ -574,11 +502,10 @@ export class Player {
      */
     tickStatusEffects(): StatusEffectTickResult {
         const result: StatusEffectTickResult = { applied: [], cleared: [] };
-        if (!Player.effectsLoader) return result;
 
         // 1. onTurnEnd 効果を適用
         for (const entry of this.activeStatusEffects) {
-            const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+            const compiled = EffectsLoader.getInstance().getCompiledEffect(entry.name);
             if (!compiled) continue;
             for (const spec of compiled.onTurnEnd) {
                 // _action 等の特殊 target は onTurnEnd では無視（仕様上、数値パラメータのみ対象）
@@ -588,7 +515,7 @@ export class Player {
                 if (evaluated === null) continue;
                 let next = Math.floor(evaluated);
                 // life などの fluctuation 許可ステータスは [0, max] でクランプ
-                if (Player.statsLoader?.isFluctuationAllowed(spec.target)) {
+                if (StatsLoader.getInstance().isFluctuationAllowed(spec.target)) {
                     next = Math.max(0, Math.min(next, this.getEffectiveMaxStat(spec.target)));
                 } else {
                     next = Math.max(0, next);
@@ -608,7 +535,7 @@ export class Player {
         const remaining: ActiveStatusEffect[] = [];
         for (const entry of this.activeStatusEffects) {
             entry.count++;
-            const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+            const compiled = EffectsLoader.getInstance().getCompiledEffect(entry.name);
             let cleared = false;
             if (compiled?.clearFormula) {
                 try {
@@ -639,10 +566,9 @@ export class Player {
      */
     notifyDamageTaken(): Array<{ label: string }> {
         const cleared: Array<{ label: string }> = [];
-        if (!Player.effectsLoader) return cleared;
         const remaining: ActiveStatusEffect[] = [];
         for (const entry of this.activeStatusEffects) {
-            const compiled = Player.effectsLoader.getCompiledEffect(entry.name);
+            const compiled = EffectsLoader.getInstance().getCompiledEffect(entry.name);
             if (compiled?.clearOnDamage) {
                 cleared.push({ label: compiled.definition.label });
             } else {
@@ -658,9 +584,8 @@ export class Player {
      */
     getActiveStatusEffects(): Array<{ name: string; label: string; description: string; count: number }> {
         const list: Array<{ name: string; label: string; description: string; count: number }> = [];
-        if (!Player.effectsLoader) return list;
         for (const entry of this.activeStatusEffects) {
-            const def = Player.effectsLoader.getEffect(entry.name);
+            const def = EffectsLoader.getInstance().getEffect(entry.name);
             if (!def) continue;
             list.push({
                 name: entry.name,
@@ -689,7 +614,7 @@ export class Player {
      * @returns 新規習得に成功した場合 true。未定義スキル名や既習得の場合 false
      */
     learnSkill(name: string): boolean {
-        if (!Player.skillsLoader || !Player.skillsLoader.hasSkill(name)) {
+        if (!SkillsLoader.getInstance().hasSkill(name)) {
             return false;
         }
         if (this.learnedSkills.has(name)) {
@@ -729,11 +654,10 @@ export class Player {
      */
     getActivePassivesByTrigger(trigger: 'active' | 'on_attack' | 'on_turn' | 'on_damage' | 'passive'): Array<{ skillName: string; rate: number }> {
         const result: Array<{ skillName: string; rate: number }> = [];
-        if (!Player.skillsLoader) return result;
 
         // 学習済みスキル
         for (const name of this.learnedSkills) {
-            const def = Player.skillsLoader.getSkill(name);
+            const def = SkillsLoader.getInstance().getSkill(name);
             if (!def) continue;
             if ((def.trigger ?? 'active') !== trigger) continue;
             result.push({ skillName: name, rate: 1.0 });
@@ -744,7 +668,7 @@ export class Player {
             if (!item) continue;
             const entries = item.getDefinition().passive_skills ?? [];
             for (const ps of entries) {
-                const def = Player.skillsLoader.getSkill(ps.name);
+                const def = SkillsLoader.getInstance().getSkill(ps.name);
                 if (!def) continue;
                 if ((def.trigger ?? 'active') !== trigger) continue;
                 result.push({ skillName: ps.name, rate: ps.rate });
@@ -997,7 +921,7 @@ export class Player {
         const vars = this.getFormulaVars();
         for (const { target, formula, reset } of BaseLoader.getInstance().getLevelUpBonuses()) {
             const amount = formula.evaluate(vars);
-            const isFluctuating = Player.statsLoader?.isFluctuationAllowed(target) ?? false;
+            const isFluctuating = StatsLoader.getInstance().isFluctuationAllowed(target) ?? false;
             if (isFluctuating) {
                 const newMax = this.getMaxStat(target) + amount;
                 this.maxStats.set(target, newMax);
@@ -1011,27 +935,25 @@ export class Player {
 
         // mastery 抽選
         const newlyLearned: string[] = [];
-        if (Player.skillsLoader) {
-            for (const skill of Player.skillsLoader.getSkills()) {
-                if (this.learnedSkills.has(skill.name)) continue;
-                const mastery = Player.skillsLoader.getNormalizedMastery(skill.name);
-                if (mastery.length === 0) continue;
+        for (const skill of SkillsLoader.getInstance().getSkills()) {
+            if (this.learnedSkills.has(skill.name)) continue;
+            const mastery = SkillsLoader.getInstance().getNormalizedMastery(skill.name);
+            if (mastery.length === 0) continue;
 
-                // post-level >= least を満たすエントリのうち、least が最大のものを採用
-                let chosen: { least: number; rate: number } | null = null;
-                for (const m of mastery) {
-                    if (m.least <= this.level) {
-                        if (chosen === null || m.least > chosen.least) {
-                            chosen = m;
-                        }
+            // post-level >= least を満たすエントリのうち、least が最大のものを採用
+            let chosen: { least: number; rate: number } | null = null;
+            for (const m of mastery) {
+                if (m.least <= this.level) {
+                    if (chosen === null || m.least > chosen.least) {
+                        chosen = m;
                     }
                 }
-                if (chosen === null) continue;
+            }
+            if (chosen === null) continue;
 
-                if (Math.random() < chosen.rate) {
-                    if (this.learnSkill(skill.name)) {
-                        newlyLearned.push(skill.name);
-                    }
+            if (Math.random() < chosen.rate) {
+                if (this.learnSkill(skill.name)) {
+                    newlyLearned.push(skill.name);
                 }
             }
         }
@@ -1053,9 +975,9 @@ export class Player {
         for (const [key, baseValue] of this.stats) {
             const effectiveValue = this.getEffectiveStat(key);
             const bonus = effectiveValue - baseValue;
-            const abbreviation = Player.statsLoader?.getAbbreviation(key) || key.toUpperCase();
-            const description = Player.statsLoader?.getDescription(key) || key;
-            const hasFluctuation = Player.statsLoader?.isFluctuationAllowed(key) ?? false;
+            const abbreviation = StatsLoader.getInstance().getAbbreviation(key) || key.toUpperCase();
+            const description = StatsLoader.getInstance().getDescription(key) || key;
+            const hasFluctuation = StatsLoader.getInstance().isFluctuationAllowed(key) ?? false;
             const maxValue = hasFluctuation
                 ? (this.maxStats.has(key) ? this.getEffectiveMaxStat(key) : null)
                 : null;
@@ -1101,7 +1023,7 @@ export class Player {
         // インベントリ復元
         this.inventory.clear();
         for (const itemData of data.inventory) {
-            const def = Player.itemsLoader?.getItem(itemData.name);
+            const def = ItemsLoader.getInstance().getItem(itemData.name);
             if (def) {
                 this.inventory.addItem(Item.deserialize(itemData, def));
             }
@@ -1134,7 +1056,7 @@ export class Player {
         // 習得スキル復元（旧セーブには存在しないため ?? [] で互換、未定義スキル名は警告 + スキップ）
         this.learnedSkills = new Set();
         for (const name of data.learnedSkills ?? []) {
-            if (Player.skillsLoader && Player.skillsLoader.hasSkill(name)) {
+            if (SkillsLoader.getInstance().hasSkill(name)) {
                 this.learnedSkills.add(name);
             } else {
                 console.warn(`Unknown skill in save data, skipped: ${name}`);

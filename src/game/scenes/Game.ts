@@ -7,6 +7,7 @@ import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
 import { EquipmentView } from '../../lib/EquipmentView';
 import { Player } from '../../lib/Player';
+import { GameDataLoader } from '../../lib/GameDataLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { getFrontCandidates } from '../../lib/skills/TargetResolver';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
@@ -152,8 +153,8 @@ export class Game extends Scene {
             EventBus.emit('update-view');
         });
 
-        // Player初期化前にシステムを初期化
-        await Player.initializeAllSystems();
+        // Player初期化前に YAML 群を読み込む
+        await GameDataLoader.loadAll();
 
         const { errors, infos } = YamlCrossValidator.validate();
         for (const info of infos) console.info(`[YAML INFO] ${info}`);

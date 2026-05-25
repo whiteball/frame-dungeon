@@ -20,6 +20,9 @@ Vue-Phaser ブリッジ・シーン構成・ダイアログ・マップ系モジ
 - **Item**（`src/lib/Item.ts`）: アイテムの効果と情報を管理
 - **Inventory**（`src/lib/Inventory.ts`）: プレイヤーのアイテム所持を管理
 - **BaseLoader**（`src/lib/BaseLoader.ts`）: `base.yml` の読み込みとゲーム全体設定（ダメージ式・経験値式・レベルアップボーナス・フロア構成・敵自動湧き判定）を集中管理。詳細は [data.md](./data.md) の「base.yml — ゲーム全体設定」節を参照
+- **GameDataLoader**（`src/lib/GameDataLoader.ts`）: 各 Loader の Singleton (`getInstance()`) に対して `loadStats() / loadItems() / loadEnemies() / loadEffects() / loadTraps() / load() / loadSkills() / load()` をまとめて呼ぶ `loadAll()` を提供。Game シーンの `create()` で `YamlCrossValidator.validate()` の直前に一度だけ呼ぶ
+- **ItemFactory**（`src/lib/ItemFactory.ts`）: `ItemsLoader` / `ItemModifiersLoader` / `BaseLoader` の Singleton を参照し、`createItem(name, options?)` で `Item` を生成。`options.rollModifiers` 指定時はフロア設定に従って modifier 抽選を行う
+- **EnemyFactory**（`src/lib/EnemyFactory.ts`）: `EnemyLoader` の Singleton から `createEnemy(name, x, y)` / `createRandomEnemy(floor, x, y)` で `Enemy` を生成
 - **SaveManager**（`src/lib/SaveManager.ts`）: LocalStorage ベースのセーブ/ロード。スロット毎に `meta`/`player`/`dungeon`/`floor` を JSON 化。`yamlDigest` で YAML 互換性を確認
 - **CustomDataStore**（`src/lib/CustomDataStore.ts`）: ZIP からロードしたカスタム YAML テキストの一時ストア（モジュールスコープ）。タイトル画面で「カスタムデータで開始」した場合に各 Loader の `customText` 引数として注入される
 - **YamlCrossValidator**（`src/lib/YamlCrossValidator.ts`）: 起動時に各 Loader 完了後に走る横断バリデータ。`errors` / `infos` を返し、エラー時は `YamlErrorDialog` でユーザ表示

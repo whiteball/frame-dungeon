@@ -251,7 +251,7 @@ autoSpawner:
 
 ## YAML 横断バリデーション
 
-`YamlCrossValidator.validate()`（`src/lib/YamlCrossValidator.ts`）は全 Loader の `load()` 完了後に走り、以下のクロス参照を検証する：
+`YamlCrossValidator.validate()`（`src/lib/YamlCrossValidator.ts`）は `GameDataLoader.loadAll()`（`src/lib/GameDataLoader.ts`）で全 Loader の `load()` を完了させた直後に走り、以下のクロス参照を検証する：
 
 - `base.yml` の `floors[].enemies` / `floors[].traps` 名が `enemies.yml` / `traps.yml` に存在するか
 - `traps.yml` の `effect[].type === 'addEffect'` の `value` が `effects.yml` に存在するか
