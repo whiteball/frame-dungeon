@@ -180,6 +180,31 @@ export class SceneModeController {
         this.setSceneActions(actions);
     }
 
+    /**
+     * イベント選択肢モード。各 choice をボタンとして表示し、選択で onSelect(idx) を呼ぶ。
+     * 末尾には「キャンセル」ボタンを自動付与する。
+     * choices は最大 10 個まで（EventsLoader の MAX_EVENT_CHOICES と整合）。
+     */
+    enterEventChoiceMode(
+        choices: Array<{ label: string; disabled?: boolean; disabledReason?: string }>,
+        onSelect: (index: integer) => void,
+    ): void {
+        const actions: SceneAction[] = choices.map((c, i) => ({
+            label: c.label,
+            disabled: c.disabled === true,
+            onClick: () => {
+                this.enterDefaultMode();
+                onSelect(i);
+            },
+        }));
+        actions.push({
+            label: 'キャンセル',
+            onClick: () => this.enterDefaultMode(),
+        });
+        this.setSceneActions(actions);
+        this.setModeLabel('イベント選択中');
+    }
+
     /** 長居警告モード。「確認」のみのモーダル。 */
     enterLongStayWarningMode(): void {
         const actions: SceneAction[] = [

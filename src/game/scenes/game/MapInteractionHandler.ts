@@ -4,7 +4,16 @@ import { StatsLoader } from '../../../lib/StatsLoader';
 import { EffectsLoader } from '../../../lib/EffectsLoader';
 import { TrapsLoader } from '../../../lib/TrapsLoader';
 import type { TrapDefinition } from '../../../lib/TrapsLoader';
-import { ItemObject, TreasureObject } from '../../../lib/map/MapObjects';
+import { EventObject, ItemObject, TreasureObject } from '../../../lib/map/MapObjects';
+import { EventsLoader } from '../../../lib/EventsLoader';
+import type { CompiledEventChoice } from '../../../lib/EventsLoader';
+import {
+    canPayChoiceCost,
+    evaluateChoiceCost,
+    executeEventChoice,
+    executeEventImmediate,
+    formatChoiceCostSummary,
+} from '../../../lib/events/EventExecutor';
 import { getDirectionOffset, rotateDirection } from '../../../lib/map/MapDirection';
 import { makeStatFluctuatedMessage } from '../../../lib/util/text';
 import type { SceneAction } from './SceneModeController';
@@ -136,9 +145,88 @@ export class MapInteractionHandler {
             return;
         }
 
+        const eventObj = objects.find(o => o instanceof EventObject) as EventObject | undefined;
+        if (eventObj) {
+            this.investigateEvent(eventObj);
+            // 選択肢モードに遷移する場合は mode 操作はそちらで行うため
+            // ここではデフォルトモード復帰を skip し、即時実行系のみ復帰させる
+            return;
+        }
+
         this.game.dungeon.searchAt(targetX, targetY);
         this.game.render();
         this.game.mode.enterDefaultMode();
+    }
+
+    /**
+     * 調査でイベントオブジェクトに到達した際の処理。
+     * 1. flavor をログ出力
+     * 2. choices があれば選択肢モード起動、無ければ即時実行（action / random_outcome）
+     * 3. 即時実行系はターン消費し再描画
+     */
+    private investigateEvent(eventObj: EventObject): void {
+        const turn = this.game.dungeon.getTurnCount();
+        EventBus.emit('message-log', eventObj.eventDef.flavor, turn);
+
+        const compiled = EventsLoader.getInstance().getCompiledEvent(eventObj.eventDef.name);
+        if (!compiled) {
+            console.warn(`Compiled event not found for "${eventObj.eventDef.name}"`);
+            this.game.mode.enterDefaultMode();
+            return;
+        }
+
+        if (eventObj.eventDef.choices && compiled.compiledChoices.length > 0) {
+            this.enterChoiceMode(eventObj, compiled.compiledChoices);
+            return;
+        }
+
+        // 選択肢無し（action / random_outcome）→ 即時実行
+        executeEventImmediate(this.game.dungeon, this.game.player, eventObj);
+        this.game.render();
+        this.game.mode.enterDefaultMode();
+        this.game.dungeon.dispatchObjectEvent();
+        this.game.render();
+    }
+
+    /**
+     * 選択肢メニューを SceneModeController 経由で開く。cost 支払い不能な choice は disabled に。
+     */
+    private enterChoiceMode(eventObj: EventObject, compiledChoices: CompiledEventChoice[]): void {
+        const player = this.game.player;
+        const choiceButtons = compiledChoices.map(cc => {
+            let disabled = false;
+            let label = cc.choice.label;
+            if (cc.cost.size > 0) {
+                const deltas = evaluateChoiceCost(player, cc.cost);
+                const summary = formatChoiceCostSummary(deltas);
+                if (summary) label = `${cc.choice.label} (${summary})`;
+                if (!canPayChoiceCost(player, deltas)) {
+                    disabled = true;
+                }
+            }
+            return { label, disabled };
+        });
+
+        this.game.mode.enterEventChoiceMode(choiceButtons, (idx) => {
+            const cc = compiledChoices[idx];
+            if (!cc) return;
+            // 支払い
+            if (cc.cost.size > 0) {
+                const deltas = evaluateChoiceCost(player, cc.cost);
+                if (!canPayChoiceCost(player, deltas)) {
+                    EventBus.emit('message-log', 'コストを支払えなかった', this.game.dungeon.getTurnCount());
+                    this.game.render();
+                    return;
+                }
+                for (const [stat, delta] of deltas) {
+                    player.addStat(stat, delta);
+                }
+            }
+            executeEventChoice(this.game.dungeon, player, eventObj, cc);
+            this.game.render();
+            this.game.dungeon.dispatchObjectEvent();
+            this.game.render();
+        });
     }
 
     /**
