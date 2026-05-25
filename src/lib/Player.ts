@@ -3,7 +3,6 @@ import { StatsLoader } from './StatsLoader';
 import { Inventory } from './Inventory';
 import { Item } from './Item';
 import { ItemsLoader, type ImmediateEffect, type ContinuousEffect, type RemoveModifierKindSpec } from './ItemsLoader';
-import { Enemy } from './Enemy';
 import { EnemyLoader } from './EnemyLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { TrapsLoader } from './TrapsLoader';
@@ -37,7 +36,6 @@ export class Player {
     private inventory: Inventory;
     private static statsLoader: StatsLoader;
     private static itemsLoader: ItemsLoader;
-    private static enemyLoader: EnemyLoader;
     private static effectsLoader: EffectsLoader;
     private static trapsLoader: TrapsLoader;
     private static skillsLoader: SkillsLoader;
@@ -83,8 +81,7 @@ export class Player {
     }
 
     static async initializeEnemySystem(): Promise<void> {
-        this.enemyLoader = EnemyLoader.getInstance();
-        await this.enemyLoader.loadEnemies();
+        await EnemyLoader.getInstance().loadEnemies();
     }
 
     static async initializeEffectsSystem(): Promise<void> {
@@ -1146,93 +1143,5 @@ export class Player {
 
         this.enemiesDefeated = data.enemiesDefeated ?? 0;
         this.itemsUsed = data.itemsUsed ?? 0;
-    }
-
-    // アイテム作成ヘルパー
-    /**
-     * @param options.rollModifiers true なら floor 設定に従って modifier を抽選付与
-     * @param options.floor 抽選に使うフロア番号（rollModifiers=true 必須）
-     * @param options.modifierChanceOverride 抽選確率を上書き（敵ドロップ等で個別調整用）
-     */
-    static createItem(itemName: string, options?: { rollModifiers?: boolean; floor?: number; modifierChanceOverride?: number }): Item | null {
-        if (!this.itemsLoader) {
-            console.error('ItemsLoader not initialized');
-            return null;
-        }
-
-        const definition = this.itemsLoader.getItem(itemName);
-        if (!definition) {
-            console.error(`Item definition not found: ${itemName}`);
-            return null;
-        }
-
-        const item = new Item(definition);
-        if (options?.rollModifiers && typeof options.floor === 'number') {
-            Player.rollFloorModifierFor(item, options.floor, options.modifierChanceOverride);
-        }
-        return item;
-    }
-
-    /**
-     * 指定 floor の itemModifierChance/Pool に従って 1 回 modifier 抽選を行い、
-     * 当選した場合に Item へ initial 抽選範囲の count で付与する。
-     * @param chanceOverride 確率を上書き（例: 敵ドロップ別設定）
-     */
-    private static rollFloorModifierFor(item: Item, floor: number, chanceOverride?: number): void {
-        const floorConfig = BaseLoader.getInstance().getFloorConfig(floor);
-        const chance = chanceOverride ?? floorConfig.itemModifierChance;
-        if (chance <= 0) return;
-        if (Math.random() >= chance) return;
-
-        if (!this.itemModifiersLoader) return;
-        const name = this.itemModifiersLoader.pickRandomFor(item.getType(), floorConfig.itemModifierPool);
-        if (!name) return;
-        const count = this.itemModifiersLoader.rollInitialCount(name);
-        item.setModifierCount(name, count);
-    }
-
-    // 敵作成ヘルパー
-    static createEnemy(enemyName: string, x: integer, y: integer): Enemy | null {
-        if (!this.enemyLoader) {
-            console.error('EnemyLoader not initialized');
-            return null;
-        }
-
-        const definition = this.enemyLoader.getEnemy(enemyName);
-        if (!definition) {
-            console.error(`Enemy definition not found: ${enemyName}`);
-            return null;
-        }
-
-        return new Enemy(definition, x, y);
-    }
-
-    static createEnemyByName(name: string, x: integer, y: integer): Enemy | null {
-        if (!this.enemyLoader) {
-            console.error('EnemyLoader not initialized');
-            return null;
-        }
-        const definition = this.enemyLoader.getEnemy(name);
-        if (!definition) {
-            console.error(`Enemy "${name}" not found`);
-            return null;
-        }
-        return new Enemy(definition, x, y);
-    }
-
-    // フロアに応じたランダムな敵を作成
-    static createRandomEnemy(floor: number, x: integer, y: integer): Enemy | null {
-        if (!this.enemyLoader) {
-            console.error('EnemyLoader not initialized');
-            return null;
-        }
-
-        const definition = this.enemyLoader.getRandomEnemy(floor);
-        if (!definition) {
-            console.error(`No enemy available for floor ${floor}`);
-            return null;
-        }
-
-        return new Enemy(definition, x, y);
     }
 }

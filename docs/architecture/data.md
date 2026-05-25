@@ -185,7 +185,7 @@ floors:
 
 **`itemModifierChance` / `itemModifierPool`:**
 
-- `itemModifierChance` (0..1) はフロア床配置時の modifier 付与確率。未指定または 0 なら付与なし。`Player.createItem(name, { rollModifiers: true, floor })` 経由で生成された Item にのみ適用される
+- `itemModifierChance` (0..1) はフロア床配置時の modifier 付与確率。未指定または 0 なら付与なし。`ItemFactory.createItem(name, { rollModifiers: true, floor })` 経由で生成された Item にのみ適用される
 - `itemModifierPool` を指定すると **列挙された modifier 名のみが候補** となり、抽選重みは `item_modifiers.yml` の `weight` × pool の値で決まる（積算）
 - `itemModifierPool` を省略すると `item_modifiers.yml` の全 modifier が候補となり、各 `weight` のみで抽選される
 - `itemModifierPool` 内に存在しない modifier 名や負の重みがあれば `YamlCrossValidator` がエラーを返す
@@ -228,7 +228,7 @@ floors:
 **`treasure`:**
 
 - 隠し部屋ごとに `rate` で配置抽選。配置先は **扉前以外の通行可能セル**（`DungeonMap.findDoorsInRoom` で扉セルを除外し、敵/階段/トラップ等の `excludePositionList` 上のセルも除外）
-- 中身は `items[].bias` を重みとした重み付き抽選で 1 アイテム決定（`Game.pickTreasureItem`）。`Player.createItem(name)` で modifier ロール無しでインスタンス化したうえで、`items[].modifiers[].name`/`count` をそのまま `setModifierCount` で適用する（フロアの `itemModifierChance` とは独立）
+- 中身は `items[].bias` を重みとした重み付き抽選で 1 アイテム決定（`Game.pickTreasureItem`）。`ItemFactory.createItem(name)` で modifier ロール無しでインスタンス化したうえで、`items[].modifiers[].name`/`count` をそのまま `setModifierCount` で適用する（フロアの `itemModifierChance` とは独立）
 - 宝箱セルは敵と同様に進入禁止（`DungeonMap.isCellBlocked` が `TreasureObject` を判定）
 - 開封操作: C キー → `trySearch` の方向選択 → 対象セルに `TreasureObject` があれば `Game.openTreasure` が起動。`trapRate` で判定し、当該フロアの `trapPool` からランダム 1 つ選んで `applyTrapEffects` を呼出（trapPool 空なら何も起こらない）。その後 `TreasureObject` を削除し抽選アイテムを `ItemObject` として同セルに配置 → `dispatchObjectEvent()` でターン進行
 - セーブ/ロードは `MapObjectSaveData` の `type: 'treasure'` ケース（item / trapRate / trapPool）で永続化される

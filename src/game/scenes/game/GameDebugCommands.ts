@@ -1,6 +1,6 @@
 import { EventBus } from '../../EventBus';
 import { ItemObject } from '../../../lib/map/MapObjects';
-import { Player } from '../../../lib/Player';
+import { ItemFactory } from '../../../lib/ItemFactory';
 import { SkillsLoader } from '../../../lib/SkillsLoader';
 import type { Enemy } from '../../../lib/Enemy';
 import type { Game } from '../Game';
@@ -42,7 +42,7 @@ export function setupDebugCommands(game: Game): void {
         const inventory = game.player.getInventory();
         let added = 0;
         for (let i = 0; i < count; i++) {
-            const item = Player.createItem(name);
+            const item = ItemFactory.createItem(name);
             if (!item) {
                 EventBus.emit('message-log', `（debug）${name} は未定義アイテム`, turn);
                 break;
@@ -67,7 +67,7 @@ export function setupDebugCommands(game: Game): void {
         const inventory = game.player.getInventory();
         const added: string[] = [];
         for (const name of names) {
-            const item = Player.createItem(name);
+            const item = ItemFactory.createItem(name);
             if (!item) continue;
             if (!inventory.addItem(item)) break;
             added.push(name);

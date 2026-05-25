@@ -3,6 +3,7 @@
 import { Enemy } from './Enemy';
 import { MapObject, MapShape, newMapEvent, type ObjectEvent } from './MapObject';
 import { Player } from './Player';
+import { EnemyFactory } from './EnemyFactory';
 import { getRandomInt } from './util/random';
 import { Rect } from './map/Rect';
 import { MapDirection, getRandomDirection, rotateDirection, getDirectionOffset } from './map/MapDirection';
@@ -1128,7 +1129,7 @@ export class DungeonMap {
 
     const [x, y] = candidates[Math.floor(Math.random() * candidates.length)];
     const name = floorConfig.randomEnemyPool[Math.floor(Math.random() * floorConfig.randomEnemyPool.length)];
-    const enemy = Player.createEnemyByName(name, x, y);
+    const enemy = EnemyFactory.createEnemy(name, x, y);
     if (enemy) this.addEnemy(enemy);
   }
 

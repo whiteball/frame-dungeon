@@ -1,4 +1,4 @@
-import { Player } from '../Player';
+import { ItemFactory } from '../ItemFactory';
 import { BaseLoader } from '../BaseLoader';
 import { ItemObject } from './MapObjects';
 import { EventBus } from '../../game/EventBus';
@@ -114,7 +114,7 @@ export function tryEnemyDrop(
         if (entry.rate <= 0) continue;
         if (Math.random() >= entry.rate) continue;
 
-        const item = Player.createItem(entry.item, {
+        const item = ItemFactory.createItem(entry.item, {
             rollModifiers: true,
             floor,
             modifierChanceOverride: entry.modifierChance,

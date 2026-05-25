@@ -2,7 +2,8 @@ import { BaseLoader } from '../../../lib/BaseLoader';
 import type { ResolvedFloorConfig, ResolvedTreasureItemEntry } from '../../../lib/BaseLoader';
 import { ItemsLoader } from '../../../lib/ItemsLoader';
 import { TrapsLoader } from '../../../lib/TrapsLoader';
-import { Player } from '../../../lib/Player';
+import { ItemFactory } from '../../../lib/ItemFactory';
+import { EnemyFactory } from '../../../lib/EnemyFactory';
 import { ItemObject, TreasureObject } from '../../../lib/map/MapObjects';
 import type { DungeonMap, DungeonRestoreCallbacks } from '../../../lib/MapGenerator';
 import type { Item } from '../../../lib/Item';
@@ -125,7 +126,7 @@ export function populateFloor(args: {
         });
         for (const pos of itemPositions) {
             const itemDef = itemDefs[randInt(0, itemDefs.length - 1)];
-            const item = Player.createItem(itemDef.name, { rollModifiers: true, floor });
+            const item = ItemFactory.createItem(itemDef.name, { rollModifiers: true, floor });
             if (!item) continue;
             const itemObj = new ItemObject(item);
             itemObj.x = pos[0];
@@ -155,7 +156,7 @@ function pickTreasureItem(entries: ResolvedTreasureItemEntry[]): Item | null {
     }
     if (!picked) picked = entries[entries.length - 1];
 
-    const item = Player.createItem(picked.name);
+    const item = ItemFactory.createItem(picked.name);
     if (!item) return null;
     for (const m of picked.modifiers) {
         item.setModifierCount(m.name, m.count);
@@ -179,7 +180,7 @@ function spawnEnemies(
             excludePositionList: excludePositions,
         });
         for (const pos of positions) {
-            const enemy = Player.createEnemyByName(name, pos[0], pos[1]);
+            const enemy = EnemyFactory.createEnemy(name, pos[0], pos[1]);
             if (enemy) dungeon.addEnemy(enemy);
             excludePositions.push(pos);
         }
@@ -195,7 +196,7 @@ function spawnEnemies(
         });
         for (const pos of positions) {
             const name = config.randomEnemyPool[Math.floor(Math.random() * config.randomEnemyPool.length)];
-            const enemy = Player.createEnemyByName(name, pos[0], pos[1]);
+            const enemy = EnemyFactory.createEnemy(name, pos[0], pos[1]);
             if (enemy) dungeon.addEnemy(enemy);
         }
     }

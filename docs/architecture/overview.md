@@ -61,7 +61,7 @@ Phaser のシーン構成は `src/game/main.ts` で定義：`Boot` → `Preloade
 - `buildDungeonRestoreCallbacks()`（`populateFloor` とセーブ復元の双方で使用するため Game.ts に集約）
 - `pendingSaveData` の `init`→`create` フロー
 
-**マップオブジェクト生成:** `src/lib/map/MapObjects.ts` が `StairsObject` / `TrapObject` / `ItemObject` の `MapObject` 派生クラスを定義し、`src/game/scenes/game/mapObjectFactory.ts` の `buildStairsObject` / `buildTrapObject` が `Game.ts` 側のコールバックと組み合わせてイベントハンドラを差し込む。`ItemObject` は `Enemy` と同様にインスタンス（`Item`）を保持する（`ItemDefinition` ではない）。床に落ちているアイテム自体が個別の状態（修飾状態 modifier 等）を持てるようにするため、生成時に `Player.createItem(name, options?)` 経由で `Item` を作って `new ItemObject(item)` に渡し、拾得時はその `Item` を再生成せず直接インベントリへ追加する。
+**マップオブジェクト生成:** `src/lib/map/MapObjects.ts` が `StairsObject` / `TrapObject` / `ItemObject` の `MapObject` 派生クラスを定義し、`src/game/scenes/game/mapObjectFactory.ts` の `buildStairsObject` / `buildTrapObject` が `Game.ts` 側のコールバックと組み合わせてイベントハンドラを差し込む。`ItemObject` は `Enemy` と同様にインスタンス（`Item`）を保持する（`ItemDefinition` ではない）。床に落ちているアイテム自体が個別の状態（修飾状態 modifier 等）を持てるようにするため、生成時に `ItemFactory.createItem(name, options?)` 経由で `Item` を作って `new ItemObject(item)` に渡し、拾得時はその `Item` を再生成せず直接インベントリへ追加する。
 
 ## Vue-Phaser通信
 

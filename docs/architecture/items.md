@@ -33,7 +33,7 @@
 
 - `Item.modifiers: Map<string, number>` でアイテムごとに `name → count` を保持
 - `countable: true` の modifier は `max` でクランプ、`initial.{min,max}` の範囲で count を一様抽選（床配置時、`ItemModifiersLoader.rollInitialCount(name)`）
-- フロア床配置時の抽選フロー: `Game.ts` 床配置 → `Player.createItem(name, { rollModifiers: true, floor })` → `BaseLoader.getFloorConfig(floor).itemModifierChance` で確率判定 → 当選時 `ItemModifiersLoader.pickRandomFor(itemType, itemModifierPool)` で名前抽選 → `rollInitialCount(name)` で count 決定 → `Item.setModifierCount(name, count)`
+- フロア床配置時の抽選フロー: `Game.ts` 床配置 → `ItemFactory.createItem(name, { rollModifiers: true, floor })` → `BaseLoader.getFloorConfig(floor).itemModifierChance` で確率判定 → 当選時 `ItemModifiersLoader.pickRandomFor(itemType, itemModifierPool)` で名前抽選 → `rollInitialCount(name)` で count 決定 → `Item.setModifierCount(name, count)`
 - 装備変更フロー：`PlayerActions.changeEquipment` は装備中アイテムの `canUnequip()` を判定し、`cannot_unequip` の場合は装備解除も置き換え装備もブロックしてメッセージ出力（ターン非消費）。一方、装備解除トラップ（`unequip` effect）は **ローグライク慣例に倣い `cannot_unequip` を無視して強制的に外す**
 - 巻物による付与/解除：`items.yml` の消耗品 `immediate.add_modifier` で装備中アイテムへ自動付与、`immediate.remove_modifier_kind: { kind, target }` で kind タグ一致の modifier を一括除去（解呪など）。サンプル: 攻撃強化の巻物 (`add_modifier: power_reinforced`) / 攻撃弱化の巻物 (`add_modifier: power_weakened`) / 解呪の巻物 (`remove_modifier_kind: { kind: curse, target: all_equipped }`)
 - 敵ドロップ経由の付与：`enemies.yml` の `drop: [{ item, rate, modifierChance? }]` と `base.yml` floor の `enemyDropPool` は additive。`src/lib/map/EnemyDropResolver.ts` の `tryEnemyDrop(dungeon, enemy, floor)` が両プールを連結して各エントリの rate で独立判定し、当選アイテムを敵が居たマスに `ItemObject` として配置。`modifierChance` が指定されているドロップは floor の `itemModifierChance` を上書きできる（敵ドロップだけ高確率にするなど）。`PlayerActions.attackEnemyAt` と `skills/actions/DamageAction.executeDamageAction` の両方の敵死亡経路から呼ばれる。フロア番号は `DungeonMap.getCurrentFloor()` から取得（go-to-next-floor とセーブロード時に `setCurrentFloor` で設定）
@@ -47,7 +47,7 @@
 
 - 設定は `base.yml` フロア配下の `treasure: { rate, trapRate, items[] }`（[data.md](./data.md#フロア毎構成-floors) 参照）。`secretRoom` が無効なフロアでは配置されない
 - 配置: マップ生成時、各隠し部屋について `rate` 判定 → 当選なら部屋内の「扉前以外の通行可能セル」（`DungeonMap.findDoorsInRoom` で扉セルを除外）から 1 セル抽選し `TreasureObject` を配置。階段・敵・トラップ・床アイテムと座標が重ならないよう `excludePositionList` でガード
-- 抽選: `Game.pickTreasureItem` が `items[].bias` を重みとして 1 アイテム決定。`Player.createItem(name)` を modifier ロール無しで呼び、`items[].modifiers[].name`/`count` を `Item.setModifierCount` で**そのまま強制付与**する（フロアの `itemModifierChance` とは独立）
+- 抽選: `Game.pickTreasureItem` が `items[].bias` を重みとして 1 アイテム決定。`ItemFactory.createItem(name)` を modifier ロール無しで呼び、`items[].modifiers[].name`/`count` を `Item.setModifierCount` で**そのまま強制付与**する（フロアの `itemModifierChance` とは独立）
 - 進入禁止: 宝箱セルは敵セルと同等に通行不可。`DungeonMap.isCellBlocked(x, y)` が `getEnemy` と `TreasureObject` を統一判定し、プレイヤー前進 (`movePlayer`) と敵移動 (`tryMoveEnemy`) の両方から参照される
 - 開封: C キー → `trySearch` の方向選択 UI を経由。`Game.executeSearch` が対象セルに `TreasureObject` を検出すると `openTreasure(treasure, x, y)` を呼出
   1. `「宝箱を開けた！」` をメッセージログ
