@@ -16,3 +16,16 @@
   label: 装備解除罠
   effect:
     - type: unequip
+- name: healing_pad
+  label: 回復パッド
+  description: 踏むと淡く光るパッド。意図して起動すると体力が回復する
+  visible: true
+  appearance:
+    mark: o
+    color: 0x66CCFF
+    shape: cylinder
+    concentric_circle: true
+  effect:
+    - type: stat
+      target: life
+      value: 30

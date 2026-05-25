@@ -20,7 +20,14 @@ export class TrapObject extends MapObject {
     this.mark = MapMark.X_CROSS;
     this.color = 0xFF0000;
     this.shape = MapShape.PYRAMID;
-    this.visible = false;
+    this.visible = trapDef.visible ?? false;
+    const ap = trapDef.appearance;
+    if (ap) {
+      if (ap.mark !== undefined) this.mark = ap.mark;
+      if (ap.color !== undefined) this.color = ap.color;
+      if (ap.shape !== undefined) this.shape = ap.shape;
+      if (ap.concentricCircle !== undefined) this.concentricCircle = ap.concentricCircle;
+    }
   }
 }
 

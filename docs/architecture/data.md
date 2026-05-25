@@ -249,6 +249,50 @@ autoSpawner:
 
 `CustomDataStore.set('base', text)` で ZIP からのカスタム `base.yml` を注入可能。`BaseLoader.load(customText)` がこのテキストを優先採用する（fetch をスキップ）。
 
+## traps.yml — トラップ定義
+
+`traps.yml` の各エントリは `TrapDefinition`（`src/lib/TrapsLoader.ts`）にマップされ、`base.yml.floors[].traps` で参照されてフロアごとの `trapPool` に格納される。
+
+```yaml
+- name: spike                # 識別子
+  label: トゲの床             # 表示名
+  description: トゲが生えた床  # 説明
+  effect:                    # 踏み発動時に順次適用される効果
+    - type: stat             # ステータス変動（target / value 必須）
+      target: life
+      value: -10
+    - type: addEffect        # 状態異常付与（value=effects.yml の名前）
+      value: poison
+    - type: unequip          # 装備強制解除（target / value 不要、cannot_unequip も無視）
+
+# 拡張: 最初から見えるトラップ + 表示カスタマイズ
+- name: healing_pad
+  label: 回復パッド
+  description: 踏むと淡く光るパッド。意図して起動すると体力が回復する
+  visible: true              # 既定 false（隠れ罠）。true で最初から見える
+  appearance:                # 既定: 赤×ピラミッド（X_CROSS / 0xFF0000 / PYRAMID）
+    mark: o                  # MapMark の値: 'o' / '*' / '<>' / '+' / 'x' / '[]'
+    color: 0x66CCFF          # 0xRRGGBB 数値 or '#RRGGBB' / '#RGB' / '0xRRGGBB' 文字列
+    shape: cylinder          # フレンドリ名: none / sphere / cube / box / cylinder / pyramid
+    concentric_circle: true  # 床マーカーを同心円で描画（既定 false）
+  effect:
+    - type: stat
+      target: life
+      value: 30
+```
+
+**`visible` フィールドの挙動：**
+
+- `visible: false`（既定）: 従来通りの隠れ罠。プレイヤーが踏むと自動発動 + 同時に可視化される
+- `visible: true`: 最初から見える。**踏んでも自動発動しない**（既存の「探索済み罠は踏み無効化」ロジック `buildTrapObject` 内 `if (object.visible) return true` に従う）。プレイヤーは可視マーカーを避けるか、`足下`（around-0-self）ボタンで `enterTrapConfirmMode` を出して意図的に発動する。回復パッドや祭壇のような「踏むかどうかプレイヤーが選べるオブジェクト」として機能
+
+**`appearance` フィールド：**
+
+- 全フィールド省略可。指定したフィールドのみ既定値を上書き
+- `mark` / `shape` は文字列正規化済み（`TrapsLoader.parseAppearance`）。不正値は起動時 `alert` + throw で停止
+- `color` は数値 (integer) に正規化済み。`'#RGB'` は `'#RRGGBB'` に展開される
+- `concentric_circle` は MapObject の `concentricCircle` プロパティに対応（YAML では snake_case、JS では camelCase）
+
 ## YAML 横断バリデーション
 
 `YamlCrossValidator.validate()`（`src/lib/YamlCrossValidator.ts`）は `GameDataLoader.loadAll()`（`src/lib/GameDataLoader.ts`）で全 Loader の `load()` を完了させた直後に走り、以下のクロス参照を検証する：
