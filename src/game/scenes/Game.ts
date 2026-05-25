@@ -405,26 +405,6 @@ export class Game extends Scene {
         });
     }
 
-    // update(time: number, delta: number): void {
-    //     let distance = 0;
-    //     if (this.keys.keyD?.isDown) {
-    //         distance = this.dungeon.movePlayer(0);
-    //     }
-    //     if (this.keys.keyS?.isDown) {
-    //         distance = this.dungeon.movePlayer(1);
-    //     }
-    //     if (this.keys.keyA?.isDown) {
-    //         distance = this.dungeon.movePlayer(2);
-    //     }
-    //     if (this.keys.keyW?.isDown) {
-    //         distance = this.dungeon.movePlayer(3);
-    //     }
-
-    //     if (distance > 0) {
-    //         this.repaint()
-    //     }
-    // }
-
     /** ミニマップ表示更新（モードコントローラから呼ばれる）。 */
     renderMinimap(): void {
         this.miniMapView.render(this.dungeon, this.revealAll);
