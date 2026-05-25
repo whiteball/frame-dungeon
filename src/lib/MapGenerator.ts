@@ -20,6 +20,7 @@ import { Item } from './Item';
 import { TrapsLoader } from './TrapsLoader';
 import { EnemyLoader } from './EnemyLoader';
 import { StatsLoader } from './StatsLoader';
+import { EventsLoader } from './EventsLoader';
 import type { DungeonSaveData } from './SaveManager';
 import type { TrapDefinition } from './TrapsLoader';
 import { EventBus } from '../game/EventBus';
@@ -1451,6 +1452,8 @@ export class DungeonMap {
           trapRate: obj.trapRate,
           trapPool: [...obj.trapPool],
         });
+      } else if (obj instanceof EventObject) {
+        objects.push({ type: 'event', x: obj.x, y: obj.y, eventName: obj.eventDef.name });
       }
     }
 
@@ -1554,6 +1557,13 @@ export class DungeonMap {
         if (!def) continue;
         const item = Item.deserialize(objData.item, def);
         const obj = new TreasureObject(item, objData.trapRate, [...objData.trapPool]);
+        obj.x = objData.x;
+        obj.y = objData.y;
+        this._objectStore.add(obj);
+      } else if (objData.type === 'event') {
+        const eventDef = EventsLoader.getInstance().getEvent(objData.eventName);
+        if (!eventDef) continue;
+        const obj = new EventObject(eventDef);
         obj.x = objData.x;
         obj.y = objData.y;
         this._objectStore.add(obj);

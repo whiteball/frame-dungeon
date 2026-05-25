@@ -52,7 +52,8 @@ export type MapObjectSaveData =
      * - 旧形式: itemName のみ。deserialize 時にデフォルトの Item として復元
      */
     | { type: 'item'; x: number; y: number; itemName?: string; item?: ItemSaveData }
-    | { type: 'treasure'; x: number; y: number; item: ItemSaveData; trapRate: number; trapPool: string[] };
+    | { type: 'treasure'; x: number; y: number; item: ItemSaveData; trapRate: number; trapPool: string[] }
+    | { type: 'event'; x: number; y: number; eventName: string };
 
 export interface EnemySaveData {
     instanceId: string;
