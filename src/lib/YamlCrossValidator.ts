@@ -6,6 +6,8 @@ import { StatsLoader } from './StatsLoader';
 import { ItemsLoader } from './ItemsLoader';
 import { SkillsLoader } from './SkillsLoader';
 import { ItemModifiersLoader } from './ItemModifiersLoader';
+import { EventsLoader } from './EventsLoader';
+import type { EventActionEntry, EventChoice, RandomOutcomeEntry } from './EventsLoader';
 
 export interface ValidationResult {
     errors: string[];
@@ -25,6 +27,7 @@ export class YamlCrossValidator {
         const items = ItemsLoader.getInstance();
         const skills = SkillsLoader.getInstance();
         const itemModifiers = ItemModifiersLoader.getInstance();
+        const events = EventsLoader.getInstance();
 
         // ─── INFOレベル: base.yml のオプションフィールド ──────────────────────────
 
@@ -376,6 +379,135 @@ export class YamlCrossValidator {
                 }
                 if (effectName && !effects.hasEffect(effectName)) {
                     errors.push(`skills.yml "${skill.name}": action[${i}].apply_effect.effect "${effectName}" が effects.yml に存在しません`);
+                }
+            }
+        }
+
+        // events.yml の各 action 配列内クロス参照
+        // (give_item.name → items.yml, spawn_enemy.name → enemies.yml, learn_skill / execute_skill → skills.yml,
+        //  add_modifier → item_modifiers.yml, apply_effect.effect → effects.yml,
+        //  remove_modifier_kind.kind → item_modifiers.yml の kind タグ)
+        const checkEventActionEntry = (
+            entry: EventActionEntry,
+            ctx: string,
+        ): void => {
+            if (typeof entry === 'string') return; // 'attack' / 'self_destruct' などのキーレス action
+            const keys = Object.keys(entry);
+            if (keys.length !== 1) return;
+            const actionKey = keys[0];
+            const value = (entry as Record<string, unknown>)[actionKey];
+
+            switch (actionKey) {
+                case 'give_item': {
+                    let itemName: string | undefined;
+                    if (typeof value === 'string') itemName = value;
+                    else if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        const p = value as Record<string, unknown>;
+                        if (typeof p.name === 'string') itemName = p.name;
+                        // modifiers[] のクロス参照も検証
+                        if (Array.isArray(p.modifiers)) {
+                            for (let i = 0; i < p.modifiers.length; i++) {
+                                const m = (p.modifiers as any[])[i];
+                                if (m && typeof m === 'object' && typeof m.name === 'string') {
+                                    if (!itemModifiers.has(m.name)) {
+                                        errors.push(`${ctx}.give_item.modifiers[${i}].name "${m.name}" が item_modifiers.yml に存在しません`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (itemName !== undefined && !items.getItem(itemName)) {
+                        errors.push(`${ctx}.give_item "${itemName}" が items.yml に存在しません`);
+                    }
+                    break;
+                }
+                case 'spawn_enemy': {
+                    let enemyName: string | undefined;
+                    if (typeof value === 'string') enemyName = value;
+                    else if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        const p = value as Record<string, unknown>;
+                        if (typeof p.name === 'string') enemyName = p.name;
+                        if (p.near !== undefined && p.near !== 'around' && p.near !== 'room') {
+                            errors.push(`${ctx}.spawn_enemy.near は 'around' または 'room' を指定してください (got: ${JSON.stringify(p.near)})`);
+                        }
+                        if (p.count !== undefined && (typeof p.count !== 'number' || p.count <= 0)) {
+                            errors.push(`${ctx}.spawn_enemy.count は正の数値である必要があります`);
+                        }
+                    }
+                    if (enemyName !== undefined && !enemies.getEnemy(enemyName)) {
+                        errors.push(`${ctx}.spawn_enemy "${enemyName}" が enemies.yml に存在しません`);
+                    }
+                    break;
+                }
+                case 'learn_skill': {
+                    if (typeof value === 'string' && !skills.hasSkill(value)) {
+                        errors.push(`${ctx}.learn_skill "${value}" が skills.yml に存在しません`);
+                    }
+                    break;
+                }
+                case 'execute_skill': {
+                    if (typeof value === 'string') {
+                        const skillDef = skills.getSkill(value);
+                        if (!skillDef) {
+                            errors.push(`${ctx}.execute_skill "${value}" が skills.yml に存在しません`);
+                        } else if ((skillDef.trigger ?? 'active') !== 'active') {
+                            errors.push(`${ctx}.execute_skill "${value}" はパッシブスキル（trigger=${skillDef.trigger}）のため指定できません`);
+                        }
+                    }
+                    break;
+                }
+                case 'add_modifier': {
+                    if (typeof value === 'string' && !itemModifiers.has(value)) {
+                        errors.push(`${ctx}.add_modifier "${value}" が item_modifiers.yml に存在しません`);
+                    }
+                    break;
+                }
+                case 'remove_modifier_kind': {
+                    if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        const r = value as { kind?: unknown };
+                        if (typeof r.kind === 'string' && itemModifiers.getNamesByKind(r.kind).length === 0) {
+                            infos.push(`${ctx}.remove_modifier_kind.kind "${r.kind}" を持つ modifier が item_modifiers.yml に存在しません（解除対象なし）`);
+                        }
+                    }
+                    break;
+                }
+                case 'apply_effect': {
+                    let effectName: string | undefined;
+                    if (typeof value === 'string') effectName = value;
+                    else if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        const p = value as Record<string, unknown>;
+                        if (typeof p.effect === 'string') effectName = p.effect;
+                    }
+                    if (effectName !== undefined && !effects.hasEffect(effectName)) {
+                        errors.push(`${ctx}.apply_effect.effect "${effectName}" が effects.yml に存在しません`);
+                    }
+                    break;
+                }
+            }
+        };
+
+        const checkActionArray = (arr: EventActionEntry[] | undefined, ctx: string): void => {
+            if (!arr) return;
+            for (let i = 0; i < arr.length; i++) {
+                checkEventActionEntry(arr[i], `${ctx}[${i}]`);
+            }
+        };
+
+        for (const ev of events.getEvents()) {
+            const evCtx = `events.yml "${ev.name}"`;
+            checkActionArray(ev.action, `${evCtx}.action`);
+            if (ev.random_outcome) {
+                for (let i = 0; i < ev.random_outcome.length; i++) {
+                    const r: RandomOutcomeEntry = ev.random_outcome[i];
+                    checkActionArray(r.action, `${evCtx}.random_outcome[${i}].action`);
+                }
+            }
+            if (ev.choices) {
+                for (let i = 0; i < ev.choices.length; i++) {
+                    const c: EventChoice = ev.choices[i];
+                    checkActionArray(c.action, `${evCtx}.choices[${i}].action`);
+                    checkActionArray(c.on_success, `${evCtx}.choices[${i}].on_success`);
+                    checkActionArray(c.on_fail, `${evCtx}.choices[${i}].on_fail`);
                 }
             }
         }

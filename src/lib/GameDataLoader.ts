@@ -6,6 +6,7 @@ import { TrapsLoader } from './TrapsLoader';
 import { BaseLoader } from './BaseLoader';
 import { SkillsLoader } from './SkillsLoader';
 import { ItemModifiersLoader } from './ItemModifiersLoader';
+import { EventsLoader } from './EventsLoader';
 
 /**
  * 各 YAML Loader を順次初期化する。
@@ -24,5 +25,6 @@ export class GameDataLoader {
         await BaseLoader.getInstance().load();
         await SkillsLoader.getInstance().loadSkills();
         await ItemModifiersLoader.getInstance().load();
+        await EventsLoader.getInstance().loadEvents();
     }
 }

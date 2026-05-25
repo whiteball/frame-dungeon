@@ -1,0 +1,117 @@
+# 汎用イベントオブジェクト定義
+# - 調査 (C キー方向選択) でのみ起動する
+# - blocking: true（既定）の場合は宝箱と同様に進入禁止セル化される
+# - 結末は action / random_outcome / choices のうちちょうど 1 つ
+# - action 種別: heal / damage / apply_effect / give_item / spawn_enemy / message / self_destruct ...
+
+# 例 1: 回復ポイント（消えない繰り返し可、コスト無し）
+- name: healing_fountain
+  label: 癒しの泉
+  description: 清らかな水が湧き出ている
+  flavor: 透き通った水が傷を癒してくれそうだ。
+  appearance:
+    mark: o
+    color: 0x66CCFF
+    shape: cylinder
+    concentric_circle: true
+  blocking: true
+  choices:
+    - label: 飲む
+      cost:
+        magic: 2
+      action:
+        - heal: "life_max * 0.5"
+        - message: 心地よい水が体を満たした
+    - label: 立ち去る
+      action: []
+
+# 例 2: ランダム結果（メニュー無し、自壊あり）
+- name: mysterious_altar
+  label: 怪しい祭壇
+  description: 古びた祭壇
+  flavor: 古びた祭壇に手を伸ばすと、淡い光が……
+  appearance:
+    mark: '*'
+    color: 0xCCAA66
+    shape: pyramid
+  random_outcome:
+    - weight: 3
+      label: 祝福
+      action:
+        - heal: "life_max * 0.2"
+        - message: 祭壇が祝福を与えた！
+        - self_destruct
+    - weight: 2
+      label: 何も起きない
+      action:
+        - message: ただの石だった……。
+    - weight: 1
+      label: 呪い
+      action:
+        - damage: 15
+        - message: 祭壇が暗く輝いた……。
+        - self_destruct
+
+# 例 3: 能力依存判定 + 成功/失敗分岐（自壊あり）
+- name: heavy_rock
+  label: 大岩
+  description: 大きな岩
+  flavor: 大岩の陰に何かが見える。動かせるだろうか？
+  appearance:
+    mark: '[]'
+    color: 0x888888
+    shape: cube
+  choices:
+    - label: 退かす
+      cost:
+        life: "ceil(life_max * 0.05)"
+      rate: "min(1, power / 30)"
+      on_success:
+        - give_item:
+            name: potion
+        - message: 岩を退かすと薬が転がり出た！
+        - self_destruct
+      on_fail:
+        - damage: 10
+        - message: 岩はびくともしなかった……。
+    - label: 諦める
+      action: []
+
+# 例 4: 三択リスクリワード
+- name: tempting_chest
+  label: 怪しい宝箱
+  description: 立派な装飾の宝箱
+  flavor: 立派な装飾の宝箱。罠の予感もする……。
+  appearance:
+    mark: '<>'
+    color: 0xFFD700
+    shape: box
+  choices:
+    - label: 大胆に開ける
+      action:
+        - give_item:
+            name: power scroll
+        - spawn_enemy:
+            name: ogre
+            count: 1
+        - self_destruct
+    - label: 慎重に開ける
+      action:
+        - give_item:
+            name: potion
+        - spawn_enemy:
+            name: goblin
+            count: 1
+        - self_destruct
+    - label: 罠を解除して開ける
+      cost:
+        magic: 5
+      rate: "min(1, karma / 60)"
+      on_success:
+        - give_item:
+            name: mana potion
+        - self_destruct
+      on_fail:
+        - damage: 5
+        - message: 罠が作動した！
+        - self_destruct
