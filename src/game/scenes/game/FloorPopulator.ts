@@ -6,7 +6,7 @@ import { Player } from '../../../lib/Player';
 import { ItemObject, TreasureObject } from '../../../lib/map/MapObjects';
 import type { DungeonMap, DungeonRestoreCallbacks } from '../../../lib/MapGenerator';
 import type { Item } from '../../../lib/Item';
-import { buildStairsObject, buildTrapObject } from '../mapObjectFactory';
+import { buildStairsObject, buildTrapObject } from './mapObjectFactory';
 
 /**
  * 階段・トラップに紐付けるイベントハンドラ。

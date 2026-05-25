@@ -1,10 +1,10 @@
 'use strict';
 
-import { newMapEvent } from '../../lib/MapObject';
-import type { MapObject, ObjectEvent } from '../../lib/MapObject';
-import { StairsObject, TrapObject } from '../../lib/map/MapObjects';
-import type { DungeonMap } from '../../lib/MapGenerator';
-import type { TrapDefinition } from '../../lib/TrapsLoader';
+import { newMapEvent } from '../../../lib/MapObject';
+import type { MapObject, ObjectEvent } from '../../../lib/MapObject';
+import { StairsObject, TrapObject } from '../../../lib/map/MapObjects';
+import type { DungeonMap } from '../../../lib/MapGenerator';
+import type { TrapDefinition } from '../../../lib/TrapsLoader';
 
 export function buildStairsObject(
   onEnterStair: (dungeon: DungeonMap) => void,
