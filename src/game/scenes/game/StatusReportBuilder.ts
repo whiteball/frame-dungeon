@@ -10,16 +10,26 @@ type DisplayStatData = {
 };
 
 /**
+ * バフ・デバフで小数化した stat 値を小数第1位までに丸めて表示用文字列にする。
+ * 丸めた結果が整数値（.0）になる場合は整数として返す。
+ */
+function formatStatNumber(n: number): string {
+    return Number(n.toFixed(1)).toString();
+}
+
+/**
  * stat の現在値を、bonus 表記（(+N)）と変動値（current/max）を組み合わせた
  * 表示用文字列に整形する。bonus=0 かつ非変動なら数値そのまま返す。
  */
 export function formatStatValue(data: DisplayStatData): number | string {
-    const bonusStr = data.bonus > 0 ? `(+${data.bonus})` : `(${data.bonus})`;
+    const bonusStr = data.bonus > 0 ? `(+${formatStatNumber(data.bonus)})` : `(${formatStatNumber(data.bonus)})`;
+    const currentStr = formatStatNumber(data.currentValue);
     if (data.hasFluctuation && data.maxValue !== null) {
-        const maxPart = data.bonus !== 0 ? `${data.maxValue}${bonusStr}` : `${data.maxValue}`;
-        return `${data.currentValue}/${maxPart}`;
+        const maxStr = formatStatNumber(data.maxValue);
+        const maxPart = data.bonus !== 0 ? `${maxStr}${bonusStr}` : maxStr;
+        return `${currentStr}/${maxPart}`;
     } else if (data.bonus !== 0) {
-        return `${data.currentValue}${bonusStr}`;
+        return `${currentStr}${bonusStr}`;
     } else {
         return data.currentValue;
     }
