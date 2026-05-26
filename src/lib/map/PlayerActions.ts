@@ -375,6 +375,15 @@ export function searchAt(dungeon: DungeonMap, targetX: integer, targetY: integer
     }
   }
 
+  // 偽装は無いが施錠中：ヒント表示（解錠は鍵オブジェクトでのみ可能）
+  for (const c of candidateDoors) {
+    if (dungeon.isLockedDoor(c.x, c.y, c.dir)) {
+      EventBus.emit('message-log', `鍵が掛かっている。`, turnCount);
+      dungeon.dispatchObjectEvent();
+      return true;
+    }
+  }
+
   if (!dungeon.canAttack(x, y, targetX, targetY)) {
     // その方向は壁
     EventBus.emit('message-log', `そこには壁がある。`, turnCount);

@@ -21,7 +21,7 @@ import { TrapsLoader } from './TrapsLoader';
 import { EnemyLoader } from './EnemyLoader';
 import { StatsLoader } from './StatsLoader';
 import { EventsLoader } from './EventsLoader';
-import type { DungeonSaveData } from './SaveManager';
+import type { DungeonSaveData, MapObjectSaveData } from './SaveManager';
 import type { TrapDefinition } from './TrapsLoader';
 import { EventBus } from '../game/EventBus';
 import { makeStatFluctuatedMessage } from './util/text';
@@ -43,6 +43,14 @@ export type RandomPosConfig = {
 export type DungeonBuildOptions = {
   /** 隠し部屋抽選確率（0..1）。0 なら隠し部屋を生成しない */
   secretRoomChance?: number,
+  /**
+   * 隠し部屋扉のバリアント抽選重み。
+   * - plain: 壁偽装扉（従来）
+   * - locked: 偽装無し・施錠
+   * - lockedDisguised: 偽装＋施錠
+   * 未指定または全 0 のとき `{ plain: 1, locked: 1, lockedDisguised: 1 }`（均等 3 分）。
+   */
+  secretRoomDoorVariants?: { plain: number; locked: number; lockedDisguised: number },
   /**
    * MST で連結確保後、冗長な隣接ペアに追加で扉を生やす確率（0..1）。
    * 未指定なら既定値 0.3 が使用される
@@ -74,6 +82,12 @@ export class DungeonMap {
   private _roomsWithCorridors: RoomWithCorridors[];
   /** 壁に偽装された隠し扉キーの集合。形式 "x,y,dir"（両側セル分を 2 エントリ登録） */
   private _disguisedDoors: Set<string> = new Set();
+  /**
+   * 施錠中の扉キーの集合。形式 "x,y,dir"（両側セル分を 2 エントリ登録）。
+   * `isDoorPassable` が壁扱いし、通行・攻撃・経路探索・扉開放描画をすべてブロックする。
+   * 鍵 EventObject（`secret_room_key`）の調査で `unlockDoor` が呼ばれ解錠される。
+   */
+  private _lockedDoors: Set<string> = new Set();
   /** 隠し部屋の領域（オブジェクト配置除外フィルタ用） */
   private _secretRoomRects: Rect[] = [];
 
@@ -114,6 +128,7 @@ export class DungeonMap {
     this._rooms = [];
     this._roomsWithCorridors = [];
     this._disguisedDoors.clear();
+    this._lockedDoors.clear();
     this._secretRoomRects = [];
     this._objectStore.clear();
     const fog = this._enableFog ? 1 : 0;
@@ -314,7 +329,11 @@ export class DungeonMap {
       this._roomsWithCorridors = builder.makeCorridor(this._rooms);
       builder.setWall(this._roomsWithCorridors, options.extraDoorRate ?? 0.3);
       builder.placeObstacles(this._roomsWithCorridors);
-      this._markSecretRoomCandidate(builder, options.secretRoomChance ?? 0);
+      this._markSecretRoomCandidate(
+        builder,
+        options.secretRoomChance ?? 0,
+        options.secretRoomDoorVariants ?? { plain: 1, locked: 1, lockedDisguised: 1 },
+      );
     }
     this.setPlayerRandom();
   }
@@ -353,16 +372,23 @@ export class DungeonMap {
   }
 
   /**
-   * 出入口が 1 つしかない部屋から 1 部屋抽選し、指定確率で扉を壁に偽装する
+   * 出入口が 1 つしかない部屋から 1 部屋抽選し、指定確率で扉を隠し部屋扉に変換する
    *
    * - chance が 0 以下なら何もしない
    * - 候補（出入口 1 つの部屋）が無ければ何もしない
    * - 隣接部屋と壁無しで直結している部屋は候補から除外する（_hasOpenBoundary）
    * - 候補から 1 部屋ランダム抽選 → `Math.random() < chance` で隠し化判定
-   * - 採用した部屋の扉セル両側に "x,y,dir" キーを `_disguisedDoors` に登録
+   * - 採用後 variants の重みで以下 3 種から抽選：
+   *   - plain: 壁偽装のみ（従来）→ `_disguisedDoors` に登録
+   *   - locked: 施錠のみ → `_lockedDoors` に登録（見た目は通常扉＋警告帯）
+   *   - lockedDisguised: 壁偽装＋施錠 → `_disguisedDoors` と `_lockedDoors` の両方に登録
    * - 部屋自体を `_secretRoomRects` に登録（オブジェクト配置除外用）
    */
-  private _markSecretRoomCandidate(builder: MapBuilder, chance: number): void {
+  private _markSecretRoomCandidate(
+    builder: MapBuilder,
+    chance: number,
+    variants: { plain: number; locked: number; lockedDisguised: number },
+  ): void {
     if (chance <= 0) return;
     const candidates: Rect[] = [];
     for (const room of this._rooms) {
@@ -379,8 +405,34 @@ export class DungeonMap {
     const door = doors[0];
     const [dx, dy] = getDirectionOffset(door.dir);
     const oppDir = ((door.dir + 2) % 4) as MapDirection;
-    this._disguisedDoors.add(`${door.x},${door.y},${door.dir}`);
-    this._disguisedDoors.add(`${door.x + dx},${door.y + dy},${oppDir}`);
+    const keyA = `${door.x},${door.y},${door.dir}`;
+    const keyB = `${door.x + dx},${door.y + dy},${oppDir}`;
+
+    // バリアント抽選（重み付き）
+    const totalW = variants.plain + variants.locked + variants.lockedDisguised;
+    const safeTotal = totalW > 0 ? totalW : 3;
+    let r = Math.random() * safeTotal;
+    let variant: 'plain' | 'locked' | 'lockedDisguised';
+    if (totalW <= 0) {
+      // すべて 0 のときは均等扱い
+      const idx = Math.floor(Math.random() * 3);
+      variant = idx === 0 ? 'plain' : idx === 1 ? 'locked' : 'lockedDisguised';
+    } else if ((r -= variants.plain) < 0) {
+      variant = 'plain';
+    } else if ((r -= variants.locked) < 0) {
+      variant = 'locked';
+    } else {
+      variant = 'lockedDisguised';
+    }
+
+    if (variant === 'plain' || variant === 'lockedDisguised') {
+      this._disguisedDoors.add(keyA);
+      this._disguisedDoors.add(keyB);
+    }
+    if (variant === 'locked' || variant === 'lockedDisguised') {
+      this._lockedDoors.add(keyA);
+      this._lockedDoors.add(keyB);
+    }
     this._secretRoomRects.push(picked);
   }
 
@@ -404,6 +456,56 @@ export class DungeonMap {
     this._disguisedDoors.delete(key);
     this._disguisedDoors.delete(`${x + dx},${y + dy},${oppDir}`);
     return true;
+  }
+
+  /**
+   * 指定セル・指定方向の扉が現在「施錠中」かを返す
+   */
+  public isLockedDoor(x: integer, y: integer, dir: MapDirection): boolean {
+    return this._lockedDoors.has(`${x},${y},${dir}`);
+  }
+
+  /**
+   * 施錠扉を解錠する。両側セル分のエントリを削除する。
+   * @returns 実際に解錠した場合 true
+   */
+  public unlockDoor(x: integer, y: integer, dir: MapDirection): boolean {
+    const key = `${x},${y},${dir}`;
+    if (!this._lockedDoors.has(key)) return false;
+    const [dx, dy] = getDirectionOffset(dir);
+    const oppDir = ((dir + 2) % 4) as MapDirection;
+    this._lockedDoors.delete(key);
+    this._lockedDoors.delete(`${x + dx},${y + dy},${oppDir}`);
+    return true;
+  }
+
+  /**
+   * 現在施錠中の扉を返す（両側 2 エントリのうち 1 件のみ、重複排除済み）。
+   * 鍵オブジェクトの紐付け先抽出などに利用する。
+   */
+  public getLockedDoors(): { x: integer; y: integer; dir: MapDirection }[] {
+    const seen = new Set<string>();
+    const result: { x: integer; y: integer; dir: MapDirection }[] = [];
+    for (const key of this._lockedDoors) {
+      const [xs, ys, ds] = key.split(',');
+      const x = parseInt(xs, 10);
+      const y = parseInt(ys, 10);
+      const dir = parseInt(ds, 10) as MapDirection;
+      // 両側のうち片方だけを採用：oppKey を canonical 化
+      const [dx, dy] = getDirectionOffset(dir);
+      const oppDir = ((dir + 2) % 4) as MapDirection;
+      const oppKey = `${x + dx},${y + dy},${oppDir}`;
+      // 辞書順で小さい方を canonical とする
+      const canonical = key < oppKey ? key : oppKey;
+      if (seen.has(canonical)) continue;
+      seen.add(canonical);
+      if (canonical === key) {
+        result.push({ x, y, dir });
+      } else {
+        result.push({ x: x + dx, y: y + dy, dir: oppDir });
+      }
+    }
+    return result;
   }
 
   /**
@@ -523,14 +625,17 @@ export class DungeonMap {
 
   /**
    * 指定セル・指定方向の扉が「通過可能な扉」かを返す。
-   * 扉ビットがあっても隠し扉（壁偽装中）なら false を返す。
+   * 扉ビットがあっても隠し扉（壁偽装中）or 施錠扉なら false を返す。
    * 通行/攻撃/経路探索/視界判定が共通で参照する。
    */
   public isDoorPassable(x: integer, y: integer, dir: MapDirection): boolean {
     const v = this.getAt(x, y);
     if (v < 0) return false;
     if (!(v & (16 << dir))) return false;
-    return !this._disguisedDoors.has(`${x},${y},${dir}`);
+    const key = `${x},${y},${dir}`;
+    if (this._disguisedDoors.has(key)) return false;
+    if (this._lockedDoors.has(key)) return false;
+    return true;
   }
 
   /**
@@ -774,8 +879,14 @@ export class DungeonMap {
   public movePlayer(direction: MapDirection): integer {
     const value = this.getAt(this._player.x, this._player.y)
     if (value & (2 ** direction)) {
-      // 壁あり: 通過可能な扉（隠し扉でない）でなければ移動不可
+      // 壁あり: 通過可能な扉（隠し扉でない／施錠中でない）でなければ移動不可
       if (!this.isDoorPassable(this._player.x, this._player.y, direction)) {
+        // 施錠扉に阻まれた場合はメッセージで通知（壁ぶつかり時の鍵ヒント）。
+        // ただし偽装中（lockedDisguised の偽装解除前）は隠し扉の存在を漏らさないため無言とする
+        if (this.isLockedDoor(this._player.x, this._player.y, direction)
+            && !this.isDisguisedDoor(this._player.x, this._player.y, direction)) {
+          EventBus.emit('message-log', '鍵が掛かっている。', this._turnCount);
+        }
         return 0;
       }
     }
@@ -1453,7 +1564,20 @@ export class DungeonMap {
           trapPool: [...obj.trapPool],
         });
       } else if (obj instanceof EventObject) {
-        objects.push({ type: 'event', x: obj.x, y: obj.y, eventName: obj.eventDef.name });
+        const entry: MapObjectSaveData = {
+          type: 'event',
+          x: obj.x,
+          y: obj.y,
+          eventName: obj.eventDef.name,
+        };
+        if (obj.linkedDoor) {
+          entry.linkedDoor = {
+            x: obj.linkedDoor.x,
+            y: obj.linkedDoor.y,
+            dir: obj.linkedDoor.dir,
+          };
+        }
+        objects.push(entry);
       }
     }
 
@@ -1476,6 +1600,7 @@ export class DungeonMap {
       objects,
       enemies,
       disguisedDoors: Array.from(this._disguisedDoors),
+      lockedDoors: Array.from(this._lockedDoors),
       secretRoomRects: this._secretRoomRects.map(r => ({ x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 })),
     };
   }
@@ -1500,6 +1625,7 @@ export class DungeonMap {
       corridors: rwc.corridors.map(c => new Rect(c.x1, c.y1, c.x2, c.y2)),
     }));
     this._disguisedDoors = new Set(data.disguisedDoors ?? []);
+    this._lockedDoors = new Set(data.lockedDoors ?? []);
     this._secretRoomRects = (data.secretRoomRects ?? []).map(r => new Rect(r.x1, r.y1, r.x2, r.y2));
 
     this._objectStore.clear();
@@ -1569,6 +1695,13 @@ export class DungeonMap {
         const obj = new EventObject(eventDef);
         obj.x = objData.x;
         obj.y = objData.y;
+        if (objData.linkedDoor) {
+          obj.linkedDoor = {
+            x: objData.linkedDoor.x,
+            y: objData.linkedDoor.y,
+            dir: objData.linkedDoor.dir as MapDirection,
+          };
+        }
         this._objectStore.add(obj);
       }
     }

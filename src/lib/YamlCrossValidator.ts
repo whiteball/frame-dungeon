@@ -29,6 +29,16 @@ export class YamlCrossValidator {
         const itemModifiers = ItemModifiersLoader.getInstance();
         const events = EventsLoader.getInstance();
 
+        // ─── 施錠扉システムの可用性判定 ────────────────────────────────────────
+        // `events.yml` に `secret_room_key`（解錠レバー）が無いと施錠扉に入れない部屋になるため、
+        // BaseLoader 側で `secretRoomDoorVariants.locked` / `lockedDisguised` を強制 0 にする。
+        // どんな base.yml 設定であっても plain（壁偽装のみ）にフォールバックされる。
+        const hasSecretRoomKey = events.has('secret_room_key');
+        base.setLockedDoorsAvailable(hasSecretRoomKey);
+        if (!hasSecretRoomKey) {
+            infos.push(`events.yml: "secret_room_key" が未定義のため、隠し部屋扉は plain（壁偽装のみ）に強制されます`);
+        }
+
         // ─── INFOレベル: base.yml のオプションフィールド ──────────────────────────
 
         if (!base.hasName()) {
@@ -517,6 +527,13 @@ export class YamlCrossValidator {
                     }
                     if (effectName !== undefined && !effects.hasEffect(effectName)) {
                         errors.push(`${ctx}.apply_effect.effect "${effectName}" が effects.yml に存在しません`);
+                    }
+                    break;
+                }
+                case 'unlock_door': {
+                    // 鍵 EventObject 専用 action。`param: 'self'` 固定（EventObject.linkedDoor を runtime に解決）。
+                    if (value !== 'self') {
+                        errors.push(`${ctx}.unlock_door は 'self' のみサポートします (got: ${JSON.stringify(value)})`);
                     }
                     break;
                 }

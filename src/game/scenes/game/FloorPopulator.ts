@@ -44,6 +44,7 @@ export function populateFloor(args: {
     dungeon.resize(floorConfig.width, floorConfig.height);
     dungeon.build({
         secretRoomChance: floorConfig.secretRoomChance,
+        secretRoomDoorVariants: floorConfig.secretRoomDoorVariants,
         extraDoorRate: floorConfig.extraDoorRate,
     });
     dungeon.resetFloorTurnCount();
@@ -117,6 +118,35 @@ export function populateFloor(args: {
         trapObj.y = trapPos[1];
         dungeon.placeObject(trapObj);
         excludePositionList.push(trapPos);
+    }
+
+    // 施錠扉に紐付ける鍵（実体は「どこかの扉に繋がるレバー」）の配置
+    // dungeon.build() の variants 抽選で _lockedDoors に登録された扉に対し、
+    // events.yml の `secret_room_key` 定義から EventObject を生成し linkedDoor を注入する
+    const lockedDoors = dungeon.getLockedDoors();
+    if (lockedDoors.length > 0) {
+        const keyDef = EventsLoader.getInstance().getEvent('secret_room_key');
+        if (!keyDef) {
+            console.warn(`floor ${floor}: 施錠扉が ${lockedDoors.length} 件ありますが events.yml に "secret_room_key" が未定義です`);
+        } else {
+            const keyPositions = dungeon.getRandomPosList(lockedDoors.length, false, {
+                withoutCorridor: true,
+                withoutDoor: true,
+                withoutPlayer: true,
+                withoutSecretRoom: true,
+                excludePositionList,
+            });
+            for (let i = 0; i < keyPositions.length; i++) {
+                const pos = keyPositions[i];
+                const door = lockedDoors[i];
+                const keyObj = new EventObject(keyDef);
+                keyObj.linkedDoor = { x: door.x, y: door.y, dir: door.dir };
+                keyObj.x = pos[0];
+                keyObj.y = pos[1];
+                dungeon.placeObject(keyObj);
+                excludePositionList.push(pos);
+            }
+        }
     }
 
     // イベントオブジェクトの配置（base.yml の events / eventCount に従う）

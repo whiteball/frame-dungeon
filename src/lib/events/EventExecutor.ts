@@ -353,6 +353,21 @@ function executeOneAction(
             }
             break;
         }
+        case 'unlock_door': {
+            // param: 'self' のときのみ EventObject.linkedDoor を unlock。
+            // 鍵オブジェクトと施錠扉の紐付けは FloorPopulator / deserialize 時に EventObject.linkedDoor へ書き込まれる。
+            if (param !== 'self') {
+                console.warn(`event '${eventObj.eventDef.name}': unlock_door の param は 'self' のみサポート（received: ${JSON.stringify(param)}）`);
+                break;
+            }
+            const ld = eventObj.linkedDoor;
+            if (!ld) {
+                console.warn(`event '${eventObj.eventDef.name}': unlock_door: self を指定しましたが linkedDoor が未設定です`);
+                break;
+            }
+            dungeon.unlockDoor(ld.x, ld.y, ld.dir);
+            break;
+        }
         case 'spawn_enemy': {
             let enemyName: string | undefined;
             let count = 1;

@@ -53,7 +53,17 @@ export type MapObjectSaveData =
      */
     | { type: 'item'; x: number; y: number; itemName?: string; item?: ItemSaveData }
     | { type: 'treasure'; x: number; y: number; item: ItemSaveData; trapRate: number; trapPool: string[] }
-    | { type: 'event'; x: number; y: number; eventName: string };
+    | {
+        type: 'event';
+        x: number;
+        y: number;
+        eventName: string;
+        /**
+         * `unlock_door: self` action 用の連動扉座標。
+         * 鍵 (`secret_room_key`) のような特定の扉と紐付けられた EventObject 用。
+         */
+        linkedDoor?: { x: number; y: number; dir: number };
+      };
 
 export interface EnemySaveData {
     instanceId: string;
@@ -88,6 +98,8 @@ export interface DungeonSaveData {
     enemies: EnemySaveData[];
     /** 壁に偽装中の隠し扉キー（形式 "x,y,dir"、両側 2 エントリ） */
     disguisedDoors?: string[];
+    /** 施錠中の扉キー（形式 "x,y,dir"、両側 2 エントリ）。鍵オブジェクトの調査で解錠される */
+    lockedDoors?: string[];
     /** 隠し部屋の領域（オブジェクト配置除外用） */
     secretRoomRects?: RectData[];
 }

@@ -87,7 +87,7 @@
   - [ ] セット装備ボーナス
 
 - [ ] 特殊アイテム
-  - [ ] 鍵とドアのシステム
+  - [x] 鍵とドアのシステム — 隠し部屋扉のバリエーション拡張（`secretRoomDoorVariants: { plain, locked, lockedDisguised }` で重み抽選）。施錠扉は壁同等（通行・攻撃・扉開放描画すべて遮断）、視覚は取っ手の代わりに黄黒警告ストライプ帯。鍵は `events.yml` の `secret_room_key`（実体は「どこかの扉に繋がるレバー」）として配置され、調査で `unlock_door: self` action 経由で対応扉を解錠。詳細は [docs/architecture/data.md](docs/architecture/data.md) の `secretRoomDoorVariants` 節と [docs/architecture/events.md](docs/architecture/events.md) の `unlock_door` 項を参照
   - [x] 魔法の巻物（スキルが発動するアイテム）: `items.yml` の `effect.immediate.executeSkill: <skill>` でアクティブスキルをコスト無し・未習得不問で発動。`target: front` のスキルは方向選択後にアイテム消費、キャンセル時は非消費。パッシブ系は `YamlCrossValidator` でエラー
   - [ ] 永続効果アイテム
 

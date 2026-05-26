@@ -76,6 +76,25 @@
     - label: 諦める
       action: []
 
+# 鍵（隠し部屋の施錠扉解錠用、FloorPopulator から直接参照）
+# - base.yml.floors[].events プールには入れない（重み付き抽選で出ては困る）
+# - 内部識別子は secret_room_key だが、ユーザー向け文言は「どこかの扉に繋がるレバー」表現
+# - 施錠扉ごとに 1 個ずつフロアのランダム位置に配置され、調査で対応扉が解錠される
+# - unlock_door: self は EventObject.linkedDoor を参照して対応扉を解錠する
+- name: secret_room_key
+  label: 古びたレバー
+  description: どこかの扉に繋がっているレバー
+  flavor: 壁から突き出た古びたレバーがある。どこかの扉に繋がっていそうだ。
+  appearance:
+    mark: '+'
+    color: 0xFFCC00
+    shape: cylinder
+  blocking: true
+  action:
+    - unlock_door: self
+    - message: どこかで鍵が開いたようだ。
+    - self_destruct
+
 # 例 4: 三択リスクリワード
 - name: tempting_chest
   label: 怪しい宝箱

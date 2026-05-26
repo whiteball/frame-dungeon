@@ -166,6 +166,10 @@ floors:
           rate: 0.05            # ドロップ確率 (0..1) 独立判定
           modifierChance: 0.5   # 任意。当該ドロップの modifier 付与確率上書き
       secretRoom: yes           # 任意。true/'yes' で 50%、数値ならその確率で隠し部屋を生成
+      secretRoomDoorVariants:   # 任意。隠し部屋扉のバリアント重み（後述）
+        plain: 1                # 壁偽装のみ（従来）
+        locked: 1               # 施錠のみ
+        lockedDisguised: 1      # 偽装＋施錠
       extraDoorRate: 0.3        # 任意。MST 連結後に冗長隣接へ扉を追加する確率 (0..1)。未指定で 0.3
       respawnCycle: 20          # 任意。敵リスポーン間隔ターン数。未指定で 20
       longStayTurns: 1500       # 任意。長居警告/強制移動の規定ターン数（絶対値）。指定時は longStayFactor より優先
@@ -229,6 +233,25 @@ floors:
 - 隠し部屋には階段・アイテム・トラップ・敵・プレイヤー初期位置を配置しない（`DungeonMap.getRandomPos({ withoutSecretRoom: true })`）。ただし非隠し部屋に置けない場合は `setPlayerRandom` が隠し部屋へのフォールバック配置を許可する
 - 偽装中の扉は MainView / MiniMapView の両方で壁として描画され、フォグ可視判定でも壁扱いされる。プレイヤーが隣接して「調べる」（C キー → `trySearch`）で正しい方向を選ぶと `PlayerActions.searchAt` が `dungeon.revealDisguisedDoor` を呼び `「隠し扉を発見した！」` を message-log に流して通常扉に戻す
 - 偽装状態は `DungeonSaveData.disguisedDoors` / `secretRoomRects` でセーブ/ロードに永続化される
+
+**`secretRoomDoorVariants`:**
+
+- 隠し部屋の入口扉のバリアントを重み付き抽選で決定する。各キーは非負の数値で抽選重みを表す
+- フォーマット：`{ plain: <weight>, locked: <weight>, lockedDisguised: <weight> }`
+- 未指定または全 0 のとき `{ plain: 1, locked: 1, lockedDisguised: 1 }`（均等 3 分）にフォールバックする
+- 各バリアントの挙動：
+
+  | 名前 | 偽装 | 施錠 | 解除方法 | 視覚 |
+  | --- | :-: | :-: | --- | --- |
+  | `plain` | ○ | ─ | C キー調査で偽装解除 | 偽装中は壁、解除後は通常扉 |
+  | `locked` | ─ | ○ | 対応する鍵 EventObject を調査 | 取っ手の代わりに黄黒警告ストライプ帯付きの扉 |
+  | `lockedDisguised` | ○ | ○ | C キーで偽装解除 + 鍵で施錠解除（順不同・独立） | 偽装中は壁、偽装解除後は警告帯付きの施錠扉 |
+
+- 施錠扉は `DungeonMap._lockedDoors: Set<string>` で管理。`isDoorPassable` が壁扱いし、プレイヤー/敵の通行・攻撃・経路探索・扉開放描画をすべてブロックする
+- プレイヤーが施錠扉に向かって移動を試みると `movePlayer` が `「鍵が掛かっている。」` を message-log に流す（ターンは消費しない）。C キー調査でも同じメッセージが出る
+- 施錠扉ごとに 1 個ずつ、`events.yml` の `secret_room_key` 定義から `EventObject` を生成しフロアのランダム位置に配置する（`FloorPopulator` 内で `dungeon.getLockedDoors()` を参照）。`EventObject.linkedDoor` に対応扉の座標を注入し、調査時に `EventExecutor` の `unlock_door: self` action が `dungeon.unlockDoor(...)` を呼ぶ
+- 施錠状態は `DungeonSaveData.lockedDoors` で永続化。鍵 EventObject の linkedDoor は `MapObjectSaveData.event.linkedDoor` で永続化される
+- **可用性チェック**: `events.yml` に `secret_room_key` が未定義の場合、`YamlCrossValidator` が起動時に `BaseLoader.setLockedDoorsAvailable(false)` を呼び、全フロアの `secretRoomDoorVariants` を `{ plain: max(配置値, 1), locked: 0, lockedDisguised: 0 }` に強制する。解錠手段が無いまま入れない部屋が生成されるのを防ぐためのフェイルセーフ（カスタムデータで events.yml を最小化した場合などに有効）
 
 **`treasure`:**
 

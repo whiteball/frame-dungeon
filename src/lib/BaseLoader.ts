@@ -49,6 +49,14 @@ export interface FloorConfigRaw {
      * 「出入口が 1 つしかない部屋」から 1 部屋抽選し扉を壁に偽装する。
      */
     secretRoom?: boolean | number | string;
+    /**
+     * 隠し部屋の入口扉のバリアント抽選重み。
+     * - plain: 従来の壁偽装扉（C キー調査で発見）
+     * - locked: 偽装無し・施錠扉（鍵オブジェクト調査で解錠）
+     * - lockedDisguised: 壁偽装 + 施錠（両方を独立に解除する必要あり）
+     * 未指定または全 0 のとき `{ plain: 1, locked: 1, lockedDisguised: 1 }`（均等 3 分）。
+     */
+    secretRoomDoorVariants?: { plain?: number; locked?: number; lockedDisguised?: number };
     /** 隠し部屋に置く宝箱の設定。secretRoom が無効なら無視される */
     treasure?: TreasureConfigRaw;
     /**
@@ -116,6 +124,11 @@ export interface ResolvedFloorConfig {
     enemyDropPool: EnemyDropEntry[];
     /** 隠し部屋抽選確率（0..1）。0 なら無効。boolean true は 0.5 に正規化される */
     secretRoomChance: number;
+    /**
+     * 隠し部屋扉バリアント抽選重み（正規化済み、3 キー必須・全 0 ならフォールバック `{1,1,1}`）。
+     * secretRoomChance=0 なら参照されない。
+     */
+    secretRoomDoorVariants: { plain: number; locked: number; lockedDisguised: number };
     /** 隠し部屋宝箱設定。なければ undefined */
     treasure?: ResolvedTreasureConfig;
     /** MST で連結確保後、冗長な隣接ペアに追加で扉を生やす確率（0..1）。既定 0.3 */
@@ -155,6 +168,12 @@ export class BaseLoader {
     private playerInitialStats: Map<string, number> = new Map();
     private _longStayMessages: string[] | null = null;
     private _longStayFactor: number = 4;
+    /**
+     * 施錠扉システムが利用可能か。`events.yml` に `secret_room_key` が定義されているときのみ true。
+     * false の場合、`getFloorConfig` は `secretRoomDoorVariants.locked` / `lockedDisguised` を強制 0 にする
+     * （プレイヤーが入れない部屋を出さないため）。`YamlCrossValidator.validate()` から設定される。
+     */
+    private _lockedDoorsAvailable: boolean = true;
 
     // INFOレベル判定用フラグ
     private _nameExplicit = false;
@@ -466,6 +485,17 @@ export class BaseLoader {
         return this._longStayFactor;
     }
 
+    /**
+     * 施錠扉システムが利用可能か（`events.yml` に `secret_room_key` が定義されているか）を設定する。
+     * 設定を変更すると resolvedCache をクリアして次回 `getFloorConfig` から反映する。
+     * `YamlCrossValidator.validate()` で起動時に一度呼ばれる想定。
+     */
+    setLockedDoorsAvailable(available: boolean): void {
+        if (this._lockedDoorsAvailable === available) return;
+        this._lockedDoorsAvailable = available;
+        this.resolvedCache.clear();
+    }
+
     getFloorConfig(floor: number): ResolvedFloorConfig {
         const keys = [...this.rawFloorConfigs.keys()].sort((a, b) => a - b);
         const matchingKeys = keys.filter(k => k <= floor);
@@ -538,6 +568,36 @@ export class BaseLoader {
             secretRoomChance = 0.5;
         } else if (typeof raw.secretRoom === 'number' && isFinite(raw.secretRoom)) {
             secretRoomChance = Math.max(0, Math.min(1, raw.secretRoom));
+        }
+
+        // 隠し部屋扉バリアント抽選重みの正規化（plain / locked / lockedDisguised）
+        const variantsRaw = raw.secretRoomDoorVariants;
+        const pickW = (v: unknown): number => {
+            if (typeof v !== 'number' || !isFinite(v) || v < 0) return 0;
+            return v;
+        };
+        let secretRoomDoorVariants: { plain: number; locked: number; lockedDisguised: number };
+        if (variantsRaw && typeof variantsRaw === 'object') {
+            const plain = pickW(variantsRaw.plain);
+            const locked = pickW(variantsRaw.locked);
+            const lockedDisguised = pickW(variantsRaw.lockedDisguised);
+            if (plain + locked + lockedDisguised <= 0) {
+                secretRoomDoorVariants = { plain: 1, locked: 1, lockedDisguised: 1 };
+            } else {
+                secretRoomDoorVariants = { plain, locked, lockedDisguised };
+            }
+        } else {
+            secretRoomDoorVariants = { plain: 1, locked: 1, lockedDisguised: 1 };
+        }
+        // 施錠扉システムが利用不可（events.yml に secret_room_key が無い）の場合、
+        // 解錠手段が存在しないので locked / lockedDisguised を 0 に強制（plain のみで抽選）。
+        // plain も 0 だと隠し部屋自体が出ないことになるため最低 1 を補償する。
+        if (!this._lockedDoorsAvailable) {
+            secretRoomDoorVariants = {
+                plain: secretRoomDoorVariants.plain > 0 ? secretRoomDoorVariants.plain : 1,
+                locked: 0,
+                lockedDisguised: 0,
+            };
         }
 
         const enemyDropPool: EnemyDropEntry[] = [];
@@ -645,6 +705,7 @@ export class BaseLoader {
             itemModifierPool,
             enemyDropPool,
             secretRoomChance,
+            secretRoomDoorVariants,
             treasure,
             extraDoorRate,
             respawnCycle,

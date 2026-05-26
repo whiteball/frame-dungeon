@@ -7,6 +7,7 @@ import type { TrapDefinition } from '../TrapsLoader';
 import type { Item } from '../Item';
 import type { EventDefinition } from '../EventsLoader';
 import { applyAppearance } from '../AppearanceSpec';
+import type { MapDirection } from './MapDirection';
 
 export class StairsObject extends MapObject {
   constructor() {
@@ -55,6 +56,13 @@ export class TreasureObject extends MapObject {
  * イベントハンドラの差し込みは `buildEventObject` (mapObjectFactory) で行う。
  */
 export class EventObject extends MapObject {
+  /**
+   * `unlock_door: self` action 用の連動扉座標。
+   * 鍵 (`secret_room_key`) のような特定の扉と紐付けられた EventObject 用に
+   * FloorPopulator / deserialize 経由で外部から代入される。
+   */
+  public linkedDoor?: { x: integer; y: integer; dir: MapDirection };
+
   constructor(public readonly eventDef: EventDefinition) {
     super();
     // 既定の見た目（青系球体）。appearance 指定があれば上書きする

@@ -75,6 +75,7 @@ choices:
 | `give_item: <name>` または `{ name, count?, modifiers? }` | アイテムをインベントリに追加。**満杯時は足下に `ItemObject` 配置**（宝箱開封と同じ流儀） |
 | `spawn_enemy: <name>` または `{ name, count?, near? }` | 敵を生成・配置。`near: around`（既定、隣接 8 マス）/ `room`（プレイヤーゾーン）。`around` で不足する場合は `room` にフォールバック。**プレイヤーセルと候補セル間の壁/扉は検査しないため、プレイヤーが壁際にいると壁の向こう側の部屋に敵が出現する場合がある**（演出としては許容範囲と判断、`EventExecutor.getAroundEmptyCells` 参照） |
 | `message: <text>` | 任意ログ出力（演出用） |
+| `unlock_door: self` | `EventObject.linkedDoor` で指定された扉を解錠（`DungeonMap.unlockDoor`）。`secret_room_key` 専用 action で、`param: 'self'` 固定。linkedDoor は YAML には書かず、`FloorPopulator` が施錠扉ごとに runtime で注入する |
 | `self_destruct` | 当該 `EventObject` を `removeMapObject`。1 回限りのイベントに |
 
 action 配列は順次実行され、`self_destruct` を含んでいた場合は最後に EventObject を除去する。`damage` でプレイヤー死亡時は以降の action をスキップ。
@@ -116,6 +117,6 @@ floors:
 
 ## セーブ/ロード
 
-`MapObjectSaveData` に `{ type: 'event'; x; y; eventName }` を追加。`DungeonMap.serialize` / `deserialize` で EventObject の名前と座標を永続化する。「自壊済みか」は「マップ上に存在するか」で表現するため追加状態は不要。
+`MapObjectSaveData` に `{ type: 'event'; x; y; eventName; linkedDoor? }` を追加。`DungeonMap.serialize` / `deserialize` で EventObject の名前と座標を永続化する。「自壊済みか」は「マップ上に存在するか」で表現するため追加状態は不要。`linkedDoor` は `secret_room_key` のような扉と紐付くイベント用のオプション（隠し部屋施錠扉システム）。
 
 `yamlDigest` は `CustomDataStore.YAML_KEYS` から計算され、`events` キーが既に登録済みのため events.yml の変更は自動的にダイジェスト変化として検出される。
