@@ -5,6 +5,7 @@ import type { MapObject, ObjectEvent } from '../../../lib/MapObject';
 import { StairsObject, TrapObject } from '../../../lib/map/MapObjects';
 import type { DungeonMap } from '../../../lib/MapGenerator';
 import type { TrapDefinition } from '../../../lib/TrapsLoader';
+import { EventBus } from '../../EventBus';
 
 export function buildStairsObject(
   onEnterStair: (dungeon: DungeonMap) => void,
@@ -22,8 +23,11 @@ export function buildTrapObject(
   enterConfirmMode: (def: TrapDefinition, obj: MapObject) => void,
 ): TrapObject {
   const obj = new TrapObject(trapDef);
-  const onTrigger: ObjectEvent = (_, object) => {
-    if (object.visible) return true;
+  const onTrigger: ObjectEvent = (dungeon, object) => {
+    if (object.visible) {
+      EventBus.emit('message-log', `${trapDef.label}の上に乗った`, dungeon.getTurnCount());
+      return true;
+    }
     object.visible = true;
     applyEffects(trapDef);
     return true;

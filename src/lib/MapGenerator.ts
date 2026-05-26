@@ -1521,8 +1521,11 @@ export class DungeonMap {
         const trapDef = trapsLoader.getTrap(objData.trapName);
         if (!trapDef) continue;
         const obj = new TrapObject(trapDef);
-        const onTrigger: ObjectEvent = (_, object) => {
-          if (object.visible) return true;
+        const onTrigger: ObjectEvent = (dungeon, object) => {
+          if (object.visible) {
+            EventBus.emit('message-log', `${trapDef.label}の上に乗った`, dungeon.getTurnCount());
+            return true;
+          }
           object.visible = true;
           callbacks.applyTrapEffects(trapDef);
           return true;
