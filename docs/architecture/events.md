@@ -73,7 +73,7 @@ choices:
 | `remove_modifier_kind: { kind, target? }` | 指定 kind の modifier を解除 |
 | `execute_skill: <name>` | コスト無し・未習得不問でスキル発動（`SkillExecutor.executeSkillFromItem`）。`target: front` スキルは event 経由では発動不可 |
 | `give_item: <name>` または `{ name, count?, modifiers? }` | アイテムをインベントリに追加。**満杯時は足下に `ItemObject` 配置**（宝箱開封と同じ流儀） |
-| `spawn_enemy: <name>` または `{ name, count?, near? }` | 敵を生成・配置。`near: around`（既定、隣接 8 マス）/ `room`（プレイヤーゾーン）。`around` で不足する場合は `room` にフォールバック |
+| `spawn_enemy: <name>` または `{ name, count?, near? }` | 敵を生成・配置。`near: around`（既定、隣接 8 マス）/ `room`（プレイヤーゾーン）。`around` で不足する場合は `room` にフォールバック。**プレイヤーセルと候補セル間の壁/扉は検査しないため、プレイヤーが壁際にいると壁の向こう側の部屋に敵が出現する場合がある**（演出としては許容範囲と判断、`EventExecutor.getAroundEmptyCells` 参照） |
 | `message: <text>` | 任意ログ出力（演出用） |
 | `self_destruct` | 当該 `EventObject` を `removeMapObject`。1 回限りのイベントに |
 

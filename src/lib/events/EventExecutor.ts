@@ -144,6 +144,12 @@ function pickRandomOutcome(entries: RandomOutcomeEntry[]): RandomOutcomeEntry | 
 
 /**
  * 8 マス近傍からランダム順に空きセルを返す（near='around' 用）。
+ *
+ * 注意: プレイヤーセルと候補セル間の壁/扉ビットは検査しないため、プレイヤーが壁際にいる場合は
+ * 壁の向こう側の部屋に敵が出現することがある（例：プレイヤー = 部屋 A 内の壁ぎわ、
+ * 候補セル = 隣接する部屋 B 内）。視覚的にはやや唐突に見える可能性があるが、
+ * 「イベントから魔物が湧いた」演出としては許容範囲と判断し意図的に許容している。
+ * 厳密に視線/通路を経由したセルのみに限定したい場合は `isInSameZone` などで絞ること。
  */
 function getAroundEmptyCells(dungeon: DungeonMap): Array<[integer, integer]> {
     const { x: px, y: py } = dungeon.getPlayerPos();

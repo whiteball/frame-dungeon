@@ -31,7 +31,6 @@
   description: 古びた祭壇
   flavor: 古びた祭壇に手を伸ばすと、淡い光が……
   appearance:
-    mark: '*'
     color: 0xCCAA66
     shape: pyramid
   random_outcome:
