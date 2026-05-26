@@ -98,7 +98,12 @@ export function populateFloor(args: {
 
     // トラップ配置（base.yml の設定に従う）
     const trapCount = randInt(floorConfig.trapMin, floorConfig.trapMax);
-    const traps = dungeon.getRandomPosList(trapCount, false, { withoutPlayer: true, withoutSecretRoom: true, excludePositionList: [step] });
+    const traps = dungeon.getRandomPosList(trapCount, false, {
+        withoutCorridor: true,
+        withoutPlayer: true,
+        withoutSecretRoom: true,
+        excludePositionList: [step]
+    });
     for (const trapPos of traps) {
         if (floorConfig.trapPool.length === 0) break;
         const trapName = floorConfig.trapPool[randInt(0, floorConfig.trapPool.length - 1)];
@@ -214,6 +219,7 @@ function spawnEnemies(
 ): void {
     for (const { name, count } of config.fixedEnemies) {
         const positions = dungeon.getRandomPosList(count, false, {
+            withoutCorridor: true,
             withoutPlayer: true,
             withoutSecretRoom: true,
             excludePositionList: excludePositions,
