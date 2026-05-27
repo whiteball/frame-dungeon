@@ -31,6 +31,7 @@ export class Enemy extends MapObject {
     private randomWalkCount: integer = 0;
     // target がプレイヤー視認由来か（false=ウェイポイント）。else if の扉リダイレクトはプレイヤー追跡時のみ有効
     private targetIsPlayerPos: boolean = false;
+    private blockedCells: [number, number][] = [];
 
     constructor(definition: EnemyDefinition, x: integer, y: integer, instanceId?: string) {
         super();
@@ -156,17 +157,25 @@ export class Enemy extends MapObject {
             return;
         }
 
+        // 記録しているブロックセルの状態をチェックする
+        this.blockedCells = this.blockedCells.filter((block) => {
+            // 視線が通っていないセルのブロック状態はそのまま
+            if (!dungeon.hasLineOfSight(this.x, this.y, block[0], block[1])) {
+                return true;
+            }
+            // そのセルが通過可能になっていたら消す
+            return dungeon.isCellBlocked(block[0], block[1]);
+        })
         const prevX = this.x, prevY = this.y;
         let path: MapDirection[] | undefined = [];
-        const blocked: [number, number][] = [];
         do {
             // 経路がブロックされていたなら、別の経路を探す
             if (path && path.length > 0) {
                 const [dx, dy] = getDirectionOffset(path[0]);
-                blocked.push([this.x + dx, this.y + dy]);
+                this.blockedCells.push([this.x + dx, this.y + dy]);
             }
 
-            path = dungeon.findPath(this.x, this.y, this.target.x, this.target.y, { blockedPositions: blocked });
+            path = dungeon.findPath(this.x, this.y, this.target.x, this.target.y, { blockedPositions: this.blockedCells });
             if (path === undefined || path.length === 0) {
                 this.target = null;
                 this.targetIsPlayerPos = false;
@@ -183,10 +192,11 @@ export class Enemy extends MapObject {
             }
         } while (!dungeon.tryMoveEnemy(this, path[0]));
 
-        // 扉を越えた場合は出発セルを記録し、ランダムウォークカウンタをリセット
+        // 扉を越えた場合は出発セルを記録し、ランダムウォークカウンタとブロックセルリストをリセット
         if (dungeon.getAt(prevX, prevY) & (16 << path[0])) {
             this.lastEnteredFrom = { x: prevX, y: prevY };
             this.randomWalkCount = 0;
+            this.blockedCells = [];
         }
 
         // プレイヤー追跡中で、移動した地点からプレイヤーが見えているなら、目標地点を更新する
@@ -589,6 +599,7 @@ export class Enemy extends MapObject {
         clone.target = this.target ? { ...this.target } : null;
         clone.targetIsPlayerPos = this.targetIsPlayerPos;
         clone.lastEnteredFrom = this.lastEnteredFrom ? { ...this.lastEnteredFrom } : null;
+        clone.blockedCells = this.blockedCells ? [ ...this.blockedCells ] : [];
         clone.randomWalkCount = this.randomWalkCount;
         clone.activeStatusEffects = this.activeStatusEffects.map(e => ({ name: e.name, count: e.count }));
         return clone;
