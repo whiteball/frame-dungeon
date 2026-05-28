@@ -72,8 +72,8 @@
 
 ### ターンの流れ
 
-1. プレイヤーがスペースキーを押す → `DungeonMap.attackPlayer()` を呼び出す
-2. 正面座標の敵を取得し、`canAttack()` で壁チェックを行う
+1. プレイヤーがスペースキーを押す → `Game.tryAttackOrShowDirections()`。前方斜めに攻撃可能な敵がいれば 3 択ボタンを提示、正面のみに敵がいれば即時攻撃（`DungeonMap.attackPlayer()`）、敵が一体もいなければ正面を調査（`MapInteractionHandler.searchFront()` = C キー→中央選択と同等。手軽な調査・1 ターンスキップ手段）
+2. 攻撃時は正面座標の敵を取得し、`canAttack()` で壁チェックを行う
 3. ダメージ計算: `BaseLoader.calculateDamageFromPlayer(playerVars, enemyVars)` が `base.yml` の `damageFromPlayer.formula` を評価（`Math.max(1, Math.floor(...))` クランプ）
 4. 敵が死亡した場合（`BaseLoader.isEnemyDead` 判定）: マップから除去し、`player.addExp()` で経験値付与
 5. `dispatchObjectEvent()` を呼び出し、隣接する敵の反撃ターンを処理

@@ -132,6 +132,17 @@ export class MapInteractionHandler {
         this.game.mode.setModeLabel('調査方向選択中');
     }
 
+    /**
+     * 正面（中央セル）を調査する。Space キーで敵が一体もいない場合に呼ばれ、
+     * C キー →「中央」選択と同等の処理を方向選択を挟まず即実行する
+     * （手軽な調査・1 ターンスキップ手段）。
+     */
+    searchFront(): void {
+        const { x, y, direction } = this.game.dungeon.getPlayerPos();
+        const [fdx, fdy] = getDirectionOffset(direction);
+        this.executeSearch('中央', x + fdx, y + fdy);
+    }
+
     private executeSearch(directionLabel: string, targetX: integer, targetY: integer): void {
         const turnCount = this.game.dungeon.getTurnCount();
         EventBus.emit('message-log', `${directionLabel}を調べた。`, turnCount);

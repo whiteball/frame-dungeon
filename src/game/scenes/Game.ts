@@ -413,7 +413,8 @@ export class Game extends Scene {
 
     /**
      * Space 押下時の処理。前方斜めに敵がいれば3択ボタンを提示し、
-     * いなければ従来通り正面を即時攻撃する。
+     * 正面のみに敵がいれば即時攻撃、敵が一体もいなければ正面を調査する
+     * （C キー→中央選択と同等。手軽な調査・1 ターンスキップ手段）。
      */
     private tryAttackOrShowDirections(autoAttack: boolean = false): void {
         const { x, y, direction } = this.dungeon.getPlayerPos();
@@ -425,13 +426,17 @@ export class Game extends Scene {
 
         const hasRightEnemy = !!this.dungeon.getEnemy(rightCell[0], rightCell[1]) && this.dungeon.canAttack(x, y, rightCell[0], rightCell[1]);
         const hasLeftEnemy = !!this.dungeon.getEnemy(leftCell[0], leftCell[1]) && this.dungeon.canAttack(x, y, leftCell[0], leftCell[1]);
+        const hasCenterEnemy = !!this.dungeon.getEnemy(centerCell[0], centerCell[1]) && this.dungeon.canAttack(x, y, centerCell[0], centerCell[1]);
 
         if (!hasRightEnemy && !hasLeftEnemy) {
-            this.executeAction(() => this.dungeon.attackPlayer());
+            if (hasCenterEnemy) {
+                this.executeAction(() => this.dungeon.attackPlayer());
+            } else {
+                // 正面に攻撃対象がいなければ調査（C キー→中央選択と同等。1 ターン消費）
+                this.interaction.searchFront();
+            }
             return;
         }
-
-        const hasCenterEnemy = !!this.dungeon.getEnemy(centerCell[0], centerCell[1]) && this.dungeon.canAttack(x, y, centerCell[0], centerCell[1]);
 
         if (autoAttack) {
             if (hasCenterEnemy) {
