@@ -411,6 +411,16 @@ defineExpose({ scene, game });
                 @click="a.onClick"
             >{{ a.label }} [{{ (i + 1) % 10 }}]</button>
         </div>
+        <a
+            href="https://github.com/whiteball/frame-dungeon/blob/master/MANUAL.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            style="position: absolute; right: 8px; bottom: -12px; z-index: 50;
+                   font-family: 'BIZ UDゴシック', Consolas, monospace;
+                   font-size: 12px; color: #9cf; text-decoration: none;
+                   background: rgba(0,0,0,0.6); padding: 2px 8px;
+                   border: 1px solid #456; border-radius: 4px;"
+        >操作マニュアル ↗</a>
         <div
             ref="logRef"
             v-show="logVisible"
