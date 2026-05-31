@@ -1,8 +1,9 @@
-import { Parser, type Expression } from 'expr-eval-fork';
+import { type Expression } from 'expr-eval-fork';
 import { YamlDefinitionStore } from './YamlDefinitionStore';
 import { CustomDataStore } from './CustomDataStore';
 import { parseAppearance } from './AppearanceSpec';
 import type { AppearanceSpec } from './AppearanceSpec';
+import { eventParser, compileEventFormula } from './events/eventFormula';
 
 /**
  * 選択肢メニュー上限。`SceneModeController.enterEventChoiceMode` の
@@ -40,6 +41,12 @@ export interface EventChoice {
     on_success?: EventActionEntry[];
     /** rate 指定時の失敗側分岐 */
     on_fail?: EventActionEntry[];
+    /**
+     * 選択肢の表示条件（formula または数値リテラル）。評価結果が真（非 0）のとき表示、
+     * 偽（0）のとき**非表示**になる。`has_item("x")` / `item_count("x")` / `has_skill("x")`
+     * などのクエリ関数を使える（{@link ./events/eventFormula}）。未指定なら常に表示。
+     */
+    condition?: number | string;
 }
 
 /** ランダム結果（メニュー無し）の 1 エントリ */
@@ -79,6 +86,8 @@ export interface CompiledEventChoice {
     cost: Map<string, Expression>;
     /** 数値リテラルなら数値、formula 文字列なら Expression。未指定なら null */
     rate: number | Expression | null;
+    /** 表示条件。数値リテラルなら数値、formula 文字列なら Expression。未指定なら null（常に表示） */
+    condition: number | Expression | null;
 }
 
 /** コンパイル済みイベント */
@@ -92,7 +101,6 @@ const FINAL_KEYS = ['action', 'random_outcome', 'choices'] as const;
 export class EventsLoader {
     private static instance: EventsLoader;
     private store = new YamlDefinitionStore<EventDefinition>();
-    private parser: Parser = new Parser();
     private compiledByName: Map<string, CompiledEvent> = new Map();
 
     private constructor() {}
@@ -125,24 +133,23 @@ export class EventsLoader {
             if (ch.cost) {
                 for (const [stat, formulaOrNum] of Object.entries(ch.cost)) {
                     const src = typeof formulaOrNum === 'number' ? String(formulaOrNum) : formulaOrNum;
-                    try {
-                        cost.set(stat, this.parser.parse(src));
-                    } catch (e) {
-                        console.warn(`Failed to parse cost formula "${src}" for event "${def.name}":`, e);
-                    }
+                    const expr = compileEventFormula(src);
+                    if (expr) cost.set(stat, expr);
                 }
             }
             let rate: number | Expression | null = null;
             if (typeof ch.rate === 'number') {
                 rate = ch.rate;
             } else if (typeof ch.rate === 'string') {
-                try {
-                    rate = this.parser.parse(ch.rate);
-                } catch (e) {
-                    console.warn(`Failed to parse rate formula "${ch.rate}" for event "${def.name}":`, e);
-                }
+                rate = compileEventFormula(ch.rate);
             }
-            compiledChoices.push({ choice: ch, cost, rate });
+            let condition: number | Expression | null = null;
+            if (typeof ch.condition === 'number') {
+                condition = ch.condition;
+            } else if (typeof ch.condition === 'string') {
+                condition = compileEventFormula(ch.condition);
+            }
+            compiledChoices.push({ choice: ch, cost, rate, condition });
         }
         return { definition: def, compiledChoices };
     }
@@ -227,6 +234,17 @@ export class EventsLoader {
                         }
                     }
                 }
+                if (c.condition !== undefined) {
+                    if (typeof c.condition === 'string') {
+                        try {
+                            eventParser.parse(c.condition);
+                        } catch {
+                            throw new Error(`Invalid ${ctx}: 'condition' formula parse error: "${c.condition}"`);
+                        }
+                    } else if (typeof c.condition !== 'number') {
+                        throw new Error(`Invalid ${ctx}: 'condition' must be a number or formula string`);
+                    }
+                }
                 const hasRate = c.rate !== undefined;
                 const hasAction = c.action !== undefined;
                 const hasSuccess = c.on_success !== undefined;
@@ -238,7 +256,7 @@ export class EventsLoader {
                         }
                     } else if (typeof c.rate === 'string') {
                         try {
-                            this.parser.parse(c.rate);
+                            eventParser.parse(c.rate);
                         } catch {
                             throw new Error(`Invalid ${ctx}: 'rate' formula parse error: "${c.rate}"`);
                         }

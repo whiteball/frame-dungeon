@@ -61,6 +61,37 @@ choices:
 - formula 変数は player の実効値 + `<stat>_max` + `level` / `exp`
 - 評価結果は [0,1] にクランプ
 
+### `choices` の `condition` 指定（条件付き表示）
+
+```yaml
+choices:
+  - label: 薬を与える
+    condition: 'has_item("potion")'   # 真のときだけメニューに表示される
+    action:
+      - consume_item: { name: potion, count: 1 }
+      - give_item: { name: power scroll }
+      - self_destruct
+  - label: そっとしておく
+    action: []
+```
+
+- `condition`（formula 文字列 or 数値リテラル）の**評価結果が真（非 0）のときだけ選択肢を表示**し、偽（0）なら**非表示**にする（grey-out ではなく完全に出さない）
+- `cost` / `rate` / `action` とは独立して併用可能（cost 不足の disabled とは別軸）
+- 「特定アイテム所持時のみ」「特定スキル習得済みのみ」といった出し分けに使う
+- UI フィルタ（`MapInteractionHandler.enterChoiceMode`）に加え、`EventExecutor.executeEventChoice` 側でも実行直前に再判定する（すり抜け防止）
+
+#### イベント formula で使えるクエリ関数
+
+イベント系 formula（`condition` / `cost` / `rate` / `heal`・`damage` 数式など）では、通常の変数に加えて以下の関数を呼べる（`src/lib/events/eventFormula.ts` の共有 `eventParser` に登録）：
+
+| 関数 | 戻り値 | 用途 |
+| --- | --- | --- |
+| `has_item("name")` | 所持していれば 1、なければ 0 | アイテム所持判定 |
+| `item_count("name")` | 所持個数 | 個数依存の cost / rate / condition |
+| `has_skill("name")` | 習得済みなら 1、なければ 0 | スキル習得判定 |
+
+> **実装メモ**: `expr-eval-fork` は values 経由で渡した関数の呼び出しを拒否するため、これらは parser インスタンスの `functions` に登録している。よって全イベント formula は共有 `eventParser`（`compileEventFormula`）で parse し、評価は `evalWithPlayer(player, () => expr.evaluate(vars))` で player 文脈をセットして行うこと。
+
 ### action 種別
 
 | action | 動作 |
@@ -73,6 +104,7 @@ choices:
 | `remove_modifier_kind: { kind, target? }` | 指定 kind の modifier を解除 |
 | `execute_skill: <name>` | コスト無し・未習得不問でスキル発動（`SkillExecutor.executeSkillFromItem`）。`target: front` スキルは event 経由では発動不可 |
 | `give_item: <name>` または `{ name, count?, modifiers? }` | アイテムをインベントリに追加。**満杯時は足下に `ItemObject` 配置**（宝箱開封と同じ流儀） |
+| `consume_item: <name>` または `{ name, count? }` | インベントリから name 一致のアイテムを最大 count 個（既定 1）除去。除去できた数だけログ出力。`condition: 'has_item("...")'` と組み合わせて「所持アイテムを対価に渡す」イベントに使う（`Inventory.removeItemByName`） |
 | `spawn_enemy: <name>` または `{ name, count?, near? }` | 敵を生成・配置。`near: around`（既定、隣接 8 マス）/ `room`（プレイヤーゾーン）。`around` で不足する場合は `room` にフォールバック。**プレイヤーセルと候補セル間の壁/扉は検査しないため、プレイヤーが壁際にいると壁の向こう側の部屋に敵が出現する場合がある**（演出としては許容範囲と判断、`EventExecutor.getAroundEmptyCells` 参照） |
 | `message: <text>` | 任意ログ出力（演出用） |
 | `unlock_door: self` | `EventObject.linkedDoor` で指定された扉を解錠（`DungeonMap.unlockDoor`）。`secret_room_key` 専用 action で、`param: 'self'` 固定。linkedDoor は YAML には書かず、`FloorPopulator` が施錠扉ごとに runtime で注入する |
@@ -82,7 +114,8 @@ action 配列は順次実行され、`self_destruct` を含んでいた場合は
 
 ## クラス構成
 
-- **EventDefinition / EventsLoader** (`src/lib/EventsLoader.ts`): YAML パース + 構造検証 + cost / rate formula コンパイル + Singleton 公開。`getCompiledEvent(name)` で `CompiledEvent` を取得可能
+- **eventFormula** (`src/lib/events/eventFormula.ts`): イベント formula 専用の共有 `Parser`（`has_item` / `item_count` / `has_skill` 関数を登録済み）と `compileEventFormula` / `evalWithPlayer` を提供。全イベント formula の parse / evaluate はここを経由する
+- **EventDefinition / EventsLoader** (`src/lib/EventsLoader.ts`): YAML パース + 構造検証 + cost / rate / condition formula コンパイル + Singleton 公開。`getCompiledEvent(name)` で `CompiledEvent` を取得可能
 - **AppearanceSpec** (`src/lib/AppearanceSpec.ts`): mark / color / shape / concentric_circle のパース。`TrapsLoader` と共有
 - **EventObject** (`src/lib/map/MapObjects.ts`): `MapObject` 継承。`eventDef` を保持、`isBlocking` getter で `blocking` フラグを露出
 - **EventExecutor** (`src/lib/events/EventExecutor.ts`): action 実行の中核。formula キャッシュ・コスト評価・rate 判定・action ディスパッチ・選択肢実行（`executeEventImmediate` / `executeEventChoice`）
@@ -111,9 +144,9 @@ floors:
 
 - `base.yml.floors[].events[]` の名前が `events.yml` に存在するか
 - `base.yml.floors[].eventCount` が数値または `{ min, max }` 形式か
-- events action 内の参照：`give_item.name` → items.yml / `spawn_enemy.name` → enemies.yml / `learn_skill` → skills.yml / `execute_skill` → skills.yml（active のみ）/ `add_modifier` → item_modifiers.yml / `apply_effect.effect` → effects.yml / `remove_modifier_kind.kind` → item_modifiers.yml（kind タグ存在チェック、空なら INFO）
+- events action 内の参照：`give_item.name` / `consume_item.name` → items.yml / `spawn_enemy.name` → enemies.yml / `learn_skill` → skills.yml / `execute_skill` → skills.yml（active のみ）/ `add_modifier` → item_modifiers.yml / `apply_effect.effect` → effects.yml / `remove_modifier_kind.kind` → item_modifiers.yml（kind タグ存在チェック、空なら INFO）
 
-イベントの構造検証（結末排他チェック / `choices` 個数上限 / `rate` と `on_success`/`on_fail` の整合性 など）は `EventsLoader.validateEvent` 内で起動時に throw する。
+イベントの構造検証（結末排他チェック / `choices` 個数上限 / `rate` と `on_success`/`on_fail` の整合性 / `condition` の formula parse など）は `EventsLoader.validateEvent` 内で起動時に throw する。`condition` 内の `has_item("...")` 等の引数（formula 文字列リテラル）はクロス検証しない（静的抽出が脆いため parse 検証のみ）。
 
 ## セーブ/ロード
 

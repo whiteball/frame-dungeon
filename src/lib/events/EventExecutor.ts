@@ -1,8 +1,9 @@
-import { Parser, type Expression } from 'expr-eval-fork';
+import { type Expression } from 'expr-eval-fork';
 import { Player } from '../Player';
 import { BaseLoader } from '../BaseLoader';
 import { StatsLoader } from '../StatsLoader';
 import { EffectsLoader } from '../EffectsLoader';
+import { ItemsLoader } from '../ItemsLoader';
 import { ItemFactory } from '../ItemFactory';
 import { EnemyFactory } from '../EnemyFactory';
 import { EventBus } from '../../game/EventBus';
@@ -14,32 +15,21 @@ import type {
     RandomOutcomeEntry,
     CompiledEventChoice,
 } from '../EventsLoader';
+import { compileEventFormula, evalWithPlayer } from './eventFormula';
 
 // ===== formula 評価 =====
-
-const parser = new Parser();
-const formulaCache = new Map<string, Expression>();
-
-function getFormula(src: string): Expression | null {
-    let expr = formulaCache.get(src);
-    if (expr) return expr;
-    try {
-        expr = parser.parse(src);
-        formulaCache.set(src, expr);
-        return expr;
-    } catch (e) {
-        console.warn(`Failed to parse event formula "${src}":`, e);
-        return null;
-    }
-}
+//
+// イベント formula は `has_item("x")` / `item_count("x")` / `has_skill("x")` などのクエリ関数を
+// 使えるよう、共有 `eventParser`（eventFormula.ts）で parse し、評価は `evalWithPlayer` で
+// player 文脈をセットして行う。
 
 function evalFormulaToInt(src: number | string, player: Player, contextLabel: string): number {
     if (typeof src === 'number') return Math.floor(src);
-    const formula = getFormula(src);
+    const formula = compileEventFormula(src);
     if (!formula) return 0;
     const vars = player.getEffectiveFormulaVarsWithMax();
     try {
-        const raw = formula.evaluate(vars);
+        const raw = evalWithPlayer(player, () => formula.evaluate(vars));
         if (typeof raw === 'number' && Number.isFinite(raw)) return Math.floor(raw);
     } catch (e) {
         console.warn(`Failed to evaluate event formula "${src}" (${contextLabel}):`, e);
@@ -59,7 +49,7 @@ export function evaluateChoiceCost(player: Player, costMap: Map<string, Expressi
     for (const [stat, formula] of costMap) {
         let raw: unknown;
         try {
-            raw = formula.evaluate(vars);
+            raw = evalWithPlayer(player, () => formula.evaluate(vars));
         } catch (e) {
             console.warn(`Failed to evaluate event cost formula for ${stat}:`, e);
             raw = 0;
@@ -93,7 +83,7 @@ export function evaluateChoiceRate(player: Player, rate: number | Expression | n
     if (typeof rate === 'number') return Math.max(0, Math.min(1, rate));
     const vars = player.getEffectiveFormulaVarsWithMax();
     try {
-        const raw = rate.evaluate(vars);
+        const raw = evalWithPlayer(player, () => rate.evaluate(vars));
         if (typeof raw === 'number' && Number.isFinite(raw)) {
             return Math.max(0, Math.min(1, raw));
         }
@@ -101,6 +91,24 @@ export function evaluateChoiceRate(player: Player, rate: number | Expression | n
         console.warn(`Failed to evaluate event rate formula:`, e);
     }
     return 0;
+}
+
+/**
+ * 選択肢の表示条件を評価する。null（未指定）なら常に true。
+ * 数値は非 0 で真、formula は評価結果が非 0 で真（`has_item` 等のクエリ関数が使える）。
+ */
+export function evaluateChoiceCondition(player: Player, condition: number | Expression | null): boolean {
+    if (condition === null) return true;
+    if (typeof condition === 'number') return condition !== 0;
+    const vars = player.getEffectiveFormulaVarsWithMax();
+    try {
+        const raw = evalWithPlayer(player, () => condition.evaluate(vars));
+        if (typeof raw === 'boolean') return raw;
+        if (typeof raw === 'number' && Number.isFinite(raw)) return raw !== 0;
+    } catch (e) {
+        console.warn(`Failed to evaluate event condition formula:`, e);
+    }
+    return false;
 }
 
 /**
@@ -247,10 +255,10 @@ function executeOneAction(
                 if (typeof p.rate === 'number') {
                     rate = Math.max(0, Math.min(1, p.rate));
                 } else if (typeof p.rate === 'string') {
-                    const formula = getFormula(p.rate);
+                    const formula = compileEventFormula(p.rate);
                     if (formula) {
                         try {
-                            const raw = formula.evaluate(player.getEffectiveFormulaVarsWithMax());
+                            const raw = evalWithPlayer(player, () => formula.evaluate(player.getEffectiveFormulaVarsWithMax()));
                             if (typeof raw === 'number' && Number.isFinite(raw)) {
                                 rate = Math.max(0, Math.min(1, raw));
                             }
@@ -350,6 +358,25 @@ function executeOneAction(
                     dungeon.placeObject(itemObj);
                     EventBus.emit('message-log', `${label}が足下に転がった`, turn);
                 }
+            }
+            break;
+        }
+        case 'consume_item': {
+            let itemName: string | undefined;
+            let count = 1;
+            if (typeof param === 'string') {
+                itemName = param;
+            } else if (param && typeof param === 'object' && !Array.isArray(param)) {
+                const p = param as Record<string, unknown>;
+                if (typeof p.name === 'string') itemName = p.name;
+                if (typeof p.count === 'number' && p.count > 0) count = Math.floor(p.count);
+            }
+            if (!itemName) break;
+            const def = ItemsLoader.getInstance().getItem(itemName);
+            const label = def?.label ?? itemName;
+            const removed = player.getInventory().removeItemByName(itemName, count);
+            if (removed > 0) {
+                EventBus.emit('message-log', `${label}を${removed}個渡した`, turn);
             }
             break;
         }
@@ -500,6 +527,11 @@ export function executeEventChoice(
     compiledChoice: CompiledEventChoice,
 ): void {
     const choice = compiledChoice.choice;
+    // UI 側でフィルタ済みだが、念のため condition を再判定（すり抜け防止）
+    if (!evaluateChoiceCondition(player, compiledChoice.condition)) {
+        console.warn(`event '${eventObj.eventDef.name}': choice "${choice.label}" の condition が偽のため実行をスキップ`);
+        return;
+    }
     if (choice.rate !== undefined) {
         const r = evaluateChoiceRate(player, compiledChoice.rate);
         const success = Math.random() < r;

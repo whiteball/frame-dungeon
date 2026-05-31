@@ -70,7 +70,7 @@
   - [x] 宝箱の配置と開封システム
   - [x] 隠し扉/隠し部屋（`base.yml.secretRoom` で有効化、出入口 1 つの部屋を抽選し扉を壁偽装、`調べる`(C) で発見）
   - [x] 回復ポイント（泉など）— 汎用イベントオブジェクトとして実装。`events.yml` で定義（`heal` / `damage` / `apply_effect` / `give_item` / `spawn_enemy` / `learn_skill` / `add_modifier` / `remove_modifier_kind` / `execute_skill` / `message` / `self_destruct` 等の action）、選択肢メニュー（最大 10）/ ランダム抽選 / 即時実行の 3 結末パターン、`rate` + `on_success` / `on_fail` で能力依存判定可能。フロア配置は `base.yml.floors[].eventCount` + `events`。詳細は [docs/architecture/events.md](docs/architecture/events.md)
-  - [ ] イベントの選択肢条件付き表示（`choices[].condition` formula）— 「特定アイテム所持時のみ選択肢を出す」「特定スキル習得済みのみ」等を formula で記述できるようにする
+  - [x] イベントの選択肢条件付き表示（`choices[].condition` formula）— 真のとき表示・偽のとき非表示。イベント formula 内で `has_item("name")` / `item_count("name")` / `has_skill("name")` クエリ関数が使える（共有 `eventParser`：`src/lib/events/eventFormula.ts`）。アイテムを対価に渡す `consume_item` action も追加（例: `wounded_animal`「薬を与える→巻物」、`ancient_inscription`「analyze 習得時のみ解読」）
   - [ ] トラップの `visible: true` + `appearance` を活用したマップギミックの拡充（罠以外の床ギミック例）
 
 ### アイテムの多様化

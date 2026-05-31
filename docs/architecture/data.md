@@ -328,7 +328,7 @@ autoSpawner:
 - `base.yml` の `floors[].enemies` / `floors[].traps` / `floors[].events` 名が `enemies.yml` / `traps.yml` / `events.yml` に存在するか
 - `traps.yml` の `effect[].type === 'addEffect'` の `value` が `effects.yml` に存在するか
 - `items.yml` の `effect.immediate.learnSkill` が `skills.yml` に存在するか
-- `events.yml` action 内のクロス参照（`give_item` → items / `spawn_enemy` → enemies / `learn_skill` / `execute_skill` → skills / `add_modifier` → item_modifiers / `apply_effect.effect` → effects 等）
+- `events.yml` action 内のクロス参照（`give_item` / `consume_item` → items / `spawn_enemy` → enemies / `learn_skill` / `execute_skill` → skills / `add_modifier` → item_modifiers / `apply_effect.effect` → effects 等）
 - `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` 要素が `effects.yml` に存在するか
 - `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
 

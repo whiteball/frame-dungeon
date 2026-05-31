@@ -133,3 +133,50 @@
         - damage: 5
         - message: 罠が作動した！
         - self_destruct
+
+# 例 5: 条件付き選択肢（アイテム所持）+ アイテム消費
+# - condition で has_item("potion") が真（薬を所持）のときだけ「薬を与える」が表示される
+# - 選ぶと consume_item で薬を 1 個消費し、お礼に攻撃強化の巻物を入手する
+- name: wounded_animal
+  label: 傷ついた動物
+  description: 傷ついた動物が横たわっている
+  flavor: 傷ついた動物が横たわっている。苦しそうだ。
+  appearance:
+    mark: o
+    color: 0x66AA44
+    shape: sphere
+  choices:
+    - label: 薬を与える
+      condition: 'has_item("potion")'
+      action:
+        - consume_item:
+            name: potion
+            count: 1
+        - give_item:
+            name: power scroll
+        - message: 動物は回復し、お礼に巻物をくれた！
+        - self_destruct
+    - label: そっとしておく
+      action: []
+
+# 例 6: 条件付き選択肢（スキル習得）
+# - condition で has_skill("analyze") が真（analyze 習得済み）のときだけ「碑文を解読する」が表示される
+- name: ancient_inscription
+  label: 古い碑文
+  description: 古代文字の碑文
+  flavor: 壁面に古代文字の碑文が刻まれている。
+  appearance:
+    mark: '+'
+    color: 0x9966CC
+    shape: cube
+  choices:
+    - label: 碑文を解読する
+      condition: 'has_skill("analyze")'
+      action:
+        - heal: "life_max * 0.3"
+        - learn_skill: meditate
+        - message: 碑文を解読し、古の知恵を授かった！
+        - self_destruct
+    - label: 眺めるだけにする
+      action:
+        - message: 解読できる気がしない……。

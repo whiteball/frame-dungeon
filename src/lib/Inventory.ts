@@ -41,6 +41,23 @@ export class Inventory {
     }
 
     /**
+     * 定義名で指定したアイテムを最大 count 個まで削除する
+     * @param name アイテム定義名
+     * @param count 削除する最大個数（既定 1）
+     * @returns 実際に削除した個数
+     */
+    removeItemByName(name: string, count = 1): number {
+        let removed = 0;
+        while (removed < count) {
+            const index = this.items.findIndex(i => i.getName() === name);
+            if (index === -1) break;
+            this.items.splice(index, 1);
+            removed++;
+        }
+        return removed;
+    }
+
+    /**
      * インスタンスIDでアイテムを削除
      * @param instanceId 削除するアイテムのインスタンスID
      * @returns 削除に成功した場合はtrue

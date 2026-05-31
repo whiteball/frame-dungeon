@@ -431,9 +431,9 @@ export class YamlCrossValidator {
         }
 
         // events.yml の各 action 配列内クロス参照
-        // (give_item.name → items.yml, spawn_enemy.name → enemies.yml, learn_skill / execute_skill → skills.yml,
-        //  add_modifier → item_modifiers.yml, apply_effect.effect → effects.yml,
-        //  remove_modifier_kind.kind → item_modifiers.yml の kind タグ)
+        // (give_item.name / consume_item.name → items.yml, spawn_enemy.name → enemies.yml,
+        //  learn_skill / execute_skill → skills.yml, add_modifier → item_modifiers.yml,
+        //  apply_effect.effect → effects.yml, remove_modifier_kind.kind → item_modifiers.yml の kind タグ)
         const checkEventActionEntry = (
             entry: EventActionEntry,
             ctx: string,
@@ -465,6 +465,21 @@ export class YamlCrossValidator {
                     }
                     if (itemName !== undefined && !items.getItem(itemName)) {
                         errors.push(`${ctx}.give_item "${itemName}" が items.yml に存在しません`);
+                    }
+                    break;
+                }
+                case 'consume_item': {
+                    let itemName: string | undefined;
+                    if (typeof value === 'string') itemName = value;
+                    else if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        const p = value as Record<string, unknown>;
+                        if (typeof p.name === 'string') itemName = p.name;
+                        if (p.count !== undefined && (typeof p.count !== 'number' || p.count <= 0)) {
+                            errors.push(`${ctx}.consume_item.count は正の数値である必要があります`);
+                        }
+                    }
+                    if (itemName !== undefined && !items.getItem(itemName)) {
+                        errors.push(`${ctx}.consume_item "${itemName}" が items.yml に存在しません`);
                     }
                     break;
                 }

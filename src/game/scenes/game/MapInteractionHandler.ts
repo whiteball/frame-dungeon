@@ -10,6 +10,7 @@ import type { CompiledEventChoice } from '../../../lib/EventsLoader';
 import {
     canPayChoiceCost,
     evaluateChoiceCost,
+    evaluateChoiceCondition,
     executeEventChoice,
     executeEventImmediate,
     formatChoiceCostSummary,
@@ -200,11 +201,15 @@ export class MapInteractionHandler {
     }
 
     /**
-     * 選択肢メニューを SceneModeController 経由で開く。cost 支払い不能な choice は disabled に。
+     * 選択肢メニューを SceneModeController 経由で開く。
+     * - condition が偽の choice は **非表示**（メニューに出さない）
+     * - cost 支払い不能な choice は disabled に
      */
     private enterChoiceMode(eventObj: EventObject, compiledChoices: CompiledEventChoice[]): void {
         const player = this.game.player;
-        const choiceButtons = compiledChoices.map(cc => {
+        // condition を満たす choice のみ表示。onSelect の index はこの visibleChoices 基準。
+        const visibleChoices = compiledChoices.filter(cc => evaluateChoiceCondition(player, cc.condition));
+        const choiceButtons = visibleChoices.map(cc => {
             let disabled = false;
             let label = cc.choice.label;
             if (cc.cost.size > 0) {
@@ -219,7 +224,7 @@ export class MapInteractionHandler {
         });
 
         this.game.mode.enterEventChoiceMode(choiceButtons, (idx) => {
-            const cc = compiledChoices[idx];
+            const cc = visibleChoices[idx];
             if (!cc) return;
             // 支払い
             if (cc.cost.size > 0) {

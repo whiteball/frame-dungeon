@@ -124,6 +124,8 @@ floors:
         - mysterious_altar
         - heavy_rock
         - tempting_chest
+        - wounded_animal
+        - ancient_inscription
       itemModifierChance: 0.25
       secretRoom: yes
       # フロア 4 以降は施錠系を増やす（探索難度上昇）
