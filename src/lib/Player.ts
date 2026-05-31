@@ -51,6 +51,10 @@ export class Player {
     // 習得済みスキル名（skills.yml の name と対応）
     private learnedSkills: Set<string> = new Set();
 
+    // 手動で無効化されたトグルスキル名（skills.yml の toggle: yes 対象のみ意味を持つ）。
+    // 既定は ON のため、無効化されたものだけを保持する。
+    private disabledSkills: Set<string> = new Set();
+
     // 統計情報（プレイ進行に伴って累積。表示は今後実装予定）
     private enemiesDefeated: number = 0;
     private itemsUsed: number = 0;
@@ -649,6 +653,27 @@ export class Player {
     }
 
     /**
+     * トグルスキルが現在有効か判定する（無効化集合に無ければ有効）。
+     * toggle 非対応スキルでも常に true を返す（無効化されないため）。
+     */
+    isSkillEnabled(name: string): boolean {
+        return !this.disabledSkills.has(name);
+    }
+
+    /**
+     * トグルスキルの有効/無効を反転する。
+     * @returns 反転後に有効なら true、無効なら false
+     */
+    toggleSkill(name: string): boolean {
+        if (this.disabledSkills.has(name)) {
+            this.disabledSkills.delete(name);
+            return true;
+        }
+        this.disabledSkills.add(name);
+        return false;
+    }
+
+    /**
      * 指定 trigger のアクティブなパッシブスキル一覧を返す。
      * - 学習済みスキル：trigger 一致なら rate=1.0 として返す
      * - 装備中アイテムの passive_skills：trigger 一致なら item 定義の rate で返す
@@ -662,6 +687,7 @@ export class Player {
             const def = SkillsLoader.getInstance().getSkill(name);
             if (!def) continue;
             if ((def.trigger ?? 'active') !== trigger) continue;
+            if (def.toggle && this.disabledSkills.has(name)) continue;
             result.push({ skillName: name, rate: 1.0 });
         }
 
@@ -673,6 +699,7 @@ export class Player {
                 const def = SkillsLoader.getInstance().getSkill(ps.name);
                 if (!def) continue;
                 if ((def.trigger ?? 'active') !== trigger) continue;
+                if (def.toggle && this.disabledSkills.has(ps.name)) continue;
                 result.push({ skillName: ps.name, rate: ps.rate });
             }
         }
@@ -1011,6 +1038,7 @@ export class Player {
                 count: e.count,
             })),
             learnedSkills: Array.from(this.learnedSkills),
+            disabledSkills: Array.from(this.disabledSkills),
             enemiesDefeated: this.enemiesDefeated,
             itemsUsed: this.itemsUsed,
         };
@@ -1064,6 +1092,9 @@ export class Player {
                 console.warn(`Unknown skill in save data, skipped: ${name}`);
             }
         }
+
+        // 無効化トグルスキル復元（旧セーブ互換のため ?? []）
+        this.disabledSkills = new Set(data.disabledSkills ?? []);
 
         this.enemiesDefeated = data.enemiesDefeated ?? 0;
         this.itemsUsed = data.itemsUsed ?? 0;

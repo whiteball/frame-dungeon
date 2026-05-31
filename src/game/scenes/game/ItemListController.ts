@@ -89,6 +89,23 @@ export class ItemListController {
             const def = SkillsLoader.getInstance().getSkill(payload.skillName);
             if (!def) return;
 
+            // パッシブ（active 以外）：toggle 対応なら有効/無効を切替（ターン非消費）。
+            if ((def.trigger ?? 'active') !== 'active') {
+                if (!def.toggle) return; // toggle 不可パッシブは本来 disabled で到達しない
+                const enabled = this.game.player.toggleSkill(payload.skillName);
+                EventBus.emit('message-log',
+                    `スキル「${def.label}」を${enabled ? '有効' : '無効'}にした`,
+                    this.game.dungeon.getTurnCount());
+                const learned = this.game.player.getLearnedSkillNames();
+                EventBus.emit('open-item-list', {
+                    items: this.buildSkillListPayload(learned),
+                    mode: 'skill',
+                    actionLabel: '発動',
+                });
+                this.game.render();
+                return;
+            }
+
             if (def.target === 'front') {
                 // リストを閉じて方向選択モードに移行
                 this.closeList();
@@ -290,17 +307,31 @@ export class ItemListController {
             const def = compiled.definition;
             const triggerValue = def.trigger ?? 'active';
             if (triggerValue !== 'active') {
-                // パッシブ全種（on_attack / on_turn / on_damage / passive）は手動発動不可
                 const passiveLabel = this.getPassiveTargetSummary(triggerValue, compiled);
-                const passiveReason = this.getPassiveDisabledReason(triggerValue);
+                const costSummary = triggerValue === 'passive' ? '' : formatCostSummary(evaluateCost(this.game.player, compiled));
+                if (def.toggle) {
+                    // toggle 対応パッシブ：有効/無効を手動切替可能。状態を種別ラベルに併記
+                    const enabled = this.game.player.isSkillEnabled(name);
+                    result.push({
+                        id: name,
+                        label: def.label,
+                        description: def.description,
+                        costSummary,
+                        targetSummary: `${passiveLabel} [${enabled ? '有効' : '無効'}]`,
+                        disabled: false,
+                        disabledReason: '',
+                    });
+                    continue;
+                }
+                // toggle 非対応パッシブは手動発動不可
                 result.push({
                     id: name,
                     label: def.label,
                     description: def.description,
-                    costSummary: triggerValue === 'passive' ? '' : formatCostSummary(evaluateCost(this.game.player, compiled)),
+                    costSummary,
                     targetSummary: passiveLabel,
                     disabled: true,
-                    disabledReason: passiveReason,
+                    disabledReason: this.getPassiveDisabledReason(triggerValue),
                 });
                 continue;
             }

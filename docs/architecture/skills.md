@@ -44,7 +44,29 @@
 | `on_damage` | プレイヤーが攻撃を受けた直後に発動するパッシブ。target=`self` または `hit`（`hit`=攻撃元の敵） |
 | `passive` | 常時 stat 修飾を行うパッシブ。`add_stats` フィールドで具体的な加算式を記述する |
 
-パッシブ全種類（active 以外）はプレイヤーのスキルリストで `disabled: true` として表示され、手動発動はできない。`PlayerActions.useSkill` 冒頭でも `trigger !== 'active'` をガードしている。
+パッシブ全種類（active 以外）はプレイヤーのスキルリストで `disabled: true` として表示され、手動発動はできない。`PlayerActions.useSkill` 冒頭でも `trigger !== 'active'` をガードしている。ただし `toggle: yes`（後述）を付けたパッシブは例外で、スキル一覧から有効/無効を切り替えられる。
+
+## トグル可能パッシブ（`toggle`）
+
+`meditate`（瞑想）のように常時自動発動するパッシブは、状況によって止めたいことがある（魔力温存など）。スキル定義に `toggle: yes` を付けると、スキル一覧から有効/無効を手動で切り替えられる。
+
+```yaml
+- name: meditate
+  trigger: on_turn
+  target: self
+  toggle: yes        # 有効/無効を切替可能にする
+  cost: { magic: 1 }
+  action: [{ heal: 3 }]
+```
+
+**仕様：**
+
+- `toggle` は `trigger` が `active` 以外（`on_attack` / `on_turn` / `on_damage` / `passive`）のパッシブ専用。`active` に付けると `SkillsLoader.validateSkill` がエラーで弾く（アクティブは元々手動発動のため無意味）。
+- **YAML 値の正規化**：js-yaml v4 の既定スキーマは `yes`/`no` を**真偽値ではなく文字列**として読む。そのため `validateSkill` で `true` / `'yes'`（大文字小文字許容）→ `true`、`false` / `'no'` → `false` に正規化し、それ以外はエラーにする。`toggle: true` でも可。
+- **状態保持**：`Player.disabledSkills: Set<string>`（無効化されたスキル名）。既定は ON（集合が空＝全て有効）なので、`toggle: yes` を付けても既存挙動は変わらない。`Player.isSkillEnabled(name)` / `Player.toggleSkill(name)` で参照・反転する。
+- **発動側への反映**：`Player.getActivePassivesByTrigger()` が学習スキル・装備 passive_skills の双方で `def.toggle && disabledSkills.has(name)` を除外する。状態はスキル名キーのため、学習・装備の両経路に一貫して効く。`trigger: passive`（常時 stat 修飾）も同じ関門を通るため、無効化すると `getEffectiveStat` から外れる。
+- **UI**：`ItemListController.buildSkillListPayload` が `toggle` 対応パッシブを `disabled: false`（選択可能）にし、`targetSummary` に現在状態を併記する（例 `ターン経過 [有効]` / `ターン経過 [無効]`）。確定（`use-skill` イベント）で `Player.toggleSkill` を呼び、message-log に「スキル「〈label〉」を有効/無効にした」を出して一覧を再描画する。**トグルはターン非消費**（`dispatchObjectEvent` を呼ばない）で、スタン中でも切替可能。
+- **永続化**：`PlayerSaveData.disabledSkills?: string[]`（旧セーブ互換のため optional、欠落時は全て有効）。`serialize` / `deserialize` で往復する。
 
 各パッシブの target 制約：
 

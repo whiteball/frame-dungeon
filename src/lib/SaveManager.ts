@@ -37,6 +37,8 @@ export interface PlayerSaveData {
     activeContinuousEffects: ContinuousEffectSaveData[];
     activeStatusEffects: StatusEffectSaveData[];
     learnedSkills: string[];
+    /** 手動で無効化中のトグルスキル名。旧セーブ互換のため optional（欠落時は全て有効として復元） */
+    disabledSkills?: string[];
     /** 倒した敵の累積数。旧セーブ互換のため optional（欠落時は 0 として復元） */
     enemiesDefeated?: number;
     /** 使ったアイテムの累積数。旧セーブ互換のため optional（欠落時は 0 として復元） */

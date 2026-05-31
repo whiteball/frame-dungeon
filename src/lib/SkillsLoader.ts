@@ -41,6 +41,12 @@ export interface SkillDefinition {
     mastery?: SkillMasteryEntry[];
     /** trigger='passive' 専用：常時 stat に加算する formula（省略可・空オブジェクト可） */
     add_stats?: Record<string, number | string>;
+    /**
+     * trigger が active 以外のパッシブ専用：有効/無効を手動切替可能にする。
+     * YAML では `toggle: yes`（js-yaml v4 では文字列）または `true` で指定。
+     * validateSkill で boolean へ正規化される。
+     */
+    toggle?: boolean;
 }
 
 /**
@@ -122,6 +128,20 @@ export class SkillsLoader {
         }
         const triggerValue: SkillTrigger = (skill.trigger ?? 'active');
         const isPassiveTrigger = triggerValue === 'passive';
+
+        // toggle 正規化（js-yaml v4 では `yes`/`no` は文字列になるため両形式を受理）
+        if (skill.toggle !== undefined) {
+            const t = skill.toggle;
+            const truthy = t === true || (typeof t === 'string' && t.toLowerCase() === 'yes');
+            const falsy = t === false || (typeof t === 'string' && t.toLowerCase() === 'no');
+            if (!truthy && !falsy) {
+                throw new Error(`Invalid skill '${skill.name}': 'toggle' must be yes/no (or true/false)`);
+            }
+            skill.toggle = truthy;
+            if (truthy && triggerValue === 'active') {
+                throw new Error(`Invalid skill '${skill.name}': 'toggle' is only allowed for passive skills (non-active trigger)`);
+            }
+        }
 
         if (skill.target !== undefined && !VALID_TARGETS.has(skill.target)) {
             throw new Error(`Invalid skill '${skill.name}': 'target' must be one of ${Array.from(VALID_TARGETS).join(', ')}`);

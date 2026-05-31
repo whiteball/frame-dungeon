@@ -85,6 +85,7 @@
   description: 毎ターン魔力を1消費して体力を3回復する
   trigger: on_turn
   target: self
+  toggle: yes
   cost:
     magic: 1
   action:

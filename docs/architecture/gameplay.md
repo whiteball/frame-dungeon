@@ -43,7 +43,7 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム使�
 
 - `meta`: `savedAt` / `memo` / `gameName` / `yamlDigest`
 - `floor`: 現在フロア
-- `player`: `PlayerSaveData`（レベル・経験値・stats/maxStats・インベントリ・装備 ID・持続効果・状態異常・習得スキル・プレイ統計（`enemiesDefeated` / `itemsUsed`））
+- `player`: `PlayerSaveData`（レベル・経験値・stats/maxStats・インベントリ・装備 ID・持続効果・状態異常・習得スキル・無効化中トグルスキル（`disabledSkills`）・プレイ統計（`enemiesDefeated` / `itemsUsed`））
 - `dungeon`: `DungeonSaveData`（マップ・フォグ・歩行済み・プレイヤー位置/向き・総ターン数 `turnCount`・階層開始時ターン数 `floorStartTurnCount`・部屋構造・全オブジェクト・全敵）
 
 ### yamlDigest による整合性チェック
