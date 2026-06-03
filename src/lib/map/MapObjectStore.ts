@@ -9,6 +9,7 @@ import { EventBus } from '../../game/EventBus';
 import { makeStatFluctuatedMessage } from '../util/text';
 import { StatsLoader } from '../StatsLoader';
 import { BaseLoader } from '../BaseLoader';
+import { executeEventByName } from '../events/EventExecutor';
 
 /**
  * マップ上のオブジェクト（階段・トラップ・敵など）を一元管理するストア。
@@ -127,7 +128,12 @@ export class MapObjectStore {
         EventBus.emit('message-log', `${a.label}で ${makeStatFluctuatedMessage(statName, a.delta)}`, dungeon.getTurnCount());
       }
       for (const c of statusResult.cleared) {
-        EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
+        if (c.expireEvent) {
+          // 満了発火：イベント側の action / message が結果を語るため「解けた」ログは出さない
+          executeEventByName(dungeon, player, c.expireEvent);
+        } else {
+          EventBus.emit('message-log', `${c.label}が解けた`, dungeon.getTurnCount());
+        }
       }
       if (BaseLoader.getInstance().isDead(player.getFormulaVars())) {
         EventBus.emit('game-over');

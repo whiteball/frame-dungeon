@@ -25,7 +25,8 @@ export type ApplyStatusEffectResult = 'applied' | 'resisted' | 'unknown';
 
 export interface StatusEffectTickResult {
     applied: Array<{ label: string; statName: string; delta: number }>;
-    cleared: Array<{ label: string }>;
+    /** 解除されたエントリ。`expireEvent` は満了発火する events.yml イベント名（onExpire 設定時のみ） */
+    cleared: Array<{ label: string; expireEvent?: string }>;
 }
 
 export class Player {
@@ -557,7 +558,12 @@ export class Player {
                 }
             }
             if (cleared && compiled) {
-                result.cleared.push({ label: compiled.definition.label });
+                // 満了（clear.formula 由来の自然解除）時のみ onExpire イベントを発火対象に載せる。
+                // 治療（clearStatusEffect）/ 被弾解除（notifyDamageTaken）では発火しない。
+                result.cleared.push({
+                    label: compiled.definition.label,
+                    ...(compiled.onExpire ? { expireEvent: compiled.onExpire } : {}),
+                });
             } else {
                 remaining.push(entry);
             }

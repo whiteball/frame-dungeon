@@ -28,6 +28,24 @@ export interface CompiledRegenerateRule {
     formula: Expression;
 }
 
+interface RawScheduledEventSpec {
+    event: string;
+    turn: number;
+    repeat?: boolean | string;
+    scope?: string;
+}
+
+export interface CompiledScheduledEvent {
+    /** events.yml のイベント名（action / random_outcome を再利用して効果を発火する） */
+    event: string;
+    /** 発火する経過ターン数（scope に依存） */
+    turn: number;
+    /** true なら turn の倍数ごとに繰り返し発火。false なら turn ちょうどで 1 回のみ */
+    repeat: boolean;
+    /** 'global'=通算ターン / 'floor'=フロア経過ターン */
+    scope: 'global' | 'floor';
+}
+
 export interface FloorConfigRaw {
     size: number | { w: number; h: number };
     enemyCount: number;
@@ -164,6 +182,7 @@ export class BaseLoader {
     private requiredExpFormula: Expression | null = null;
     private compiledLevelUpBonuses: CompiledLevelUpBonus[] = [];
     private compiledRegenerateRules: CompiledRegenerateRule[] = [];
+    private compiledScheduledEvents: CompiledScheduledEvent[] = [];
     private autoSpawnerFormula: Expression | null = null;
     private playerInitialStats: Map<string, number> = new Map();
     private _longStayMessages: string[] | null = null;
@@ -340,6 +359,22 @@ export class BaseLoader {
                 }
             }
 
+            if (Array.isArray(parsed.scheduledEvents)) {
+                for (const entry of parsed.scheduledEvents as RawScheduledEventSpec[]) {
+                    if (!entry || typeof entry.event !== 'string') continue;
+                    if (typeof entry.turn !== 'number' || !isFinite(entry.turn) || entry.turn <= 0) continue;
+                    const repeat = entry.repeat === true
+                        || (typeof entry.repeat === 'string' && /^(yes|true)$/i.test(entry.repeat));
+                    const scope: 'global' | 'floor' = entry.scope === 'floor' ? 'floor' : 'global';
+                    this.compiledScheduledEvents.push({
+                        event: entry.event,
+                        turn: Math.floor(entry.turn),
+                        repeat,
+                        scope,
+                    });
+                }
+            }
+
             if (Array.isArray(parsed.longStay)) {
                 const msgs = parsed.longStay.filter((m: unknown): m is string => typeof m === 'string');
                 if (msgs.length >= 3) {
@@ -446,6 +481,10 @@ export class BaseLoader {
 
     getRegenerateRules(): CompiledRegenerateRule[] {
         return this.compiledRegenerateRules;
+    }
+
+    getScheduledEvents(): CompiledScheduledEvent[] {
+        return this.compiledScheduledEvents;
     }
 
     isEnemySpawnableOnFloor(

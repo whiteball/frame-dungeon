@@ -10,8 +10,10 @@ import { EventBus } from '../../game/EventBus';
 import { executeSkillFromItem } from '../skills/SkillExecutor';
 import { EventObject, ItemObject } from '../map/MapObjects';
 import type { DungeonMap } from '../MapGenerator';
+import { EventsLoader } from '../EventsLoader';
 import type {
     EventActionEntry,
+    EventDefinition,
     RandomOutcomeEntry,
     CompiledEventChoice,
 } from '../EventsLoader';
@@ -186,11 +188,13 @@ function getAroundEmptyCells(dungeon: DungeonMap): Array<[integer, integer]> {
 function executeOneAction(
     dungeon: DungeonMap,
     player: Player,
-    eventObj: EventObject,
+    eventObj: EventObject | null,
     entry: EventActionEntry,
 ): { selfDestruct: boolean; playerDied: boolean } {
     const { name, param } = parseActionEntry(entry);
     const turn = dungeon.getTurnCount();
+    // eventObj が無い文脈（scheduledEvents / 状態異常の onExpire など）ではフォールバック名を使う
+    const sourceName = eventObj?.eventDef.name ?? '(scheduled)';
 
     switch (name) {
         case 'self_destruct': {
@@ -204,7 +208,7 @@ function executeOneAction(
         }
         case 'heal': {
             if (typeof param !== 'number' && typeof param !== 'string') break;
-            const amount = evalFormulaToInt(param, player, `${eventObj.eventDef.name}.heal`);
+            const amount = evalFormulaToInt(param, player, `${sourceName}.heal`);
             if (amount <= 0) break;
             const healStat = BaseLoader.getInstance().getDefaultDamageStat();
             const before = player.getStat(healStat);
@@ -218,7 +222,7 @@ function executeOneAction(
         }
         case 'damage': {
             if (typeof param !== 'number' && typeof param !== 'string') break;
-            const amount = evalFormulaToInt(param, player, `${eventObj.eventDef.name}.damage`);
+            const amount = evalFormulaToInt(param, player, `${sourceName}.damage`);
             if (amount <= 0) break;
             const damageStat = BaseLoader.getInstance().getDefaultDamageStat();
             const before = player.getStat(damageStat);
@@ -239,6 +243,35 @@ function executeOneAction(
                 maxFloor: BaseLoader.getInstance().getGoalFloor(),
             };
             if (BaseLoader.getInstance().isDead(deadVars)) {
+                EventBus.emit('game-over');
+                return { selfDestruct: false, playerDied: true };
+            }
+            break;
+        }
+        case 'mod_stat': {
+            // 任意ステータスを formula 評価値に「設定」する（heal/damage が life 加減算なのに対し、
+            // 任意 stat を狙った値にできる。例: MP を 1 にする `{ stat: magic, formula: "1" }`）。
+            // formula 内では実効値 + <stat>_max を参照可能（current 値も `magic` 等の変数で参照できる）。
+            if (!param || typeof param !== 'object' || Array.isArray(param)) break;
+            const p = param as Record<string, unknown>;
+            const stat = typeof p.stat === 'string' ? p.stat : undefined;
+            if (!stat) break;
+            if (typeof p.formula !== 'number' && typeof p.formula !== 'string') break;
+            const desired = evalFormulaToInt(p.formula, player, `${sourceName}.mod_stat.${stat}`);
+            const before = player.getStat(stat);
+            // addStat 経由で fluctuation クランプ（[0, 実効max]）を通す。差分適用で目標値に設定する
+            player.addStat(stat, desired - before);
+            const after = player.getStat(stat);
+            if (after !== before) {
+                const abbr = StatsLoader.getInstance().getAbbreviation(stat) || stat;
+                EventBus.emit('message-log', `${abbr}が${after}になった`, turn);
+            }
+            const deadVarsMS = {
+                ...player.getFormulaVars(),
+                currentFloor: dungeon.getCurrentFloor(),
+                maxFloor: BaseLoader.getInstance().getGoalFloor(),
+            };
+            if (BaseLoader.getInstance().isDead(deadVarsMS)) {
                 EventBus.emit('game-over');
                 return { selfDestruct: false, playerDied: true };
             }
@@ -318,7 +351,7 @@ function executeOneAction(
             if (typeof param !== 'string') break;
             const ok = executeSkillFromItem(dungeon, player, param);
             if (!ok) {
-                console.warn(`event '${eventObj.eventDef.name}': execute_skill "${param}" failed (target=front skills not supported in events)`);
+                console.warn(`event '${sourceName}': execute_skill "${param}" failed (target=front skills not supported in events)`);
             }
             break;
         }
@@ -384,12 +417,12 @@ function executeOneAction(
             // param: 'self' のときのみ EventObject.linkedDoor を unlock。
             // 鍵オブジェクトと施錠扉の紐付けは FloorPopulator / deserialize 時に EventObject.linkedDoor へ書き込まれる。
             if (param !== 'self') {
-                console.warn(`event '${eventObj.eventDef.name}': unlock_door の param は 'self' のみサポート（received: ${JSON.stringify(param)}）`);
+                console.warn(`event '${sourceName}': unlock_door の param は 'self' のみサポート（received: ${JSON.stringify(param)}）`);
                 break;
             }
-            const ld = eventObj.linkedDoor;
+            const ld = eventObj?.linkedDoor;
             if (!ld) {
-                console.warn(`event '${eventObj.eventDef.name}': unlock_door: self を指定しましたが linkedDoor が未設定です`);
+                console.warn(`event '${sourceName}': unlock_door: self を指定しましたが linkedDoor が未設定です`);
                 break;
             }
             dungeon.unlockDoor(ld.x, ld.y, ld.dir);
@@ -424,7 +457,7 @@ function executeOneAction(
             break;
         }
         default: {
-            console.warn(`Unknown event action "${name}" in event "${eventObj.eventDef.name}"`);
+            console.warn(`Unknown event action "${name}" in event "${sourceName}"`);
         }
     }
     return { selfDestruct: false, playerDied: false };
@@ -477,7 +510,7 @@ function getRoomEmptyCells(dungeon: DungeonMap): Array<[integer, integer]> {
 export function executeActionArray(
     dungeon: DungeonMap,
     player: Player,
-    eventObj: EventObject,
+    eventObj: EventObject | null,
     actions: EventActionEntry[],
 ): void {
     let shouldDestruct = false;
@@ -485,19 +518,20 @@ export function executeActionArray(
         const r = executeOneAction(dungeon, player, eventObj, entry);
         if (r.selfDestruct) shouldDestruct = true;
         if (r.playerDied) {
-            if (shouldDestruct) dungeon.removeMapObject(eventObj);
+            if (shouldDestruct && eventObj) dungeon.removeMapObject(eventObj);
             return;
         }
     }
-    if (shouldDestruct) dungeon.removeMapObject(eventObj);
+    // self_destruct は EventObject を伴う調査イベント専用。eventObj が無い文脈では no-op
+    if (shouldDestruct && eventObj) dungeon.removeMapObject(eventObj);
 }
 
 /**
- * 選択肢メニュー無しのイベント実行（action または random_outcome）。
- * 呼び出し元 (MapInteractionHandler.investigateEvent) は事前に flavor を message-log に出していること。
+ * 選択肢メニュー無しのイベント定義（action または random_outcome）を実行する内部共通処理。
+ * `eventObj` が null の場合は EventObject に紐づかない文脈（時限イベント / 状態異常の満了など）からの実行。
+ * `choices` のみのイベントは無人実行できないため何もしない。
  */
-export function executeEventImmediate(dungeon: DungeonMap, player: Player, eventObj: EventObject): void {
-    const def = eventObj.eventDef;
+function executeDefImmediate(dungeon: DungeonMap, player: Player, def: EventDefinition, eventObj: EventObject | null): void {
     if (def.action) {
         executeActionArray(dungeon, player, eventObj, def.action);
     } else if (def.random_outcome) {
@@ -510,6 +544,34 @@ export function executeEventImmediate(dungeon: DungeonMap, player: Player, event
             executeActionArray(dungeon, player, eventObj, picked.action);
         }
     }
+}
+
+/**
+ * 選択肢メニュー無しのイベント実行（action または random_outcome）。
+ * 呼び出し元 (MapInteractionHandler.investigateEvent) は事前に flavor を message-log に出していること。
+ */
+export function executeEventImmediate(dungeon: DungeonMap, player: Player, eventObj: EventObject): void {
+    executeDefImmediate(dungeon, player, eventObj.eventDef, eventObj);
+}
+
+/**
+ * イベント名から events.yml のイベントを EventObject 非依存で実行する。
+ * 時限イベント（base.yml の scheduledEvents）や状態異常の満了（onExpire）から呼ばれる。
+ * `action` / `random_outcome` のみ対応。`choices` 形式のイベントは無人実行できないため警告して何もしない。
+ * @returns イベント定義が見つかり実行を試みたら true、未定義なら false
+ */
+export function executeEventByName(dungeon: DungeonMap, player: Player, eventName: string): boolean {
+    const def = EventsLoader.getInstance().getEvent(eventName);
+    if (!def) {
+        console.warn(`executeEventByName: イベント "${eventName}" が events.yml に存在しません`);
+        return false;
+    }
+    if (!def.action && !def.random_outcome) {
+        console.warn(`executeEventByName: イベント "${eventName}" は action / random_outcome を持たないため時限実行できません（choices は無人実行不可）`);
+        return false;
+    }
+    executeDefImmediate(dungeon, player, def, null);
+    return true;
 }
 
 /**

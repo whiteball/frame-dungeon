@@ -552,6 +552,20 @@ export class YamlCrossValidator {
                     }
                     break;
                 }
+                case 'mod_stat': {
+                    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+                        errors.push(`${ctx}.mod_stat は { stat, formula } オブジェクトである必要があります`);
+                        break;
+                    }
+                    const p = value as Record<string, unknown>;
+                    if (typeof p.stat !== 'string' || !stats.getStatNames().includes(p.stat)) {
+                        errors.push(`${ctx}.mod_stat.stat "${String(p.stat)}" が stats.yml に存在しません`);
+                    }
+                    if (p.formula === undefined || (typeof p.formula !== 'number' && typeof p.formula !== 'string')) {
+                        errors.push(`${ctx}.mod_stat.formula は数値または formula 文字列である必要があります`);
+                    }
+                    break;
+                }
             }
         };
 
@@ -578,6 +592,34 @@ export class YamlCrossValidator {
                     checkActionArray(c.on_success, `${evCtx}.choices[${i}].on_success`);
                     checkActionArray(c.on_fail, `${evCtx}.choices[${i}].on_fail`);
                 }
+            }
+        }
+
+        // base.yml scheduledEvents → events.yml
+        // 時限イベントは events.yml の action / random_outcome を無人実行するため、
+        // 名前の存在と「choices 形式でない」ことを検証する。
+        const scheduled = base.getScheduledEvents();
+        for (let i = 0; i < scheduled.length; i++) {
+            const se = scheduled[i];
+            const ctx = `base.yml scheduledEvents[${i}]`;
+            const def = events.getEvent(se.event);
+            if (!def) {
+                errors.push(`${ctx}: event "${se.event}" が events.yml に存在しません`);
+            } else if (!def.action && !def.random_outcome) {
+                errors.push(`${ctx}: event "${se.event}" は choices 形式のため時限実行できません（action / random_outcome のみ対応）`);
+            }
+        }
+
+        // effects.yml onExpire → events.yml
+        // 状態異常の満了時に無人発火するため、scheduledEvents と同じ制約（存在 + choices 不可）を課す。
+        for (const ef of effects.getEffects()) {
+            if (!ef.onExpire) continue;
+            const ctx = `effects.yml "${ef.name}".onExpire`;
+            const def = events.getEvent(ef.onExpire);
+            if (!def) {
+                errors.push(`${ctx}: event "${ef.onExpire}" が events.yml に存在しません`);
+            } else if (!def.action && !def.random_outcome) {
+                errors.push(`${ctx}: event "${ef.onExpire}" は choices 形式のため満了実行できません（action / random_outcome のみ対応）`);
             }
         }
 

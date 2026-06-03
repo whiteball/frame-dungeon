@@ -137,3 +137,16 @@
     - apply_effect:
         effect: poison
         rate: 1.0
+
+# 遅延効果（onExpire 時限爆弾型）の付与スキル例。
+# enemies.yml の敵に skills: [{ name: curse_strike, rate: 0.x }] で持たせると
+# 「呪い攻撃を受け、何もしなければ約30ターン後にHP/MPが1になる（治療で回避可）」を実現する。
+- name: curse_strike
+  label: 呪いの一撃
+  description: 攻撃時に死の呪いを付与することがある
+  trigger: on_attack
+  target: hit
+  action:
+    - apply_effect:
+        effect: death_curse
+        rate: 1.0

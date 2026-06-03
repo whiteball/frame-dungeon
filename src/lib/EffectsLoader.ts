@@ -41,6 +41,13 @@ export interface EffectDefinition {
      * この effect が付与されている間、新規に付与されることを阻止する effect 名の配列
      */
     resist?: string[];
+    /**
+     * 満了（clear.formula 由来の自然解除）時に 1 回だけ発火する events.yml のイベント名。
+     * 治療（clearStatusEffect）や被弾解除（clear.onDamage）では発火しない。
+     * 「何もしなければ N ターン後に発動／治療すれば回避」型の遅延効果に使う。
+     * 参照イベントは action / random_outcome 形式のみ（choices は無人実行不可）。
+     */
+    onExpire?: string;
 }
 
 export type EffectTiming = 'onAction' | 'onTurnEnd' | 'permanent';
@@ -62,6 +69,7 @@ interface CompiledEffect {
     clearFormula: Expression | null;
     clearOnDamage: boolean;
     resist: string[];
+    onExpire: string | null;
 }
 
 export class EffectsLoader {
@@ -131,6 +139,7 @@ export class EffectsLoader {
             clearFormula,
             clearOnDamage: def.clear?.onDamage === true,
             resist: Array.isArray(def.resist) ? [...def.resist] : [],
+            onExpire: typeof def.onExpire === 'string' && def.onExpire.length > 0 ? def.onExpire : null,
         };
     }
 

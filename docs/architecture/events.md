@@ -98,6 +98,7 @@ choices:
 | --- | --- |
 | `heal: <number\|formula>` | プレイヤー HP（`defaultDamageStat`）を回復 |
 | `damage: <number\|formula>` | プレイヤー HP を減少。死亡判定 → `game-over` 発火 |
+| `mod_stat: { stat, formula }` | 任意ステータスを formula 評価値に**設定**する（heal/damage が HP 加減算なのに対し、MP 等を狙った値にできる。例: `{ stat: magic, formula: "1" }` で MP を 1 に）。formula 内で実効値 + `<stat>_max` を参照可（current 値も `magic` 等で参照可能）。`addStat` 差分適用で fluctuation クランプを通す。HP を下げて死亡した場合は `game-over` 発火 |
 | `apply_effect: <name>` または `{ effect, rate }` | 状態異常を付与（rate 評価あり） |
 | `learn_skill: <name>` | スキル習得（既習得時もアイテム同等のログ） |
 | `add_modifier: <name>` | 装備中アイテムへ modifier 付与（`Player.applyImmediateEffect` 経由） |
@@ -118,7 +119,7 @@ action 配列は順次実行され、`self_destruct` を含んでいた場合は
 - **EventDefinition / EventsLoader** (`src/lib/EventsLoader.ts`): YAML パース + 構造検証 + cost / rate / condition formula コンパイル + Singleton 公開。`getCompiledEvent(name)` で `CompiledEvent` を取得可能
 - **AppearanceSpec** (`src/lib/AppearanceSpec.ts`): mark / color / shape / concentric_circle のパース。`TrapsLoader` と共有
 - **EventObject** (`src/lib/map/MapObjects.ts`): `MapObject` 継承。`eventDef` を保持、`isBlocking` getter で `blocking` フラグを露出
-- **EventExecutor** (`src/lib/events/EventExecutor.ts`): action 実行の中核。formula キャッシュ・コスト評価・rate 判定・action ディスパッチ・選択肢実行（`executeEventImmediate` / `executeEventChoice`）
+- **EventExecutor** (`src/lib/events/EventExecutor.ts`): action 実行の中核。formula キャッシュ・コスト評価・rate 判定・action ディスパッチ・選択肢実行（`executeEventImmediate` / `executeEventChoice`）。`executeActionArray` / `executeOneAction` は `eventObj: EventObject | null` を取り、`null` 文脈（時限イベント等）では `self_destruct` を no-op・`unlock_door: self` を警告 skip とする。`executeEventByName(dungeon, player, eventName)` は EventObject 非依存でイベント名から `action` / `random_outcome` を実行する公開エントリ（`choices` 形式は無人実行不可で警告 + false 返却）
 - **MapInteractionHandler.investigateEvent** (`src/game/scenes/game/MapInteractionHandler.ts`): C キー調査時に EventObject を検出した際の起動口。flavor 出力 → 即実行 or 選択肢モード遷移
 - **SceneModeController.enterEventChoiceMode** (`src/game/scenes/game/SceneModeController.ts`): 最大 10 個 + 自動キャンセルのモーダル UI。cost 不足の choice は disabled で表示
 
@@ -137,6 +138,17 @@ floors:
 ```
 
 `FloorPopulator.populateFloor` が宝箱配置後・トラップ配置前にイベント配置ブロックを実行する。配置先は `withoutCorridor: true` / `withoutDoor: true` / `withoutSecretRoom: true` 制約付きのランダムセル。
+
+## 調査以外の起動経路（時間トリガー）
+
+イベントは本来「調査専用」だが、`action` / `random_outcome` 形式のイベントは座標・EventObject に依存せず `EventExecutor.executeEventByName()` で発火できるため、以下のターン経過トリガーからも実行される：
+
+- **時限イベント `scheduledEvents`**（`base.yml`）: 通算/フロア経過ターンで発火。`MapGenerator.dispatchObjectEvent()` から発火。詳細は [data.md](./data.md) の「時限イベント (`scheduledEvents`)」
+- **状態異常の満了アクション `onExpire`**（`effects.yml`）: 状態異常が**満了（`clear.formula` 由来の自然解除）した瞬間に 1 回**発火する events.yml イベント名。`Player.tickStatusEffects()` が解除エントリに `expireEvent` を載せ、`MapObjectStore.dispatchEvent()` が `executeEventByName` で発火する。治療（`clearStatusEffect`）や被弾解除（`clear.onDamage`）では発火しない（=「何もしなければ N ターン後に発動／治療すれば回避」型の遅延効果を実現）。onExpire 発火エントリには「解けた」ログを出さず、イベント側の action / message に委ねる
+
+`onExpire` 型の遅延効果の作り方：`effects.yml` で `clear.formula` を確率式ではなく閾値式 `count >= N ? 1 : 0` にしてカウントダウンにし、`onExpire: <event名>` を付ける。発火する効果は events.yml の action（`mod_stat` で HP/MP を特定値に、`apply_effect` で別状態異常に変化、`give_item` 等）を自由に組める。サンプル: `death_curse`（effects.yml）→ `death_curse_payload`（events.yml, HP/MP を 1 に）。付与は `curse_strike`（skills.yml, 敵 on_attack）等の `apply_effect` で行う。
+
+いずれも `choices` 形式のイベントは無人実行できないため使用不可（`YamlCrossValidator` がエラーで弾く）。`flavor` は調査時専用の出力なので時間トリガー発火では表示されない（定義上は必須項目のまま）。
 
 ## YAML 横断バリデーション
 

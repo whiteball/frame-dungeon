@@ -180,3 +180,34 @@
     - label: 眺めるだけにする
       action:
         - message: 解読できる気がしない……。
+
+# 例 7: 時限イベント用サンプル（base.yml の scheduledEvents から名前参照して発火する）
+# - 調査では起動しない（floors[].events プールに入れない）ため flavor は形式上の必須項目
+# - action / random_outcome のみ対応（choices は無人実行できないので不可）
+# - base.yml で `scheduledEvents: [{ event: dungeon_tremor, turn: 30, repeat: yes }]` のように使う
+- name: dungeon_tremor
+  label: ダンジョンの鳴動
+  description: 地下深くから響く震動
+  flavor: 地の底から不気味な震動が伝わってくる。
+  random_outcome:
+    - weight: 3
+      label: 小さな揺れ
+      action:
+        - message: ダンジョンが小さく鳴動した。
+    - weight: 1
+      label: 落石
+      action:
+        - damage: "ceil(life_max * 0.05)"
+        - message: 天井から小石が落ちてきた！
+
+# 例 8: 状態異常 death_curse の満了時（onExpire）に発火する効果イベント
+# - effects.yml の death_curse.onExpire から名前参照される（調査では起動しない）
+# - mod_stat で HP / MP を 1 に設定する（任意 stat を狙った値にできる action）
+- name: death_curse_payload
+  label: 呪いの発動
+  description: 死の呪いが満ちた
+  flavor: 呪いが満ちる。
+  action:
+    - message: 呪いが満ちた……身体から力が抜けていく。
+    - mod_stat: { stat: life, formula: "1" }
+    - mod_stat: { stat: magic, formula: "1" }

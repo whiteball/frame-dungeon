@@ -64,3 +64,15 @@
         formula: "x * 1.2"
   clear:
     formula: "(count ^ 2) * 0.1"
+# 遅延効果（時限爆弾型）の例: 付与中は何も起きないが、満了すると 1 回だけ effect が発動する。
+# - clear.formula を確率式ではなく閾値式 `count >= N ? 1 : 0` にしてカウントダウンにする
+# - onExpire は満了（clear.formula 由来の自然解除）時のみ発火する。治療（clearEffect アイテム）
+#   や被弾解除（clear.onDamage）では発火しないため「何もしなければ N ターン後に発動／治療で回避」になる
+# - 発火する効果は events.yml の action を再利用する（ここでは death_curse_payload で HP/MP を 1 にする）
+- name: death_curse
+  label: 死の呪い
+  description: 解けないと約30ターン後に生命力を奪われる
+  timing: {}
+  clear:
+    formula: "count >= 30 ? 1 : 0"
+  onExpire: death_curse_payload

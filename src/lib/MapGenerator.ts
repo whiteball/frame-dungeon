@@ -11,6 +11,7 @@ import { MapBuilder, type RoomWithCorridors } from './map/MapBuilder';
 import { MapObjectStore } from './map/MapObjectStore';
 import * as PlayerActions from './map/PlayerActions';
 import { executePlayerOnTurnSkill, isPlayerPassiveBlocked, isPlayerDead } from './skills/PlayerSkillExecutor';
+import { executeEventByName } from './events/EventExecutor';
 import { dumpDungeon } from './map/MapDebug';
 import { findPath, findContainingZone, isInZone, hasLineOfSight, type FindPathOptions } from './map/Pathfinding';
 import { BaseLoader } from './BaseLoader';
@@ -1198,6 +1199,22 @@ export class DungeonMap {
           if (this._turnCount % rule.turn !== 0) continue;
           const delta = Math.floor(Number(rule.formula.evaluate(vars)));
           if (delta > 0) this._playerInstance.addStat(rule.target, delta);
+        }
+      }
+    }
+
+    // 時限イベント（base.yml の scheduledEvents 定義に従う）
+    // events.yml のイベント（action / random_outcome）をターン経過トリガーで発火する。
+    // scope: global=通算ターン / floor=フロア経過ターン。repeat: true で turn の倍数ごと、false で turn ちょうど1回。
+    if (this._playerInstance && !isPlayerDead(this._playerInstance)) {
+      for (const se of BaseLoader.getInstance().getScheduledEvents()) {
+        const elapsed = se.scope === 'floor' ? this.getFloorTurnCount() : this._turnCount;
+        const fired = se.repeat ? (elapsed > 0 && elapsed % se.turn === 0) : (elapsed === se.turn);
+        if (!fired) continue;
+        executeEventByName(this, this._playerInstance, se.event);
+        if (isPlayerDead(this._playerInstance)) {
+          EventBus.emit('game-over');
+          break;
         }
       }
     }

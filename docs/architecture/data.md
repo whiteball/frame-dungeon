@@ -75,6 +75,7 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
 | `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |
 | `regenerate` | 任意 | `[]`（自動回復なし） | 一定ターンごとの自動回復ルール配列。各要素 `{ target, turn, formula }`。後述「自動回復 (`regenerate`)」参照 |
+| `scheduledEvents` | 任意 | `[]`（無効） | ターン経過で `events.yml` のイベントを発火する時限イベント配列。各要素 `{ event, turn, repeat?, scope? }`。後述「時限イベント (`scheduledEvents`)」参照 |
 | `longStay` | 任意 | `null`（機構無効） | フロア長居時の警告/強制移動メッセージ配列。3要素以上のとき先頭3要素を `[50%警告, 75%警告, 100%強制]` として採用。後述「フロア長居警告/強制移動」参照 |
 | `longStayFactor` | 任意 | `4` | 規定ターン数の倍率。`floors[].longStayTurns` 未指定時に `width * height * longStayFactor` で算出 |
 
@@ -142,6 +143,29 @@ regenerate:
 ```
 
 `MapGenerator.dispatchObjectEvent()` が `_turnCount` インクリメント前に評価する。未定義/空配列なら自動回復は発生しない。回復時に message-log は発行されない。
+
+### 時限イベント (`scheduledEvents`)
+
+ターン経過をトリガーに `events.yml` のイベント（`action` / `random_outcome`）を発火させる。効果の中身は `events.yml` の action 群（`heal` / `damage` / `apply_effect` / `give_item` / `learn_skill` / `spawn_enemy` 等、[events.md](./events.md) 参照）を**そのまま再利用**するため、新たな効果記法は不要。
+
+配列。各エントリは `{ event, turn, repeat?, scope? }`：
+
+- `event`: 発火する `events.yml` のイベント名。**`action` または `random_outcome` を持つイベントのみ**（`choices` は無人実行できないため不可。`YamlCrossValidator` がエラーで弾く）
+- `turn`: 発火する経過ターン数（正の整数）
+- `repeat`: `yes`/`true` で `turn` の倍数ごとに繰り返し発火、`no`（既定）で `turn` ちょうどに 1 回のみ
+- `scope`: `global`（既定、通算ターン `_turnCount`）/ `floor`（フロア入場からの経過ターン `getFloorTurnCount()`。フロア移動でリセットされる）
+
+```yaml
+scheduledEvents:
+  - event: dungeon_tremor   # events.yml の action / random_outcome 形式イベント
+    turn: 30
+    repeat: yes             # 30 ターンごとに発火
+    scope: global
+```
+
+`MapGenerator.dispatchObjectEvent()` が `regenerate` 評価の直後・`_turnCount` インクリメント前に、`EventExecutor.executeEventByName()` を介して発火する（EventObject 非依存で実行されるため `self_destruct` は no-op、`unlock_door: self` は linkedDoor 不在で警告 skip となる）。発火判定は `repeat=true` なら `elapsed > 0 && elapsed % turn === 0`、`false` なら `elapsed === turn`。`damage` action 等でプレイヤーが死亡した場合は `game-over` を発火し以降の時限イベントを中断する。
+
+> 発火タイミングは `_turnCount`（または `getFloorTurnCount()`）の現在値そのものに依存するため、追加の「発火済み」状態は持たない（セーブ/ロードしても turn 値で再現される）。`repeat: false` のイベントは、ちょうどそのターンを跨いでセーブ/ロードした場合に発火を逃すことがある（簡潔さ優先の割り切り）。
 
 ### フロア毎構成 (`floors`)
 
@@ -328,7 +352,8 @@ autoSpawner:
 - `base.yml` の `floors[].enemies` / `floors[].traps` / `floors[].events` 名が `enemies.yml` / `traps.yml` / `events.yml` に存在するか
 - `traps.yml` の `effect[].type === 'addEffect'` の `value` が `effects.yml` に存在するか
 - `items.yml` の `effect.immediate.learnSkill` が `skills.yml` に存在するか
-- `events.yml` action 内のクロス参照（`give_item` / `consume_item` → items / `spawn_enemy` → enemies / `learn_skill` / `execute_skill` → skills / `add_modifier` → item_modifiers / `apply_effect.effect` → effects 等）
+- `events.yml` action 内のクロス参照（`give_item` / `consume_item` → items / `spawn_enemy` → enemies / `learn_skill` / `execute_skill` → skills / `add_modifier` → item_modifiers / `apply_effect.effect` → effects / `mod_stat.stat` → stats 等）
+- `base.yml` の `scheduledEvents[].event` と `effects.yml` の `onExpire` が `events.yml` に存在し、かつ `action` / `random_outcome` 形式（`choices` 不可）であるか
 - `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` 要素が `effects.yml` に存在するか
 - `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
 

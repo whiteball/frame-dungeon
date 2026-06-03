@@ -74,6 +74,18 @@ regenerate:
     turn: 30
     formula: "floor(magic_max * 0.01) <= 0 ? 1 : floor(magic_max * 0.01)"
 
+# 時限イベント: events.yml のイベントをターン経過トリガーで発火する
+# - event:  発火する events.yml のイベント名（action / random_outcome のみ。choices は不可）
+# - turn:   発火する経過ターン数（正の整数）
+# - repeat: yes なら turn の倍数ごとに繰り返し発火 / no（既定）なら turn ちょうどで 1 回だけ
+# - scope:  global（既定, 通算ターン） / floor（フロア入場からの経過ターン。フロア移動でリセット）
+# 既定バランスを変えないため既定では無効。下記をアンコメントすると 30 ターンごとに鳴動イベントが起きる
+# scheduledEvents:
+#   - event: dungeon_tremor
+#     turn: 30
+#     repeat: yes
+#     scope: global
+
 # 同一フロアへの長居警告/強制移動
 # longStay は3要素配列で、それぞれ 50% 警告 / 75% 警告 / 100% 強制移動時のメッセージ
 # longStayFactor はフロアセル数 (width*height) に掛ける倍率で、規定ターン数を算出
