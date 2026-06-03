@@ -15,7 +15,7 @@
 
 - `lint` / `test` / `typecheck` スクリプトは未定義（ESLint は devDependencies に存在するが未統合）
 - **型チェックは `npx vue-tsc --noEmit -p tsconfig.app.json` で行う**。`yarn run build`（`vite build`）は esbuild で型を素通りさせるため型エラーを検出しない。また素の `tsc` は `.vue` を解決できず `App.vue` 等で誤った `TS2307` を出すので必ず `vue-tsc` を使う
-- 自動テストは無し。動作確認はブラウザ実機（`vue-phaser-browser-verify` スキル）で行う
+- 自動テストは無し。動作確認はブラウザ実機（`vue-phaser-browser-verify` スキル）で行う。ただしブラウザに接続できない場合は開発者による手動確認
 - パッケージマネージャは `yarn` 前提（`package-lock.json` ではなく `yarn.lock`）
 
 ## アーキテクチャ概要
