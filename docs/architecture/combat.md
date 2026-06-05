@@ -111,3 +111,25 @@
 戦闘・その他のゲームイベントは `EventBus.emit('message-log', message)` で発行し、`PhaserGame.vue` の Vue リアクティブ変数に蓄積します。ゲームキャンバス下部の `<textarea readonly>` に最新50件を表示します（テキスト選択・コピー可能）。
 
 アイテム取得・フロア移動など、将来のイベントも同じ `'message-log'` イベントを使用してください。
+
+## アイテム投擲システム
+
+「投げる」アクション（`Game.ts` の既定シーンアクション、`ItemListController.toggleList('throw')`）で、装備していない所持アイテムを直線方向へ投擲します。攻撃と同じ 左/中央/右 の3択方向選択（`SceneModeController.enterThrowDirectionMode` → `Game.enterThrowTargetSelectMode`）を経て `DungeonMap.throwItem(instanceId, dirCell)` → `PlayerActions.throwItem` が実行します。命中・着弾の解決は `src/lib/map/ThrowResolver.ts` の `resolveThrow()` に集約します。
+
+### 直線走査と停止条件
+
+プレイヤー位置を起点に、選択セルへの単位ベクトル（cardinal または diagonal）で1セルずつ前進します（`canProjectileStep`）。
+
+- **境界判定**: `canAttack` と同じ論理だが **扉も壁として遮蔽**（`isAnyWall` = 生の壁ビット参照）。斜めは2本のL字経路 pathA/pathB のいずれかが開いていれば通過可。
+- **敵に命中** → 効果を発揮しアイテム消滅（「{敵名}に当たった！」を効果出力前にログ）。
+- **壁・扉 / 進入不可オブジェクト（`isCellBlocked`：宝箱・blocking イベント）/ 射程到達** → 手前セルで停止し床にドロップ（「○が床に落ちた」）。着地は `EnemyDropResolver.findDropTarget`（ItemObject・敵・**トラップ可視不問**・プレイヤーを回避）で空きセルを探す。
+- **射程**: `base.yml` の `throwRange`（0=無制限）に `Player.getEffectiveStat('throwRange')`（装備 `effect.throwRange` / passive `add_stats.throwRange` を自動合算）を加えた値（無制限時は加算しない）。
+
+### 命中時の効果優先順位（`applyThrowHit`）
+
+1. アイテムに `throwEffect` 定義あり → `executeDamageAction` / `executeApplyEffectAction`（スキル action 実行器）を単一セル対象で再利用、`clear_effect` は `enemy.clearStatusEffect`
+2. 武器（throwEffect 無し）→ **仮装備ダメージ**: `Player.getThrownWeaponFormulaVars(item)` で武器スロットだけを投擲武器に差し替えた実効ステータスを構築し、`enemy.takeDamageFromPlayer()` に渡す（現装備武器の寄与は除外、投擲武器自身の modifier は反映、passive/continuous/permanent は維持）
+3. 消費アイテム（throwEffect 無し）→ `applyEffect` / `clearEffect` / 数値 stat のみ敵へ転用（利敵も許容）。`continuous` は未対応（[TODO.md] 参照）
+4. 防具・その他 → 投げ損（消滅のみ）
+
+敵撃破時はマップ除去・撃破数・経験値・レベルアップ・ドロップ（`tryEnemyDrop`）を AttackAction / DamageAction と同等に処理します（`awardEnemyDefeat`）。スタン中（`_action: skip`）は「動けない！」でターン消費し投擲しません。

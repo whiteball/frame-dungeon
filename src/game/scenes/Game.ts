@@ -356,6 +356,7 @@ export class Game extends Scene {
         this.mode.initDefaultActions([
             { label: 'スキル', onClick: () => this.list.toggleList('skill') },
             { label: 'アイテム使用', onClick: () => this.list.toggleList('item') },
+            { label: '投げる', onClick: () => this.list.toggleList('throw') },
             { label: '装備変更', onClick: () => this.list.toggleList('equip') },
             { label: 'ステータス', onClick: () => this.openStatus() },
             { label: '足下', onClick: () => this.list.onUnderfoot() },
@@ -487,6 +488,25 @@ export class Game extends Scene {
         const candidates = getFrontCandidates(this.dungeon);
         this.mode.enterSkillTargetSelectMode(candidates, (cell) => {
             this.executeAction(() => this.dungeon.useConsumableItem(instanceId, { skillTargetCell: cell }));
+        });
+    }
+
+    /**
+     * アイテム投擲の方向選択モードに移行する。
+     * 攻撃と同じ 左/中央/右 の3セルを候補にし、確定で `throwItem` を実行する。
+     * 壁方向でも投擲物は床に落ちるため、全方向を常に選択可能にする。
+     *
+     * ItemListController から throw-item ハンドラ経由で呼ばれるため public。
+     */
+    enterThrowTargetSelectMode(instanceId: string): void {
+        const { x, y, direction } = this.dungeon.getPlayerPos();
+        const [fdx, fdy] = getDirectionOffset(direction);
+        const [rdx, rdy] = getDirectionOffset(rotateDirection(direction, 1));
+        const centerCell: [integer, integer] = [x + fdx, y + fdy];
+        const rightCell: [integer, integer] = [centerCell[0] + rdx, centerCell[1] + rdy];
+        const leftCell: [integer, integer] = [centerCell[0] - rdx, centerCell[1] - rdy];
+        this.mode.enterThrowDirectionMode(centerCell, rightCell, leftCell, (tx, ty) => {
+            this.executeAction(() => this.dungeon.throwItem(instanceId, { x: tx, y: ty }));
         });
     }
 

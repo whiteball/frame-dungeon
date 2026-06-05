@@ -99,6 +99,28 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 | `add_modifier: <modifierName>` | 装備中で modifier の `target` type に一致する全アイテムに modifier を付与（countable は +1 でスタック、max クランプ。未付与なら count=1）。対象不在時はログ「しかし何も起こらなかった」 |
 | `remove_modifier_kind: { kind, target }` | `target` で指定したスロット（`all_equipped`/`weapon`/`main_armor`/`sub_armor`）の装備から `kind` タグ一致の modifier を一括除去。対象不在/該当 modifier なしで `modifierNoTarget` フラグが立つ |
 
+### アイテム投擲（`throwEffect` / 効果転用）
+
+「投げる」アクションで装備していない所持アイテムを直線方向へ投擲できる（処理フロー・直線走査・射程は [combat.md](./combat.md) の「アイテム投擲システム」を参照）。ここではアイテム定義側の仕様を扱う。
+
+`ItemDefinition.throwEffect?: ThrowEffectEntry[]`（`ItemsLoader`）— 投擲して敵に命中したときに発揮する効果。指定があれば下記の既定転用より **最優先**。各エントリは1種別を指定し配列で複数列挙可：
+
+| キー | 内容 |
+| --- | --- |
+| `damage: number \| formula` | `executeDamageAction` で評価（caster 実効値 `<stat>`/`<stat>_max`、`target_<stat>`、level、exp を変数に取る） |
+| `apply_effect: <effectName> \| { effect, rate }` | `executeApplyEffectAction` で敵に状態異常付与（rate は数値 or formula） |
+| `clear_effect: <effectName>` | 命中した敵の当該状態異常を解除 |
+
+`throwEffect` を持たないアイテムの既定の敵への効果（`ThrowResolver.applyThrowHit`）：
+
+| アイテム種別 | 投擲命中時の効果 |
+| --- | --- |
+| `weapon` | 仮装備ダメージ（`Player.getThrownWeaponFormulaVars` で武器スロットを差し替えた実効値を `enemy.takeDamageFromPlayer` へ） |
+| `consumable` | `immediate` の `applyEffect` / `clearEffect` / 数値 stat のみ敵へ転用（`life` 減少はダメージ表記・`notifyDamageTaken` 連携）。`continuous`・`learnSkill`・`executeSkill`・`add_modifier`・`remove_modifier_kind` は無視。回復薬を敵に投げると敵を回復させる（利敵を許容） |
+| `main_armor` / `sub_armor` | 投げ損（消滅のみ）。救済したい防具は `throwEffect` を付ける |
+
+検証：`validateItemDefinition` が `throwEffect` の形状を、`YamlCrossValidator` が `apply_effect` / `clear_effect` の effect 名を effects.yml と照合する。
+
 ### 装備・消耗品・effect に持たせる resist
 
 派生パラメータ `resist`（effect 名の文字列配列）を以下の経路で動的に獲得できる：

@@ -77,6 +77,9 @@
 
 - [ ] 追加武器・防具
   - [ ] アイテム投擲と遠距離武器
+    - [x] アイテム投擲（直線投擲・壁/扉/障害物で停止し床ドロップ・敵命中で効果発揮）。効果優先順位は `throwEffect` ＞ 武器の仮装備ダメージ（`Player.getThrownWeaponFormulaVars`）＞ 消費アイテムの `applyEffect`/`clearEffect`/数値stat 転用 ＞ 投げ損。射程は `base.yml` の `throwRange`＋装備/パッシブ `throwRange` ボーナス。実装は `src/lib/map/ThrowResolver.ts`
+    - [ ] 投擲で消費アイテムの `continuous`（持続効果）を敵に適用する（敵側に continuous 機構が無いため未対応。`Enemy` への持続効果システム導入が前提）
+    - [ ] 遠距離武器（装備したまま離れた敵を攻撃する武器種）
   - [ ] レアリティシステム
   - [x] ランダム生成アイテム（接頭辞・接尾辞）
     - [x] 修飾状態（modifier）システム: `item_modifiers.yml` + `ItemModifiersLoader`。`add_stats` / `cannot_unequip` 効果を装備中のみ発動

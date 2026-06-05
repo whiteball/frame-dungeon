@@ -1,6 +1,6 @@
 import { ItemFactory } from '../ItemFactory';
 import { BaseLoader } from '../BaseLoader';
-import { ItemObject } from './MapObjects';
+import { ItemObject, TrapObject } from './MapObjects';
 import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
 import { canPass } from './Pathfinding';
@@ -30,18 +30,26 @@ function hasEnemyAt(dungeon: DungeonMap, x: integer, y: integer): boolean {
     return dungeon.getObject(x, y).some(o => o instanceof Enemy);
 }
 
+/** 指定座標にトラップ（可視・不可視問わず）が存在するか */
+function hasTrapAt(dungeon: DungeonMap, x: integer, y: integer): boolean {
+    return dungeon.getObject(x, y).some(o => o instanceof TrapObject);
+}
+
 /**
  * 死亡セル (sourceX, sourceY) からマンハッタン距離 2 以内かつ
  * 壁を越えずに 2 歩以内で到達可能な空きセルを探索する。
  *
  * - 死亡セル自身が候補条件を満たせばそこを返す
  * - そうでなければ BFS（深さ 2）で 4 方向に隣接するセルを順に評価
- * - 候補セル条件: ItemObject も生存敵もいない、かつ **プレイヤーが立っていない**
+ * - 候補セル条件: ItemObject も生存敵もトラップ（可視・不可視問わず）もおらず、
+ *   かつ **プレイヤーが立っていない**
  *   （プレイヤーセルに置くと直後の dispatchObjectEvent で即時拾得されてしまうため、
  *    床に「一旦置く」を保証するために除外する。ただし BFS の中継点としては通過可）
  * - 見つからなければ null
+ *
+ * 敵アイテムドロップ・アイテム投擲の両経路から共用される（投擲も同じトラップ回避を要求するため）。
  */
-function findDropTarget(
+export function findDropTarget(
     dungeon: DungeonMap,
     sourceX: integer,
     sourceY: integer,
@@ -51,7 +59,8 @@ function findDropTarget(
     const isAvailable = (x: integer, y: integer) =>
         !isPlayerCell(x, y)
         && !hasItemObjectAt(dungeon, x, y)
-        && !hasEnemyAt(dungeon, x, y);
+        && !hasEnemyAt(dungeon, x, y)
+        && !hasTrapAt(dungeon, x, y);
 
     if (isAvailable(sourceX, sourceY)) {
         return { x: sourceX, y: sourceY };

@@ -14,7 +14,7 @@ import LoadDialog from '../components/dialogs/LoadDialog.vue';
 import YamlErrorDialog from '../components/dialogs/YamlErrorDialog.vue';
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
-type ListMode = 'item' | 'equip' | 'drop' | 'skill';
+type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw';
 type ItemListEntry = {
     id: string, label: string, description: string,
     isEquipped?: boolean, typeLabel?: string, effectSummary?: string,
@@ -119,6 +119,8 @@ function confirmSelect() {
         EventBus.emit('equip-item', { instanceId: it.id });
     } else if (listMode.value === 'drop') {
         EventBus.emit('drop-item', { instanceId: it.id });
+    } else if (listMode.value === 'throw') {
+        EventBus.emit('throw-item', { instanceId: it.id });
     } else if (listMode.value === 'skill') {
         EventBus.emit('use-skill', { skillName: it.id });
     } else {

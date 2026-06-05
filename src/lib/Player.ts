@@ -338,15 +338,25 @@ export class Player {
      *   5. + permanent 状態効果（formula(x)）
      */
     getEffectiveStat(key: string): number {
-        const preModValue = this.getStat(key) + (this.getEquipmentBonuses().get(key) ?? 0);
+        return this.getEffectiveStatWithEquipment(key, this.getAllEquippedItems());
+    }
+
+    /**
+     * {@link getEffectiveStat} と同じ計算を、装備セットを差し替えて行う。
+     * 投擲武器を「仮に装備して攻撃した場合」のダメージ計算で、武器スロットだけを
+     * 投擲アイテムに差し替えた装備セットを渡すために使う。
+     * equippedItems の順序・内容は {@link getAllEquippedItems} と同じ形式
+     * （[weapon, mainArmor, subArmor1, subArmor2]）を想定する。
+     */
+    getEffectiveStatWithEquipment(key: string, equippedItems: (Item | null)[]): number {
+        const preModValue = this.getStat(key) + (this.getEquipmentBonusesFrom(equippedItems).get(key) ?? 0);
         let value = preModValue;
 
         // 装備中アイテムの modifier add_stats を合算（元 stat 値は preModValue 固定で渡す）
-        const equipped = this.getAllEquippedItems();
-        if (equipped.some(it => it !== null)) {
+        if (equippedItems.some(it => it !== null)) {
             const formulaVars = this.getFormulaVars();
             formulaVars[key] = preModValue;
-            for (const item of equipped) {
+            for (const item of equippedItems) {
                 if (!item) continue;
                 const bonuses = item.getModifierStatBonuses(formulaVars);
                 value += (bonuses.get(key) ?? 0);
@@ -878,10 +888,18 @@ export class Player {
      * @returns 装備ボーナスのマップ
      */
     getEquipmentBonuses(): Map<string, number> {
+        return this.getEquipmentBonusesFrom(this.getAllEquippedItems());
+    }
+
+    /**
+     * 指定した装備セットの生ボーナス（modifier 含まず）を計算する。
+     * 投擲武器の仮装備計算で装備セットを差し替えるために分離している。
+     */
+    getEquipmentBonusesFrom(items: (Item | null)[]): Map<string, number> {
         const bonuses = new Map<string, number>();
-        
-        const equippedItems = this.getAllEquippedItems().filter(item => item !== null) as Item[];
-        
+
+        const equippedItems = items.filter(item => item !== null) as Item[];
+
         for (const item of equippedItems) {
             const effects = item.getEquipmentEffects();
             for (const [statName, value] of Object.entries(effects)) {
@@ -889,7 +907,7 @@ export class Player {
                 bonuses.set(statName, currentBonus + value);
             }
         }
-        
+
         return bonuses;
     }
 
@@ -907,6 +925,29 @@ export class Player {
         const vars: Record<string, number> = {};
         for (const [key] of this.stats) {
             vars[key] = this.getEffectiveStat(key);
+        }
+        vars.level = this.level;
+        vars.exp = this.exp;
+        return vars;
+    }
+
+    /**
+     * 投擲武器を「仮に装備して攻撃した」場合の実効ステータス変数辞書を返す。
+     * 武器スロットだけを投擲アイテムに差し替えて全 stat を再評価するため、
+     * 現在装備中の武器の寄与は除外され、投擲武器自身の modifier は反映される。
+     * passive / continuous / permanent 効果はそのまま乗る。
+     * `damageFromPlayer` formula 評価（`enemy.takeDamageFromPlayer`）に渡す。
+     */
+    getThrownWeaponFormulaVars(item: Item): Record<string, number> {
+        const override: (Item | null)[] = [
+            item,
+            this.equippedMainArmor,
+            this.equippedSubArmor1,
+            this.equippedSubArmor2,
+        ];
+        const vars: Record<string, number> = {};
+        for (const [key] of this.stats) {
+            vars[key] = this.getEffectiveStatWithEquipment(key, override);
         }
         vars.level = this.level;
         vars.exp = this.exp;

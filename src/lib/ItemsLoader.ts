@@ -68,6 +68,22 @@ export interface ItemPassiveSkillEntry {
     rate: number;
 }
 
+/**
+ * 投擲時に敵へ発揮する効果エントリ（スキル action 形式に準じる）。
+ * 1 エントリにつき 1 種別を指定する。配列で複数列挙可能。
+ * - damage: 数値リテラルまたは formula 文字列（DamageAction と同じ変数体系で評価）
+ * - apply_effect: effect 名（文字列）または { effect, rate } で状態異常を付与
+ * - clear_effect: effect 名。命中した敵の当該状態異常を解除する
+ *
+ * throwEffect が定義されている場合、武器の仮装備ダメージ・消費アイテムの効果転用より
+ * 優先して発揮される。
+ */
+export interface ThrowEffectEntry {
+    damage?: number | string;
+    apply_effect?: string | { effect: string; rate?: number | string };
+    clear_effect?: string;
+}
+
 export interface ItemDefinition {
     /**
      * アイテム内部ID（英語）
@@ -93,6 +109,11 @@ export interface ItemDefinition {
      * 装備中に付与されるパッシブスキル一覧（省略可）
      */
     passive_skills?: ItemPassiveSkillEntry[];
+    /**
+     * 投擲して敵に命中したときに発揮する効果（省略可）。
+     * 指定があれば武器の仮装備ダメージ・消費アイテムの効果転用より優先される。
+     */
+    throwEffect?: ThrowEffectEntry[];
 }
 
 export class ItemsLoader {
@@ -184,6 +205,36 @@ export class ItemsLoader {
                 }
                 if (typeof ps.rate !== 'number' || ps.rate < 0 || ps.rate > 1) {
                     throw new Error(`Invalid item '${item.name}': passive_skills[${i}].rate must be a number in [0, 1]`);
+                }
+            }
+        }
+        if (item.throwEffect !== undefined) {
+            if (!Array.isArray(item.throwEffect)) {
+                throw new Error(`Invalid item '${item.name}': 'throwEffect' must be an array`);
+            }
+            for (let i = 0; i < item.throwEffect.length; i++) {
+                const e = item.throwEffect[i];
+                if (!e || typeof e !== 'object' || Array.isArray(e)) {
+                    throw new Error(`Invalid item '${item.name}': throwEffect[${i}] must be an object`);
+                }
+                if (e.damage !== undefined && typeof e.damage !== 'number' && typeof e.damage !== 'string') {
+                    throw new Error(`Invalid item '${item.name}': throwEffect[${i}].damage must be a number or formula string`);
+                }
+                if (e.apply_effect !== undefined) {
+                    const ae = e.apply_effect;
+                    if (typeof ae === 'object') {
+                        if (!ae || Array.isArray(ae) || typeof ae.effect !== 'string' || !ae.effect) {
+                            throw new Error(`Invalid item '${item.name}': throwEffect[${i}].apply_effect must be a string or { effect, rate } object`);
+                        }
+                        if (ae.rate !== undefined && typeof ae.rate !== 'number' && typeof ae.rate !== 'string') {
+                            throw new Error(`Invalid item '${item.name}': throwEffect[${i}].apply_effect.rate must be a number or string`);
+                        }
+                    } else if (typeof ae !== 'string') {
+                        throw new Error(`Invalid item '${item.name}': throwEffect[${i}].apply_effect must be a string or { effect, rate } object`);
+                    }
+                }
+                if (e.clear_effect !== undefined && typeof e.clear_effect !== 'string') {
+                    throw new Error(`Invalid item '${item.name}': throwEffect[${i}].clear_effect must be a string`);
                 }
             }
         }

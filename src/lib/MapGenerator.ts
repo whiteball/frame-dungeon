@@ -989,6 +989,14 @@ export class DungeonMap {
   }
 
   /**
+   * プレイヤーがアイテムを投擲する
+   * @param dirCell 投擲方向を示すセル（攻撃方向選択の 左/中央/右）
+   */
+  public throwItem(instanceId: string, dirCell: { x: integer; y: integer }): boolean {
+    return PlayerActions.throwItem(this, instanceId, dirCell);
+  }
+
+  /**
    * プレイヤーを現在の向きから右方向に移動させる（向きは変わらない）
    * @returns 移動に成功した場合1、移動できない場合0
    */

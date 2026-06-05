@@ -78,6 +78,7 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | `scheduledEvents` | 任意 | `[]`（無効） | ターン経過で `events.yml` のイベントを発火する時限イベント配列。各要素 `{ event, turn, repeat?, scope? }`。後述「時限イベント (`scheduledEvents`)」参照 |
 | `longStay` | 任意 | `null`（機構無効） | フロア長居時の警告/強制移動メッセージ配列。3要素以上のとき先頭3要素を `[50%警告, 75%警告, 100%強制]` として採用。後述「フロア長居警告/強制移動」参照 |
 | `longStayFactor` | 任意 | `4` | 規定ターン数の倍率。`floors[].longStayTurns` 未指定時に `width * height * longStayFactor` で算出 |
+| `throwRange` | 任意 | `0`（無制限） | アイテム投擲の基準射程（セル数）。0 以下で無制限。実効射程はこの値に装備/パッシブの `throwRange` ボーナス（`Player.getEffectiveStat('throwRange')`）を加算（無制限時は加算しない）。`BaseLoader.getThrowRange()`。`throwRange` は stats.yml 非登録の派生キーで、装備 `effect.throwRange` / passive `add_stats.throwRange` から加算される（`YamlCrossValidator` の `DERIVED_STAT_KEYS` で stat 存在チェックを免除） |
 
 ### 死亡判定 (`dead` / `enemyDead`)
 

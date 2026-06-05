@@ -97,6 +97,47 @@ export class SceneModeController {
     }
 
     /**
+     * 投擲方向選択モード。3 セル（左/中央/右）から選択で onExecute(x, y) を呼ぶ。
+     * 攻撃と異なり全方向を常に選択可能にする（壁方向でも投擲物は床に落ちるため）。
+     */
+    enterThrowDirectionMode(
+        centerCell: [integer, integer],
+        rightCell: [integer, integer],
+        leftCell: [integer, integer],
+        onExecute: (x: integer, y: integer) => void,
+    ): void {
+        const actions: SceneAction[] = [
+            {
+                label: '左',
+                onClick: () => {
+                    this.enterDefaultMode();
+                    onExecute(leftCell[0], leftCell[1]);
+                },
+            },
+            {
+                label: '中央',
+                onClick: () => {
+                    this.enterDefaultMode();
+                    onExecute(centerCell[0], centerCell[1]);
+                },
+            },
+            {
+                label: '右',
+                onClick: () => {
+                    this.enterDefaultMode();
+                    onExecute(rightCell[0], rightCell[1]);
+                },
+            },
+            {
+                label: 'キャンセル',
+                onClick: () => this.enterDefaultMode(),
+            },
+        ];
+        this.setSceneActions(actions);
+        this.setModeLabel('投擲方向選択中');
+    }
+
+    /**
      * target: front スキル用の方向選択モード。候補は呼び出し側で
      * getFrontCandidates(dungeon) 等から組み立てて渡す。
      */

@@ -114,3 +114,28 @@
     immediate:
       executeSkill: explosion
   description: 唱えるとスキル「爆発」が発動し、部屋全体に大ダメージを与える
+- name: throwing flask
+  label: 火炎瓶
+  type: consumable
+  effect:
+    immediate:
+      life: 5
+  throwEffect:
+    - damage: "20 + power - target_defense / 2"
+  description: 投げつけると割れて爆発する瓶。飲んでもわずかに体力が回復するだけ
+- name: throwing glove
+  label: 投擲手袋
+  type: sub_armor
+  effect:
+    defense: 1
+    throwRange: 2
+  description: 装備するとアイテムを少し遠くまで投げられるようになる手袋
+- name: spiked shield
+  label: トゲ付きの盾
+  type: main_armor
+  effect:
+    defense: 8
+  throwEffect:
+    - damage: "15 + power - target_defense / 2"
+    - apply_effect: { effect: poison, rate: 0.3 }
+  description: トゲが付いた盾。投げつけても相手を傷つけ、毒を与えることがある

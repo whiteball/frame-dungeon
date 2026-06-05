@@ -14,6 +14,14 @@ export interface ValidationResult {
     infos: string[];
 }
 
+/**
+ * stats.yml には登録されないが、システムが装備 `effect` / passive `add_stats` 経由で
+ * 解釈する派生ステータスキー。`Player.getStat` は未知キーで 0 を返すため、
+ * これらは base 0 ＋装備/パッシブ加算として `getEffectiveStat` で集計される。
+ * - `throwRange`: アイテム投擲の射程ボーナス（基準射程は `base.yml` の `throwRange`）
+ */
+const DERIVED_STAT_KEYS = new Set<string>(['throwRange']);
+
 export class YamlCrossValidator {
     static validate(): ValidationResult {
         const errors: string[] = [];
@@ -296,7 +304,7 @@ export class YamlCrossValidator {
                 // トップレベルの stat キー（immediate / continuous / resist 以外の数値）
                 for (const [k, v] of Object.entries(spec)) {
                     if (k === 'immediate' || k === 'continuous' || k === 'resist') continue;
-                    if (typeof v === 'number' && !stats.getStat(k)) {
+                    if (typeof v === 'number' && !stats.getStat(k) && !DERIVED_STAT_KEYS.has(k)) {
                         errors.push(`items.yml "${item.name}": effect のキー "${k}" が stats.yml に存在しません`);
                     }
                 }
@@ -365,6 +373,20 @@ export class YamlCrossValidator {
                     }
                 }
             }
+
+            // throwEffect の effect 名参照 → effects.yml（damage の formula は検証対象外）
+            const throwEntries = item.throwEffect ?? [];
+            for (let i = 0; i < throwEntries.length; i++) {
+                const e = throwEntries[i];
+                const ae = e.apply_effect;
+                const aeName = typeof ae === 'string' ? ae : (ae && typeof ae === 'object' ? ae.effect : undefined);
+                if (typeof aeName === 'string' && aeName && !effects.hasEffect(aeName)) {
+                    errors.push(`items.yml "${item.name}": throwEffect[${i}].apply_effect "${aeName}" が effects.yml に存在しません`);
+                }
+                if (typeof e.clear_effect === 'string' && !effects.hasEffect(e.clear_effect)) {
+                    errors.push(`items.yml "${item.name}": throwEffect[${i}].clear_effect "${e.clear_effect}" が effects.yml に存在しません`);
+                }
+            }
         }
 
         // item_modifiers.yml: effect.add_stats.target → stats.yml
@@ -402,7 +424,7 @@ export class YamlCrossValidator {
             for (const key of Object.keys(skill.add_stats)) {
                 const isMax = key.endsWith('_max');
                 const baseKey = isMax ? key.slice(0, -'_max'.length) : key;
-                if (!stats.getStat(baseKey)) {
+                if (!stats.getStat(baseKey) && !DERIVED_STAT_KEYS.has(baseKey)) {
                     errors.push(`skills.yml "${skill.name}": add_stats."${key}" の対応 stat が stats.yml に存在しません`);
                 }
             }

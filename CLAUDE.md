@@ -47,6 +47,7 @@
 - **セーブ/ロード**: `SaveManager` が LocalStorage にスロット単位で保存（`SaveDialog` / `LoadDialog` 経由）。`yamlDigest` でデータ互換性を確認する
 - **スキルシステム**: `skills.yml` 定義 → mastery 抽選 or アイテム使用（`learnSkill` 効果）で習得 → `src/lib/skills/SkillExecutor.ts` がコスト評価・target 解決・action 実行。スタン中は発動不可。パッシブの `toggle: yes` で有効/無効を切替（`Player.disabledSkills` で永続化）。仕様全般は [skills.md](docs/architecture/skills.md)
 - **アイテム修飾状態 (modifier)**: `item_modifiers.yml` で定義する装備個体差。装備中のみ `add_stats` / `cannot_unequip` の effect が発動し、`Player.getEffectiveStat` が base → 装備raw → modifier → continuous → permanent の順で合算。詳細は [items.md](docs/architecture/items.md)
+- **アイテム投擲**: 「投げる」アクションで装備外アイテムを直線投擲（`src/lib/map/ThrowResolver.ts`）。壁・扉・障害物で停止し床ドロップ、敵命中で消滅して効果発揮。効果優先順位は `throwEffect`（`items.yml`）＞ 武器の仮装備ダメージ（`Player.getThrownWeaponFormulaVars`）＞ 消費アイテムの `applyEffect`/`clearEffect`/数値stat 転用 ＞ 投げ損。射程は `base.yml` の `throwRange`（0=無制限）＋装備/パッシブの `throwRange` ボーナス。詳細は [combat.md](docs/architecture/combat.md) / [items.md](docs/architecture/items.md)
 - **YAML 横断バリデーション**: `YamlCrossValidator.validate()` が起動直後に走り、`base.yml` の floor 定義と `enemies.yml` / `traps.yml` のクロスリファレンス、および `items.yml` の `learnSkill` 効果と `skills.yml` のクロスリファレンスを検証。エラーは `YamlErrorDialog` に表示
 
 ### プロジェクト構造メモ

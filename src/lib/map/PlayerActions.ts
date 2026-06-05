@@ -10,6 +10,7 @@ import { EventBus } from '../../game/EventBus';
 import { Enemy } from '../Enemy';
 import { StairsObject, TrapObject, ItemObject } from './MapObjects';
 import { tryEnemyDrop } from './EnemyDropResolver';
+import { resolveThrow } from './ThrowResolver';
 import { executePlayerOnAttackSkill } from '../skills/PlayerSkillExecutor';
 
 /**
@@ -339,6 +340,49 @@ export function useSkill(
 
   // action 配列を順次実行
   executeActions(dungeon, player, compiled, targetCells);
+
+  dungeon.dispatchObjectEvent();
+  return true;
+}
+
+/**
+ * プレイヤーがアイテムを投擲する。
+ * - スタン中は投擲不可（「動けない！」でターン消費。useSkill と同形）
+ * - 装備中アイテムは投擲不可（UI 側で除外済みだが防御的に再チェック）
+ * - dirCell（攻撃方向選択の 左/中央/右 セル）への単位ベクトルで直線走査する
+ *
+ * @param instanceId 投擲するアイテムのインスタンスID
+ * @param dirCell 投擲方向を示すセル（プレイヤー隣接の cardinal/diagonal セル）
+ * @returns ターンを消費した場合 true（投擲実行 or スタンによる空費）。対象不正なら false（非消費）
+ */
+export function throwItem(
+  dungeon: DungeonMap,
+  instanceId: string,
+  dirCell: { x: integer; y: integer },
+): boolean {
+  const player = dungeon.getPlayerInstance();
+  if (!player) return false;
+
+  if (player.getPlayerActionDirective() === 'skip') {
+    EventBus.emit('message-log', '動けない！', dungeon.getTurnCount());
+    dungeon.dispatchObjectEvent();
+    return true;
+  }
+
+  const inventory = player.getInventory();
+  const item = inventory.getItemById(instanceId);
+  if (!item) return false;
+  if (player.getEquippedSlotOf(item) !== null) return false;
+
+  const { x, y } = dungeon.getPlayerPos();
+  const stepDx = Math.sign(dirCell.x - x);
+  const stepDy = Math.sign(dirCell.y - y);
+  if (stepDx === 0 && stepDy === 0) return false;
+
+  inventory.removeItemById(instanceId);
+  EventBus.emit('message-log', `${item.getLabelWithModifiers()}を投げた`, dungeon.getTurnCount());
+
+  resolveThrow(dungeon, player, item, stepDx, stepDy);
 
   dungeon.dispatchObjectEvent();
   return true;

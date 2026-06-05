@@ -8,7 +8,7 @@ import type { Item } from '../../../lib/Item';
 import type { MapObject } from '../../../lib/MapObject';
 import type { Game } from '../Game';
 
-export type ListMode = 'item' | 'equip' | 'drop' | 'skill';
+export type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw';
 
 type ItemListEntry = {
     id: string;
@@ -54,6 +54,7 @@ export class ItemListController {
         EventBus.removeAllListeners('use-item');
         EventBus.removeAllListeners('use-skill');
         EventBus.removeAllListeners('equip-item');
+        EventBus.removeAllListeners('throw-item');
         EventBus.removeAllListeners('close-item-list-request');
         EventBus.removeAllListeners('open-drop-list-for-pickup');
         EventBus.removeAllListeners('drop-item');
@@ -144,6 +145,12 @@ export class ItemListController {
             }
         });
 
+        EventBus.on('throw-item', (payload: { instanceId: string }) => {
+            // リストを閉じて投擲方向選択モードへ移行。確定で throwItem、キャンセルで何もしない。
+            this.closeList();
+            this.game.enterThrowTargetSelectMode(payload.instanceId);
+        });
+
         EventBus.on('close-item-list-request', () => {
             this.closeList();
         });
@@ -195,7 +202,7 @@ export class ItemListController {
     }
 
     /** 同じモードならクローズ、違うモードなら開き直す。drop は対象外（onUnderfoot 経由）。 */
-    toggleList(mode: 'item' | 'equip' | 'skill'): void {
+    toggleList(mode: 'item' | 'equip' | 'skill' | 'throw'): void {
         if (this.listMode === mode) {
             this.closeList();
         } else {
@@ -263,6 +270,7 @@ export class ItemListController {
             items = this.game.player.getInventory().getEquippableItems();
             actionLabel = '装備';
         } else {
+            // drop / throw: 装備中以外の全アイテムを対象にする
             const equippedIds = new Set(
                 this.game.player.getAllEquippedItems()
                     .filter((it): it is Item => it !== null)
@@ -270,7 +278,7 @@ export class ItemListController {
             );
             items = this.game.player.getInventory().getItems()
                 .filter(it => !equippedIds.has(it.getInstanceId()));
-            actionLabel = '置く';
+            actionLabel = mode === 'throw' ? '投げる' : '置く';
         }
         this.listMode = mode;
         if (this.game.input.keyboard) this.game.input.keyboard.enabled = false;

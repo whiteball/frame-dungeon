@@ -187,6 +187,8 @@ export class BaseLoader {
     private playerInitialStats: Map<string, number> = new Map();
     private _longStayMessages: string[] | null = null;
     private _longStayFactor: number = 4;
+    /** アイテム投擲の射程（セル数）。0 以下なら無制限。装備/パッシブで延長される基準値 */
+    private _throwRange: number = 0;
     /**
      * 施錠扉システムが利用可能か。`events.yml` に `secret_room_key` が定義されているときのみ true。
      * false の場合、`getFloorConfig` は `secretRoomDoorVariants.locked` / `lockedDisguised` を強制 0 にする
@@ -386,6 +388,9 @@ export class BaseLoader {
             if (typeof parsed.longStayFactor === 'number' && isFinite(parsed.longStayFactor) && parsed.longStayFactor > 0) {
                 this._longStayFactor = parsed.longStayFactor;
             }
+            if (typeof parsed.throwRange === 'number' && isFinite(parsed.throwRange) && parsed.throwRange > 0) {
+                this._throwRange = Math.floor(parsed.throwRange);
+            }
         } catch (error) {
             this._throwWithAlert(filePath, error);
         }
@@ -522,6 +527,14 @@ export class BaseLoader {
     /** 規定ターン数算出の倍率（floorConfig.longStayTurns が無い場合に使用） */
     getLongStayFactor(): number {
         return this._longStayFactor;
+    }
+
+    /**
+     * アイテム投擲の基準射程（セル数）。0 以下なら無制限。
+     * 実効射程は呼び出し側で装備/パッシブの `throwRange` ボーナスを加算する。
+     */
+    getThrowRange(): number {
+        return this._throwRange;
     }
 
     /**
