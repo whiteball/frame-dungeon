@@ -31,6 +31,59 @@ const logVisible = ref(false);
 const logRef = ref<HTMLDivElement | null>(null);
 const lastLogTurn = ref(0);
 const actions = ref<SceneAction[]>([]);
+const actionPage = ref(0);
+
+// 1 行に収まるボタン数の上限（ナビボタン込み）。これを超えるとページ分割する。
+const ACTIONS_PER_ROW = 6;
+
+// 貪欲レイアウト: 各ページ最大 ACTIONS_PER_ROW ボタン（ナビ含む）。
+// 先頭=5+次 / 中間=4+前+次 / 最終=残り(最大5)+前。残り1で次ページを作らない。
+const actionPages = computed<Array<{ start: number; end: number; prev: boolean; next: boolean }>>(() => {
+    const n = actions.value.length;
+    if (n <= ACTIONS_PER_ROW) return [{ start: 0, end: n, prev: false, next: false }];
+    const pages: Array<{ start: number; end: number; prev: boolean; next: boolean }> = [];
+    pages.push({ start: 0, end: 5, prev: false, next: true });
+    let i = 5;
+    while (i < n) {
+        const remaining = n - i;
+        if (remaining <= 5) {
+            pages.push({ start: i, end: n, prev: true, next: false });
+            i = n;
+        } else {
+            pages.push({ start: i, end: i + 4, prev: true, next: true });
+            i += 4;
+        }
+    }
+    return pages;
+});
+
+const currentActionPage = computed(() => {
+    const pages = actionPages.value;
+    const idx = Math.min(actionPage.value, pages.length - 1);
+    return pages[idx] ?? { start: 0, end: 0, prev: false, next: false };
+});
+
+function isActionOnCurrentPage(i: number): boolean {
+    const p = currentActionPage.value;
+    return i >= p.start && i < p.end;
+}
+
+function flipActionPage(delta: number): void {
+    const last = actionPages.value.length - 1;
+    actionPage.value = Math.max(0, Math.min(last, actionPage.value + delta));
+}
+
+function onWindowKeyDownForPaging(e: KeyboardEvent) {
+    if (!gameStarted.value) return;
+    if (actionPages.value.length <= 1) return;
+    if (e.key === 'PageUp') {
+        flipActionPage(-1);
+        e.preventDefault();
+    } else if (e.key === 'PageDown') {
+        flipActionPage(1);
+        e.preventDefault();
+    }
+}
 
 const itemList = ref<ItemListEntry[]>([]);
 const itemListVisible = ref(false);
@@ -255,6 +308,10 @@ onMounted(() => {
 
     // StartGame() はデータ選択後に呼ぶため、ここでは EventBus リスナのみ登録する
 
+    // アクションボタンのページ送り（PageUp/PageDown）。ページ状態は Vue 側にあるため
+    // Phaser を介さず window で直接購読する。
+    window.addEventListener('keydown', onWindowKeyDownForPaging);
+
     EventBus.on('current-scene-ready', (scene_instance: Phaser.Scene) => {
         emit('current-active-scene', scene_instance);
         scene.value = scene_instance;
@@ -283,6 +340,7 @@ onMounted(() => {
 
     EventBus.on('scene-actions', (list: SceneAction[]) => {
         actions.value = list;
+        actionPage.value = 0; // アクション集合が変わったら必ず先頭ページへ戻す
     });
 
     EventBus.on('reset-message-log', () => {
@@ -358,6 +416,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+
+    window.removeEventListener('keydown', onWindowKeyDownForPaging);
 
     EventBus.removeListener('game-scene-start');
     EventBus.removeListener('message-log');
@@ -461,8 +521,14 @@ defineExpose({ scene, game });
                 >{{ b.label }}<span style="position: absolute; top: 2px; right: 4px; font-size: 10px; opacity: 0.55;">{{ i + 1 }}</span></button>
             </template>
             <template v-else>
+                <!--
+                  隠れページのボタンは v-if ではなく v-show（display:none）で DOM に残す。
+                  リスト表示中の onListKeyDown が action-button-N へ dispatchEvent('click')
+                  する経路が全ページで生き続けるようにするため。
+                -->
                 <button
                     v-for="(a, i) in actions"
+                    v-show="isActionOnCurrentPage(i)"
                     :key="i"
                     :id="'action-button-' + ((i + 1) % 10)"
                     class="button"
@@ -470,7 +536,21 @@ defineExpose({ scene, game });
                     :disabled="a.disabled"
                     @mousedown.prevent
                     @click="a.onClick"
-                >{{ a.label }}<span style="position: absolute; top: 2px; right: 4px; font-size: 10px; opacity: 0.55;">{{ (i + 1) % 10 }}</span></button>
+                >{{ a.label }}<span v-if="i < 10" style="position: absolute; top: 2px; right: 4px; font-size: 10px; opacity: 0.55;">{{ (i + 1) % 10 }}</span></button>
+                <button
+                    v-if="currentActionPage.prev"
+                    class="button"
+                    style="position: relative;"
+                    @mousedown.prevent
+                    @click="flipActionPage(-1)"
+                >＜前ページ</button>
+                <button
+                    v-if="currentActionPage.next"
+                    class="button"
+                    style="position: relative;"
+                    @mousedown.prevent
+                    @click="flipActionPage(1)"
+                >次ページ＞</button>
             </template>
         </div>
         <a

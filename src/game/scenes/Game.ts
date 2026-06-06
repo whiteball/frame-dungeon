@@ -315,6 +315,12 @@ export class Game extends Scene {
         this.keys.keyEsc?.on('down', () => {
             if (this.miniMapView.isMoveMode()) {
                 this.mode.exitMinimapMoveMode();
+            } else if (this.mode.isModalMode && this.mode.current.length > 0) {
+                // 攻撃/投擲/スキル方向選択・階段/トラップ確認・イベント選択・長居警告などの
+                // モーダルを Escape でキャンセルする。各モーダルのキャンセル動作は実装上すべて
+                // enterDefaultMode() のみ（onExecute/onSelect 不呼び出し＝副作用なし）。
+                // current.length === 0 のセーブダイアログ（キー入力もブロック中）は対象外。
+                this.mode.enterDefaultMode();
             }
         })
 
