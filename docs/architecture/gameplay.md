@@ -14,11 +14,14 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム, ス
 
 かつての `アイテム使用 / 投げる / 装備変更` の 3 ボタンは「アイテム」1 ボタン（`ItemListController.toggleList('inventory')`）に集約しています。`'inventory'` モードは**全アイテム**（`Inventory.getItems()`、消耗品を先頭に安定ソート）を一覧表示し、操作は**画面下部の 1024px 幅のアクション列を専用コンテキストバーに差し替えて**選ばせます（234px のリストフッターには詰め込まない）。
 
-- コンテキストバーは `PhaserGame.vue` の Vue 側ボタンとして描画され（`ctxButtons` computed）、選択中項目（`selectedIndex`）を直読して `use-item` / `equip-item` / `throw-item` / `drop-item` を発火します。`SceneModeController` には触れず、`isModalMode` は変えません（リスト中の入力ブロックは従来どおり `keyboard.enabled=false` が担う）。
-- ボタンは `使用 / 装備 / 投げる / 置く / 説明 / 閉じる` の 6 個で、選択項目の `consumable` / `equippable` / `isEquipped` フラグに応じて個別に活殺します。番号キー `1〜6` は `onListKeyDown` が `action-button-N` へ DOM クリック転送する既存経路で対応します。
-- Enter / スペース（`confirmSelect`）は `'inventory'` モードでは消耗品→使用 / 装備可→装備 と自動判定し、頻用操作の手数を従来と同じに保ちます。
+- コンテキストバーは `PhaserGame.vue` の Vue 側ボタンとして描画され（`ctxButtons` computed）、選択中項目（`selectedIndex`）を直読して `use-item` / `use-skill` / `equip-item` / `throw-item` / `drop-item` を発火します。`SceneModeController` には触れず、`isModalMode` は変えません（リスト中の入力ブロックは従来どおり `keyboard.enabled=false` が担う）。
+- 操作感統一のため **`inventory` / `skill` / `drop` のいずれの一覧もこのコンテキストバーを使う**（リスト下の 234px フッターは廃止）。`ctxButtons` は `listMode` で内容を出し分けます：
+  - `inventory`：`使用 / 装備 / 投げる / 置く / 説明 / 閉じる` の 6 個。選択項目の `consumable` / `equippable` / `isEquipped` で個別に活殺。
+  - `skill`：`発動 / 説明 / 閉じる` の 3 個。`発動` は選択スキルの `disabled`（スタン・コスト不足・toggle 非対応パッシブ）で無効化。
+  - `drop`：`置く / 説明 / 閉じる` の 3 個（設置フロー）。
+- 番号キーは表示中の `ctxButtons` の個数に合わせ、`onListKeyDown` が `action-button-N` へ DOM クリック転送する既存経路で対応します（skill / drop は `1〜3`、inventory は `1〜6`）。コンテキストバーは常に 6 個以下なのでページ送りは発生しません。
+- Enter / スペース（`confirmSelect`）は各モードの既定アクション（`inventory`：消耗品→使用 / 装備可→装備、`skill`：発動、`drop`：置く）を実行し、頻用操作の手数を保ちます。
 - アイテム使用 / 装備変更の後は `ItemListController.reopenCurrentList()` が現在の `listMode` に応じて一覧を再構築し（`'inventory'` なら統合リスト）、対象が空になった場合のみ閉じます。
-- `skill` モード（スキル一覧）と `drop` モード（満杯時の入れ換え設置フロー）は従来どおり 234px フッターの 3 ボタンを使います。
 
 ### ボタンラベルの折り返し許容文字数（目安）
 

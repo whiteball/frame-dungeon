@@ -90,7 +90,6 @@ const itemListVisible = ref(false);
 const selectedIndex = ref(0);
 const listRef = ref<HTMLUListElement | null>(null);
 const listMode = ref<ListMode>('item');
-const actionLabel = ref<string>('使用');
 const modeLabel = ref<string>('');
 
 const settingsVisible = ref(false);
@@ -210,10 +209,32 @@ function ctxDrop() {
     if (!it || it.isEquipped) return;
     EventBus.emit('drop-item', { instanceId: it.id });
 }
+function ctxUseSkill() {
+    const it = selectedEntry.value;
+    if (!it || it.disabled) return;
+    EventBus.emit('use-skill', { skillName: it.id });
+}
 
+// 一覧表示中、画面下部に出すコンテキストバー。listMode ごとに必要な操作だけを並べる。
+// 操作感統一のため inventory / skill / drop のいずれもこのバーを使う（リスト下フッターは廃止）。
 const ctxButtons = computed<SceneAction[]>(() => {
     const sel = selectedEntry.value;
     const empty = itemList.value.length === 0;
+    if (listMode.value === 'skill') {
+        return [
+            { label: '発動', disabled: empty || !!sel?.disabled, onClick: ctxUseSkill },
+            { label: '説明', disabled: empty, onClick: showDescription },
+            { label: '閉じる', disabled: false, onClick: requestClose },
+        ];
+    }
+    if (listMode.value === 'drop') {
+        return [
+            { label: '置く', disabled: empty, onClick: ctxDrop },
+            { label: '説明', disabled: empty, onClick: showDescription },
+            { label: '閉じる', disabled: false, onClick: requestClose },
+        ];
+    }
+    // inventory（統合インベントリ）
     const isEquipped = !!sel?.isEquipped;
     return [
         { label: '使用', disabled: empty || !sel?.consumable, onClick: ctxUse },
@@ -352,9 +373,8 @@ onMounted(() => {
         selectedIndex.value = 0;
     });
 
-    EventBus.on('open-item-list', (payload: { items: ItemListEntry[]; mode?: ListMode; actionLabel?: string }) => {
+    EventBus.on('open-item-list', (payload: { items: ItemListEntry[]; mode?: ListMode }) => {
         listMode.value = payload.mode ?? 'item';
-        actionLabel.value = payload.actionLabel ?? '使用';
         itemList.value = payload.items;
         if (selectedIndex.value >= itemList.value.length) {
             selectedIndex.value = Math.max(0, itemList.value.length - 1);
@@ -507,8 +527,8 @@ defineExpose({ scene, game });
                    align-items: center; gap: 8px; padding: 6px;
                    box-sizing: border-box;"
         >
-            <!-- 統合インベントリ表示中は専用コンテキストバーに差し替える -->
-            <template v-if="itemListVisible && listMode === 'inventory'">
+            <!-- 一覧表示中は listMode 別の専用コンテキストバーに差し替える -->
+            <template v-if="itemListVisible">
                 <button
                     v-for="(b, i) in ctxButtons"
                     :key="'ctx-' + i"
@@ -630,22 +650,6 @@ defineExpose({ scene, game });
                     style="padding: 2px 4px; opacity: 0.6;"
                 >{{ listMode === 'skill' ? '習得しているスキルがない' : listMode === 'equip' ? '装備できる物がない' : listMode === 'drop' ? '置けるアイテムがない' : '使える薬がない' }}</li>
             </ul>
-            <div
-                v-if="listMode !== 'inventory'"
-                style="display: flex; gap: 4px; padding: 4px; border-top: 1px solid #666;"
-            >
-                <button
-                    class="button"
-                    @click="confirmSelect"
-                    :disabled="itemList.length === 0"
-                >{{ actionLabel }}</button>
-                <button
-                    class="button"
-                    @click="showDescription"
-                    :disabled="itemList.length === 0"
-                >説明</button>
-                <button class="button" @click="requestClose">閉</button>
-            </div>
         </div>
 
         <SettingsDialog

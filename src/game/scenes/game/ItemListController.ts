@@ -94,7 +94,6 @@ export class ItemListController {
                 EventBus.emit('open-item-list', {
                     items: this.buildSkillListPayload(learned),
                     mode: 'skill',
-                    actionLabel: '発動',
                 });
                 this.game.render();
                 return;
@@ -115,7 +114,6 @@ export class ItemListController {
                 EventBus.emit('open-item-list', {
                     items: this.buildSkillListPayload(learned),
                     mode: 'skill',
-                    actionLabel: '発動',
                 });
                 this.game.render();
             }
@@ -240,23 +238,18 @@ export class ItemListController {
             EventBus.emit('open-item-list', {
                 items: this.buildSkillListPayload(learned),
                 mode: 'skill',
-                actionLabel: '発動',
             });
             return;
         }
 
         let items: Item[];
-        let actionLabel: string;
         if (mode === 'inventory') {
             // 統合インベントリ: 全アイテムを表示し、操作は下部コンテキストバー（Vue 側）で選ぶ
             items = this.buildInventoryItems();
-            actionLabel = '使用';
         } else if (mode === 'item') {
             items = this.game.player.getInventory().getConsumableItems();
-            actionLabel = '使用';
         } else if (mode === 'equip') {
             items = this.game.player.getInventory().getEquippableItems();
-            actionLabel = '装備';
         } else {
             // drop / throw: 装備中以外の全アイテムを対象にする
             const equippedIds = new Set(
@@ -266,14 +259,12 @@ export class ItemListController {
             );
             items = this.game.player.getInventory().getItems()
                 .filter(it => !equippedIds.has(it.getInstanceId()));
-            actionLabel = mode === 'throw' ? '投げる' : '置く';
         }
         this.listMode = mode;
         if (this.game.input.keyboard) this.game.input.keyboard.enabled = false;
         EventBus.emit('open-item-list', {
             items: this.buildItemListPayload(items),
             mode,
-            actionLabel,
         });
     }
 
@@ -313,19 +304,15 @@ export class ItemListController {
         const inventory = this.game.player.getInventory();
         let items: Item[];
         let mode: ListMode;
-        let actionLabel: string;
         if (this.listMode === 'inventory') {
             items = this.buildInventoryItems();
             mode = 'inventory';
-            actionLabel = '使用';
         } else if (this.listMode === 'equip') {
             items = inventory.getEquippableItems();
             mode = 'equip';
-            actionLabel = '装備';
         } else {
             items = inventory.getConsumableItems();
             mode = 'item';
-            actionLabel = '使用';
         }
         if (items.length === 0) {
             this.closeList();
@@ -334,7 +321,6 @@ export class ItemListController {
         EventBus.emit('open-item-list', {
             items: this.buildItemListPayload(items),
             mode,
-            actionLabel,
         });
     }
 
