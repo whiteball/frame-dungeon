@@ -355,9 +355,7 @@ export class Game extends Scene {
 
         this.mode.initDefaultActions([
             { label: 'スキル', onClick: () => this.list.toggleList('skill') },
-            { label: 'アイテム使用', onClick: () => this.list.toggleList('item') },
-            { label: '投げる', onClick: () => this.list.toggleList('throw') },
-            { label: '装備変更', onClick: () => this.list.toggleList('equip') },
+            { label: 'アイテム', onClick: () => this.list.toggleList('inventory') },
             { label: 'ステータス', onClick: () => this.openStatus() },
             { label: '足下', onClick: () => this.list.onUnderfoot() },
             { label: 'セーブ', onClick: () => this.saveLoad.openSaveDialog() },

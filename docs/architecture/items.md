@@ -75,17 +75,17 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 
 ### 消耗品の使用フロー
 
-1. シーン下部の「アイテム使用」ボタン押下またはショートカットキー押下で `Game.toggleItemList()` が呼ばれる
-2. `openItemList()` が `Inventory.getConsumableItems()` で一覧を取得し、EventBus `'open-item-list'` で Vue 側へ渡す。同時に `this.input.keyboard.enabled = false` で Phaser キー入力を停止
-3. Vue 側（`PhaserGame.vue`）は textarea 右隣に `<ul>` を表示し、フォーカスを奪う。↑↓/Enter/ESC、ダブルクリック、「使用」「キャンセル」ボタンで操作
-4. 「使用」確定時、Vue は EventBus `'use-item'` を `{ instanceId }` 付きで発行
-5. Game シーンが受け取り `DungeonMap.useConsumableItem(instanceId)` を呼び出す：
+1. シーン下部の「アイテム」ボタン押下またはショートカットキー押下で `ItemListController.toggleList('inventory')` が呼ばれる（統合インベントリ）
+2. `openList('inventory')` が `Inventory.getItems()`（消耗品を先頭に安定ソート）で一覧を取得し、EventBus `'open-item-list'` で Vue 側へ渡す。同時に `this.input.keyboard.enabled = false` で Phaser キー入力を停止
+3. Vue 側（`PhaserGame.vue`）は `<ul>` を表示してフォーカスを奪い、画面下部を専用コンテキストバー（`使用/装備/投げる/置く/説明/閉じる`）に差し替える。↑↓ で項目選択、コンテキストバーのボタン（または対応する数字キー）、ダブルクリック、Enter/ESC で操作
+4. 消耗品の使用は「使用」ボタンか Enter（選択中が消耗品のときの既定アクション）で、Vue は EventBus `'use-item'` を `{ instanceId }` 付きで発行
+5. `ItemListController` の `use-item` ハンドラが `DungeonMap.useConsumableItem(instanceId)` を呼び出す：
    - 即座効果（`immediate`）がある場合は `Player.applyImmediateEffect()` を実行
    - 持続効果（`continuous`）がある場合は `Player.applyContinuousEffect(effect, label)` で `activeContinuousEffects` に新規エントリを追加（同じアイテムを複数回使用しても合算せず別エントリとして独立保持）
    - 両方とも無いアイテムの場合のみログ表示のみでターン非消費
    - 効果適用後 `Inventory.removeItemById()` → `dispatchObjectEvent()`（敵の反撃ターン）
-6. 使用後、残りの消耗品があれば一覧を更新再描画、なければ `closeItemList()` で UI を閉じる
-7. `closeItemList()` は `resetKeys()` で Phaser Key 状態をクリアしてから `keyboard.enabled = true` に戻す（`enabled=false` 中に取りこぼした keyup により `Key.isDown` が固定される副作用の対策）
+6. 使用後、`reopenCurrentList()` が現在の `listMode`（`'inventory'` なら統合リスト）で一覧を再構築し、対象が空になったら `closeList()` で UI を閉じる
+7. `closeList()` は `resetKeys()` で Phaser Key 状態をクリアしてから `keyboard.enabled = true` に戻す（`enabled=false` 中に取りこぼした keyup により `Key.isDown` が固定される副作用の対策）
 
 ### ImmediateEffect で扱える特殊キー
 
@@ -217,10 +217,13 @@ Player と同じシグネチャ・同じ意味で以下を実装：
 
 | イベント名 | 方向 | payload | 用途 |
 | --- | --- | --- | --- |
-| `open-item-list` | Phaser→Vue | `{ items: Array<{ id, label, description, ... }>, mode, actionLabel }` | 一覧 UI を開く・再描画する。`mode` は `'item' / 'equip' / 'drop' / 'skill'` |
+| `open-item-list` | Phaser→Vue | `{ items: Array<{ id, label, description, ... }>, mode, actionLabel }` | 一覧 UI を開く・再描画する。`mode` は `'item' / 'equip' / 'drop' / 'skill' / 'throw' / 'inventory'`（`'inventory'` は統合インベントリ＝下部コンテキストバー方式） |
 | `close-item-list` | Phaser→Vue | なし | 一覧 UI を閉じる確定通知 |
 | `close-item-list-request` | Vue→Phaser | なし | Vue 側（ESC/キャンセル/外側トリガ）からのクローズ要求 |
 | `use-item` | Vue→Phaser | `{ instanceId: string }` | アイテム使用確定 |
+| `equip-item` | Vue→Phaser | `{ instanceId: string }` | 装備変更確定（統合インベントリの「装備」） |
+| `throw-item` | Vue→Phaser | `{ instanceId: string }` | 投擲確定（→ 方向選択モードへ移行） |
+| `drop-item` | Vue→Phaser | `{ instanceId: string }` | 設置確定（足下に置く／満杯時の入れ換え） |
 | `use-skill` | Vue→Phaser | `{ skillName: string }` | スキル発動確定 |
 
 ## トラップシステム

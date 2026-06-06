@@ -8,7 +8,7 @@ import type { Item } from '../../../lib/Item';
 import type { MapObject } from '../../../lib/MapObject';
 import type { Game } from '../Game';
 
-export type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw';
+export type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw' | 'inventory';
 
 type ItemListEntry = {
     id: string;
@@ -17,6 +17,8 @@ type ItemListEntry = {
     isEquipped: boolean;
     typeLabel: string;
     effectSummary: string;
+    consumable: boolean;
+    equippable: boolean;
 };
 
 type SkillListEntry = {
@@ -72,16 +74,7 @@ export class ItemListController {
                 }
             }
             if (this.game.dungeon.useConsumableItem(payload.instanceId)) {
-                const rest = this.game.player.getInventory().getConsumableItems();
-                if (rest.length === 0) {
-                    this.closeList();
-                } else {
-                    EventBus.emit('open-item-list', {
-                        items: this.buildItemListPayload(rest),
-                        mode: 'item',
-                        actionLabel: '使用',
-                    });
-                }
+                this.reopenCurrentList();
                 this.game.render();
             }
         });
@@ -131,16 +124,7 @@ export class ItemListController {
         EventBus.on('equip-item', (payload: { instanceId: string }) => {
             const result = this.game.dungeon.changeEquipment(payload.instanceId);
             if (result.success) {
-                const rest = this.game.player.getInventory().getEquippableItems();
-                if (rest.length === 0) {
-                    this.closeList();
-                } else {
-                    EventBus.emit('open-item-list', {
-                        items: this.buildItemListPayload(rest),
-                        mode: 'equip',
-                        actionLabel: '装備',
-                    });
-                }
+                this.reopenCurrentList();
                 this.game.render();
             }
         });
@@ -202,7 +186,7 @@ export class ItemListController {
     }
 
     /** 同じモードならクローズ、違うモードなら開き直す。drop は対象外（onUnderfoot 経由）。 */
-    toggleList(mode: 'item' | 'equip' | 'skill' | 'throw'): void {
+    toggleList(mode: 'item' | 'equip' | 'skill' | 'throw' | 'inventory'): void {
         if (this.listMode === mode) {
             this.closeList();
         } else {
@@ -263,7 +247,11 @@ export class ItemListController {
 
         let items: Item[];
         let actionLabel: string;
-        if (mode === 'item') {
+        if (mode === 'inventory') {
+            // 統合インベントリ: 全アイテムを表示し、操作は下部コンテキストバー（Vue 側）で選ぶ
+            items = this.buildInventoryItems();
+            actionLabel = '使用';
+        } else if (mode === 'item') {
             items = this.game.player.getInventory().getConsumableItems();
             actionLabel = '使用';
         } else if (mode === 'equip') {
@@ -302,7 +290,52 @@ export class ItemListController {
             isEquipped: equippedIds.has(it.getInstanceId()),
             typeLabel: formatItemTypeLabel(it.getType()),
             effectSummary: formatItemEffect(it.getEffectSpecs()),
+            consumable: it.isConsumable(),
+            equippable: it.isEquippable(),
         }));
+    }
+
+    /**
+     * 統合インベントリ用のアイテム配列を組み立てる。
+     * 消耗品を先頭にソート（回復薬等へ素早く到達できるように）。
+     * Array.prototype.sort は安定なので同区分内の元の並びは保たれる。
+     */
+    private buildInventoryItems(): Item[] {
+        const items = this.game.player.getInventory().getItems();
+        return [...items].sort((a, b) => Number(b.isConsumable()) - Number(a.isConsumable()));
+    }
+
+    /**
+     * 現在のリストモードに応じて一覧を再構築する（アイテム使用 / 装備変更の後に一覧を
+     * 開いたまま継続表示するため）。対象が空になったらリストを閉じる。
+     */
+    private reopenCurrentList(): void {
+        const inventory = this.game.player.getInventory();
+        let items: Item[];
+        let mode: ListMode;
+        let actionLabel: string;
+        if (this.listMode === 'inventory') {
+            items = this.buildInventoryItems();
+            mode = 'inventory';
+            actionLabel = '使用';
+        } else if (this.listMode === 'equip') {
+            items = inventory.getEquippableItems();
+            mode = 'equip';
+            actionLabel = '装備';
+        } else {
+            items = inventory.getConsumableItems();
+            mode = 'item';
+            actionLabel = '使用';
+        }
+        if (items.length === 0) {
+            this.closeList();
+            return;
+        }
+        EventBus.emit('open-item-list', {
+            items: this.buildItemListPayload(items),
+            mode,
+            actionLabel,
+        });
     }
 
     private buildSkillListPayload(skillNames: string[]): SkillListEntry[] {

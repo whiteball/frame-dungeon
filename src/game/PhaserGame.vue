@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { EventBus } from './EventBus';
 import StartGame from './main';
 import Phaser from 'phaser';
@@ -14,12 +14,13 @@ import LoadDialog from '../components/dialogs/LoadDialog.vue';
 import YamlErrorDialog from '../components/dialogs/YamlErrorDialog.vue';
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
-type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw';
+type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw' | 'inventory';
 type ItemListEntry = {
     id: string, label: string, description: string,
     isEquipped?: boolean, typeLabel?: string, effectSummary?: string,
     costSummary?: string, targetSummary?: string,
     disabled?: boolean, disabledReason?: string,
+    consumable?: boolean, equippable?: boolean,
 };
 
 const scene = ref();
@@ -115,7 +116,11 @@ function confirmSelect() {
     const it = itemList.value[selectedIndex.value];
     if (!it) return;
     if (it.disabled) return;
-    if (listMode.value === 'equip') {
+    if (listMode.value === 'inventory') {
+        // 統合インベントリの既定アクション: 消耗品→使用 / 装備可→装備（現状と同手数を維持）
+        if (it.consumable) EventBus.emit('use-item', { instanceId: it.id });
+        else if (it.equippable) EventBus.emit('equip-item', { instanceId: it.id });
+    } else if (listMode.value === 'equip') {
         EventBus.emit('equip-item', { instanceId: it.id });
     } else if (listMode.value === 'drop') {
         EventBus.emit('drop-item', { instanceId: it.id });
@@ -127,6 +132,45 @@ function confirmSelect() {
         EventBus.emit('use-item', { instanceId: it.id });
     }
 }
+
+// 統合インベントリ表示中、画面下部に出す専用コンテキストバー。
+// 選択項目（Vue 側 selectedIndex）を直読して対応する EventBus を発火する。
+const selectedEntry = computed<ItemListEntry | null>(() => itemList.value[selectedIndex.value] ?? null);
+
+function ctxUse() {
+    const it = selectedEntry.value;
+    if (!it || !it.consumable) return;
+    EventBus.emit('use-item', { instanceId: it.id });
+}
+function ctxEquip() {
+    const it = selectedEntry.value;
+    if (!it || !it.equippable) return;
+    EventBus.emit('equip-item', { instanceId: it.id });
+}
+function ctxThrow() {
+    const it = selectedEntry.value;
+    if (!it || it.isEquipped) return;
+    EventBus.emit('throw-item', { instanceId: it.id });
+}
+function ctxDrop() {
+    const it = selectedEntry.value;
+    if (!it || it.isEquipped) return;
+    EventBus.emit('drop-item', { instanceId: it.id });
+}
+
+const ctxButtons = computed<SceneAction[]>(() => {
+    const sel = selectedEntry.value;
+    const empty = itemList.value.length === 0;
+    const isEquipped = !!sel?.isEquipped;
+    return [
+        { label: '使用', disabled: empty || !sel?.consumable, onClick: ctxUse },
+        { label: '装備', disabled: empty || !sel?.equippable, onClick: ctxEquip },
+        { label: '投げる', disabled: empty || isEquipped, onClick: ctxThrow },
+        { label: '置く', disabled: empty || isEquipped, onClick: ctxDrop },
+        { label: '説明', disabled: empty, onClick: showDescription },
+        { label: '閉じる', disabled: false, onClick: requestClose },
+    ];
+});
 
 function showDescription() {
     const it = itemList.value[selectedIndex.value];
@@ -403,15 +447,31 @@ defineExpose({ scene, game });
                    align-items: center; gap: 8px; padding: 6px;
                    box-sizing: border-box;"
         >
-            <button
-                v-for="(a, i) in actions"
-                :key="i"
-                :id="'action-button-' + ((i + 1) % 10)"
-                class="button"
-                :disabled="a.disabled"
-                @mousedown.prevent
-                @click="a.onClick"
-            >{{ a.label }} [{{ (i + 1) % 10 }}]</button>
+            <!-- 統合インベントリ表示中は専用コンテキストバーに差し替える -->
+            <template v-if="itemListVisible && listMode === 'inventory'">
+                <button
+                    v-for="(b, i) in ctxButtons"
+                    :key="'ctx-' + i"
+                    :id="'action-button-' + (i + 1)"
+                    class="button"
+                    style="position: relative;"
+                    :disabled="b.disabled"
+                    @mousedown.prevent
+                    @click="b.onClick"
+                >{{ b.label }}<span style="position: absolute; top: 2px; right: 4px; font-size: 10px; opacity: 0.55;">{{ i + 1 }}</span></button>
+            </template>
+            <template v-else>
+                <button
+                    v-for="(a, i) in actions"
+                    :key="i"
+                    :id="'action-button-' + ((i + 1) % 10)"
+                    class="button"
+                    style="position: relative;"
+                    :disabled="a.disabled"
+                    @mousedown.prevent
+                    @click="a.onClick"
+                >{{ a.label }}<span style="position: absolute; top: 2px; right: 4px; font-size: 10px; opacity: 0.55;">{{ (i + 1) % 10 }}</span></button>
+            </template>
         </div>
         <a
             href="https://github.com/whiteball/frame-dungeon/blob/master/MANUAL.md"
@@ -490,7 +550,10 @@ defineExpose({ scene, game });
                     style="padding: 2px 4px; opacity: 0.6;"
                 >{{ listMode === 'skill' ? '習得しているスキルがない' : listMode === 'equip' ? '装備できる物がない' : listMode === 'drop' ? '置けるアイテムがない' : '使える薬がない' }}</li>
             </ul>
-            <div style="display: flex; gap: 4px; padding: 4px; border-top: 1px solid #666;">
+            <div
+                v-if="listMode !== 'inventory'"
+                style="display: flex; gap: 4px; padding: 4px; border-top: 1px solid #666;"
+            >
                 <button
                     class="button"
                     @click="confirmSelect"

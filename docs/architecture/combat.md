@@ -114,7 +114,7 @@
 
 ## アイテム投擲システム
 
-「投げる」アクション（`Game.ts` の既定シーンアクション、`ItemListController.toggleList('throw')`）で、装備していない所持アイテムを直線方向へ投擲します。攻撃と同じ 左/中央/右 の3択方向選択（`SceneModeController.enterThrowDirectionMode` → `Game.enterThrowTargetSelectMode`）を経て `DungeonMap.throwItem(instanceId, dirCell)` → `PlayerActions.throwItem` が実行します。命中・着弾の解決は `src/lib/map/ThrowResolver.ts` の `resolveThrow()` に集約します。
+「アイテム」一覧（統合インベントリ、[gameplay.md](./gameplay.md) 参照）のコンテキストバーで「投げる」を選ぶと、装備していない所持アイテムを直線方向へ投擲します。`PhaserGame.vue` が `throw-item` を発火 → `ItemListController` のハンドラが一覧を閉じて `Game.enterThrowTargetSelectMode` へ移行します。攻撃と同じ 左/中央/右 の3択方向選択（`SceneModeController.enterThrowDirectionMode` → `Game.enterThrowTargetSelectMode`）を経て `DungeonMap.throwItem(instanceId, dirCell)` → `PlayerActions.throwItem` が実行します。命中・着弾の解決は `src/lib/map/ThrowResolver.ts` の `resolveThrow()` に集約します。
 
 ### 直線走査と停止条件
 
