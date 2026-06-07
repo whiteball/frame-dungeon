@@ -99,6 +99,7 @@ const settingsShowAllEnemies = ref(false);
 const settingsSwapQEandAD = ref(false);
 const settingsSwapSandShiftS = ref(false);
 const settingsDebugCommands = ref(false);
+const settingsCloseListAfterAction = ref(false);
 
 const statusVisible = ref(false);
 const statusText = ref('');
@@ -394,13 +395,14 @@ onMounted(() => {
         modeLabel.value = label;
     });
 
-    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean; debugCommands: boolean }) => {
+    EventBus.on('open-settings', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean; debugCommands: boolean; closeListAfterAction: boolean }) => {
         settingsViewRange.value = data.viewRange;
         settingsEnableFog.value = data.enableFog;
         settingsShowAllEnemies.value = data.showAllEnemies;
         settingsSwapQEandAD.value = data.swapQEandAD;
         settingsSwapSandShiftS.value = data.swapSandShiftS;
         settingsDebugCommands.value = data.debugCommands;
+        settingsCloseListAfterAction.value = data.closeListAfterAction;
         settingsVisible.value = true;
     });
 
@@ -660,6 +662,7 @@ defineExpose({ scene, game });
             :initial-swap-q-e-and-a-d="settingsSwapQEandAD"
             :initial-swap-s-and-shift-s="settingsSwapSandShiftS"
             :initial-debug-commands="settingsDebugCommands"
+            :initial-close-list-after-action="settingsCloseListAfterAction"
             @confirm="(p) => { EventBus.emit('settings-confirmed', p); settingsVisible = false; }"
             @cancel="settingsVisible = false"
         />

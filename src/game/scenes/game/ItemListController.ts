@@ -90,11 +90,7 @@ export class ItemListController {
                 EventBus.emit('message-log',
                     `スキル「${def.label}」を${enabled ? '有効' : '無効'}にした`,
                     this.game.dungeon.getTurnCount());
-                const learned = this.game.player.getLearnedSkillNames();
-                EventBus.emit('open-item-list', {
-                    items: this.buildSkillListPayload(learned),
-                    mode: 'skill',
-                });
+                this.continueOrCloseSkillList();
                 this.game.render();
                 return;
             }
@@ -109,12 +105,9 @@ export class ItemListController {
             // それ以外（self / around / room / map）は即発動
             if (this.game.dungeon.useSkill(payload.skillName)) {
                 // スキル発動成功時は一覧を再描画して開いたままにする
-                // （アイテム使用と同じ思想。スキルは消費しないため常に同じ一覧）
-                const learned = this.game.player.getLearnedSkillNames();
-                EventBus.emit('open-item-list', {
-                    items: this.buildSkillListPayload(learned),
-                    mode: 'skill',
-                });
+                // （アイテム使用と同じ思想。スキルは消費しないため常に同じ一覧）。
+                // ただし設定が有効なら閉じて移動可能状態へ戻す。
+                this.continueOrCloseSkillList();
                 this.game.render();
             }
         });
@@ -300,7 +293,30 @@ export class ItemListController {
      * 現在のリストモードに応じて一覧を再構築する（アイテム使用 / 装備変更の後に一覧を
      * 開いたまま継続表示するため）。対象が空になったらリストを閉じる。
      */
+    /**
+     * スキル使用 / toggle 後の継続表示。設定「アイテム/スキルリストを毎回閉じる」が有効なら
+     * 一覧を閉じて WASD 移動可能な既定状態へ戻し、無効なら従来どおりスキル一覧を再描画して
+     * 開いたままにする。
+     */
+    private continueOrCloseSkillList(): void {
+        if (this.game.getCloseListAfterAction()) {
+            this.closeList();
+            return;
+        }
+        const learned = this.game.player.getLearnedSkillNames();
+        EventBus.emit('open-item-list', {
+            items: this.buildSkillListPayload(learned),
+            mode: 'skill',
+        });
+    }
+
     private reopenCurrentList(): void {
+        // 設定「アイテム/スキルリストを毎回閉じる」が有効なら、使用/装備後は一覧を再表示せず
+        // 閉じて WASD 移動可能な既定状態へ戻す。
+        if (this.game.getCloseListAfterAction()) {
+            this.closeList();
+            return;
+        }
         const inventory = this.game.player.getInventory();
         let items: Item[];
         let mode: ListMode;

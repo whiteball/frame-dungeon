@@ -166,7 +166,7 @@
     - [x] アイテム系（使用/投擲/装備）を「アイテム」1ボタンに集約し既定を7→5個に削減（折り返し解消）。一覧表示中は画面下部を専用コンテキストバー（使用/装備/投げる/置く/説明/閉じる）に差し替え。詳細は [docs/architecture/gameplay.md](docs/architecture/gameplay.md)
     - [x] 数字キー番号を右上隅バッジ化してラベル幅を確保。折り返さない文字数目安をドキュメント化（標準ボタンで全角約6文字）
   - [x] アクションボタンが7個以上必要になった場合の対策（`PhaserGame.vue` の `actionPages` で貪欲ページ分割＝1ページ最大6ボタン・先頭5+次/中間4+前+次/最終残り+前・隠れボタンは `v-show`。ナビに数字キーは割り当てず `6〜0` キーは全ページのアクションに直結、`PageUp/PageDown` でページ閲覧。イベント選択肢モーダルの11個溢れにも対応。あわせて `Escape` でモーダルをキャンセル可能に。詳細は [docs/architecture/gameplay.md](docs/architecture/gameplay.md)）
-  - [ ] アイテムを使用したり装備した後は、WASDで移動できる状態（標準のアクションボタン）に戻す
+  - [x] アイテムを使用したり装備した後は、WASDで移動できる状態（標準のアクションボタン）に戻す（設定「アイテム/スキルリストを毎回閉じる」=`gameSettings.closeListAfterAction`、UI設定でセーブ非保存。有効時は使用・装備・スキル発動/toggle 後に `reopenCurrentList` / `continueOrCloseSkillList` が `closeList` する）
   - [x] 操作感の統一のため、スキルやドロップも、アイテムと同様にアクションボタン（コンテキストバー）を使うようにして、リスト下の234pxフッターを廃止した（`ctxButtons` を `listMode` で出し分け：`skill`=発動/説明/閉じる、`drop`=置く/説明/閉じる、`inventory`=従来の6個）。詳細は [docs/architecture/gameplay.md](docs/architecture/gameplay.md)
   - [ ] マウス主体操作のために、攻撃や調べる、移動もクリック操作できるようにする。実現方法は要検討
 

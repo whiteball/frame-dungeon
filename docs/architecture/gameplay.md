@@ -21,7 +21,8 @@ Game シーンのデフォルト SceneActions は `[スキル, アイテム, ス
   - `drop`：`置く / 説明 / 閉じる` の 3 個（設置フロー）。
 - 番号キーは表示中の `ctxButtons` の個数に合わせ、`onListKeyDown` が `action-button-N` へ DOM クリック転送する既存経路で対応します（skill / drop は `1〜3`、inventory は `1〜6`）。コンテキストバーは常に 6 個以下なのでページ送りは発生しません。
 - Enter / スペース（`confirmSelect`）は各モードの既定アクション（`inventory`：消耗品→使用 / 装備可→装備、`skill`：発動、`drop`：置く）を実行し、頻用操作の手数を保ちます。
-- アイテム使用 / 装備変更の後は `ItemListController.reopenCurrentList()` が現在の `listMode` に応じて一覧を再構築し（`'inventory'` なら統合リスト）、対象が空になった場合のみ閉じます。
+- アイテム使用 / 装備変更の後は `ItemListController.reopenCurrentList()` が現在の `listMode` に応じて一覧を再構築し（`'inventory'` なら統合リスト）、対象が空になった場合のみ閉じます。スキル発動 / toggle 後は `continueOrCloseSkillList()` がスキル一覧を再描画します。
+- **設定「アイテム/スキルリストを毎回閉じる」（`gameSettings.closeListAfterAction`、UI 設定でセーブデータ非保存）が有効なときは、上記の「使用・装備・スキル発動/toggle 後の再表示」を行わず `closeList()` で一覧を閉じ、WASD 移動可能な既定状態へ戻します**（`reopenCurrentList()` / `continueOrCloseSkillList()` の冒頭で `Game.getCloseListAfterAction()` を判定）。設定値は `MainMenu` が `localStorage` で管理し `scene.start('Game', …)` 経由で `Game.init` に渡します。
 
 ### ボタンラベルの折り返し許容文字数（目安）
 

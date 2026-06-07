@@ -10,6 +10,7 @@ const props = defineProps<{
     initialSwapQEAndAD: boolean
     initialSwapSAndShiftS: boolean
     initialDebugCommands: boolean
+    initialCloseListAfterAction: boolean
 }>();
 
 const emit = defineEmits<{
@@ -20,6 +21,7 @@ const emit = defineEmits<{
         swapQEandAD: boolean;
         swapSandShiftS: boolean;
         debugCommands: boolean;
+        closeListAfterAction: boolean;
     }]
     cancel: []
 }>();
@@ -30,6 +32,7 @@ const localShowAllEnemies = ref(props.initialShowAllEnemies);
 const localSwapQEandAD = ref(props.initialSwapQEAndAD);
 const localSwapSandShiftS = ref(props.initialSwapSAndShiftS);
 const localDebugCommands = ref(props.initialDebugCommands);
+const localCloseListAfterAction = ref(props.initialCloseListAfterAction);
 
 watch(() => props.visible, (v) => {
     if (v) {
@@ -39,6 +42,7 @@ watch(() => props.visible, (v) => {
         localSwapQEandAD.value = props.initialSwapQEAndAD;
         localSwapSandShiftS.value = props.initialSwapSAndShiftS;
         localDebugCommands.value = props.initialDebugCommands;
+        localCloseListAfterAction.value = props.initialCloseListAfterAction;
     }
 });
 
@@ -50,6 +54,7 @@ function confirm() {
         swapQEandAD: localSwapQEandAD.value,
         swapSandShiftS: localSwapSandShiftS.value,
         debugCommands: localDebugCommands.value,
+        closeListAfterAction: localCloseListAfterAction.value,
     });
 }
 </script>
@@ -119,6 +124,16 @@ function confirm() {
                         <input
                             type="checkbox"
                             v-model="localSwapSandShiftS"
+                            style="width: 18px; height: 18px; cursor: pointer;"
+                        />
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 16px 8px 0; white-space: nowrap;">アイテム/スキルリストを毎回閉じる</td>
+                    <td style="padding: 8px 0;">
+                        <input
+                            type="checkbox"
+                            v-model="localCloseListAfterAction"
                             style="width: 18px; height: 18px; cursor: pointer;"
                         />
                     </td>

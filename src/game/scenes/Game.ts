@@ -57,20 +57,27 @@ export class Game extends Scene {
     private swapQEandAD = false;
     private swapSandShiftS = false;
     private debugCommands = false;
+    private closeListAfterAction = false;
     private pendingSaveData: SaveData | null = null;
 
     constructor() {
         super('Game');
     }
 
-    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean; swapQEandAD?: boolean; swapSandShiftS?: boolean; debugCommands?: boolean; saveData?: SaveData }) {
+    init(data: { viewRange?: number; enableFog?: boolean; showAllEnemies?: boolean; swapQEandAD?: boolean; swapSandShiftS?: boolean; debugCommands?: boolean; closeListAfterAction?: boolean; saveData?: SaveData }) {
         this.viewRange = data.viewRange ?? 3;
         this.enableFog = data.enableFog ?? true;
         this.revealAll = data.showAllEnemies ?? false;
         this.swapQEandAD = data.swapQEandAD ?? false;
         this.swapSandShiftS = data.swapSandShiftS ?? false;
         this.debugCommands = data.debugCommands ?? false;
+        this.closeListAfterAction = data.closeListAfterAction ?? false;
         this.pendingSaveData = data.saveData ?? null;
+    }
+
+    /** 設定「アイテム/スキルリストを毎回閉じる」が有効か（ItemListController から参照）。 */
+    getCloseListAfterAction(): boolean {
+        return this.closeListAfterAction;
     }
 
     private getOpenDoors(): Set<string> {
