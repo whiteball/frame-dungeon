@@ -52,7 +52,7 @@ Phaser のシーン構成は `src/game/main.ts` で定義：`Boot` → `Preloade
 - **SaveLoadController**（`SaveLoadController.ts`）: セーブ / ロード周りの UI 制御。`save-to-slot` / `export-save` / `close-save-dialog` の EventBus ハンドラと、`openSaveDialog` / `buildSaveData` を提供
 - **FloorPopulator**（`FloorPopulator.ts`）: `populateFloor({dungeon, floor, callbacks})` 関数として、フロア入室時の初期配置（リサイズ・ビルド・階段・宝箱・トラップ・床アイテム・敵の配置）を一括実行。`go-to-next-floor` イベントハンドラから呼ばれる
 - **StatusReportBuilder**（`StatusReportBuilder.ts`）: 表示用 stat マップ構築（`buildDisplayParams`）とステータス画面・リザルト画面のテキスト組み立て（`buildStatusText` / `buildResultText`）を提供する関数群
-- **GameDebugCommands**（`GameDebugCommands.ts`）: `setupDebugCommands(game)` で DevTools コンソール用デバッグ関数（`window.listMapItems` / `addItem` / `applyStatusEffect` / `learnSkill` 等）を一括登録。設定ダイアログの「デバッグコマンド」フラグが ON のときのみ呼ばれる
+- **GameDebugCommands**（`GameDebugCommands.ts`）: `setupDebugCommands(game)` で DevTools コンソール用デバッグ関数（`window.listMapItems` / `addItem` / `addEnemyAt(x,y,name?)` / `addTrapAt(x,y,name?)` / `applyStatusEffect` / `learnSkill` 等）を一括登録。設定ダイアログの「デバッグコマンド」フラグが ON のときのみ呼ばれる
 
 `Game.ts` には以下が残置されています：
 

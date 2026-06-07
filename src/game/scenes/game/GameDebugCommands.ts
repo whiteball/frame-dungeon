@@ -1,7 +1,10 @@
 import { EventBus } from '../../EventBus';
-import { ItemObject } from '../../../lib/map/MapObjects';
+import { ItemObject, TrapObject } from '../../../lib/map/MapObjects';
 import { ItemFactory } from '../../../lib/ItemFactory';
+import { EnemyFactory } from '../../../lib/EnemyFactory';
+import { TrapsLoader } from '../../../lib/TrapsLoader';
 import { SkillsLoader } from '../../../lib/SkillsLoader';
+import { buildTrapObject } from './mapObjectFactory';
 import type { Enemy } from '../../../lib/Enemy';
 import type { Game } from '../Game';
 
@@ -211,6 +214,69 @@ export function setupDebugCommands(game: Game): void {
         }
         game.render();
         return allLearned;
+    };
+
+    // window.addEnemyAt(3, 5, 'slime') - 任意座標に敵を追加（name 省略時はフロアプールから抽選）
+    // 成功で true。範囲外/壁・プレイヤー直上・既に敵/宝箱/ブロッキングイベントで占有のセルは false。
+    w.addEnemyAt = (x: integer, y: integer, name?: string): boolean => {
+        const turn = game.dungeon.getTurnCount();
+        if (game.dungeon.getAt(x, y) === -1) {
+            EventBus.emit('message-log', `（debug）(${x},${y}) は進入禁止セル`, turn);
+            return false;
+        }
+        const playerPos = game.dungeon.getPlayerPos();
+        if (x === playerPos.x && y === playerPos.y) {
+            EventBus.emit('message-log', `（debug）(${x},${y}) はプレイヤーの位置`, turn);
+            return false;
+        }
+        if (game.dungeon.isCellBlocked(x, y)) {
+            EventBus.emit('message-log', `（debug）(${x},${y}) は既に占有されている`, turn);
+            return false;
+        }
+        const enemy = name
+            ? EnemyFactory.createEnemy(name, x, y)
+            : EnemyFactory.createRandomEnemy(game.floor, x, y);
+        if (!enemy) {
+            EventBus.emit('message-log', `（debug）敵を生成できません（${name ?? `floor ${game.floor} のプールが空`}）`, turn);
+            return false;
+        }
+        game.dungeon.addEnemy(enemy);
+        EventBus.emit('message-log', `（debug）(${x},${y}) に ${enemy.getLabel()} を追加`, turn);
+        game.render();
+        return true;
+    };
+
+    // window.addTrapAt(3, 5, 'pitfall') - 任意座標にトラップを追加（name 省略時は全定義から抽選）
+    // 成功で true。範囲外/壁・既にトラップ存在・敵/宝箱/ブロッキングイベントで占有のセルは false。
+    w.addTrapAt = (x: integer, y: integer, name?: string): boolean => {
+        const turn = game.dungeon.getTurnCount();
+        if (game.dungeon.getAt(x, y) === -1) {
+            EventBus.emit('message-log', `（debug）(${x},${y}) は進入禁止セル`, turn);
+            return false;
+        }
+        if (game.dungeon.getObject(x, y).some(o => o instanceof TrapObject)) {
+            EventBus.emit('message-log', `（debug）(${x},${y}) には既にトラップがある`, turn);
+            return false;
+        }
+        if (game.dungeon.isCellBlocked(x, y)) {
+            EventBus.emit('message-log', `（debug）(${x},${y}) は既に占有されている`, turn);
+            return false;
+        }
+        const trapDef = name
+            ? TrapsLoader.getInstance().getTrap(name)
+            : TrapsLoader.getInstance().getRandomTrap();
+        if (!trapDef) {
+            EventBus.emit('message-log', `（debug）トラップ定義が見つかりません（${name ?? '定義なし'}）`, turn);
+            return false;
+        }
+        const cb = game.buildDungeonRestoreCallbacks();
+        const trapObj = buildTrapObject(trapDef, cb.applyTrapEffects, cb.enterTrapConfirmMode);
+        trapObj.x = x;
+        trapObj.y = y;
+        game.dungeon.placeObject(trapObj);
+        EventBus.emit('message-log', `（debug）(${x},${y}) に ${trapDef.label} を追加`, turn);
+        game.render();
+        return true;
     };
 
     // window.findPath(1,1,2,7,false) - 経路探索結果をコンソール出力

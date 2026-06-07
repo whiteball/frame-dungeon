@@ -60,7 +60,7 @@
 - Viteの設定は `vite/config.dev.mjs` と `vite/config.prod.mjs` に分離
 - 開発サーバーはポート8081で実行
 - UI要素に日本語フォントを使用
-- デバッグ用に `window.applyStatusEffect(name)` / `window.applyStatusEffectToEnemy(name, instanceId?)` / `window.findPath(...)` / `window.learnSkill(name)` / `window.forgetSkill(name)` / `window.listSkills()` / `window.addExp(n)` / `window.levelUpN(n?)` / `window.addItemModifier(slot, name, count?)` / `window.removeItemModifier(slot, name)` / `window.listMapItems()` / `window.addItem(name, count?)` / `window.addTestItems()` を `setupDebugCommands(game)`（`src/game/scenes/game/GameDebugCommands.ts`）でグローバル公開（DevTools コンソールから利用）。**設定ダイアログの「デバッグコマンド」がONのときのみ実行される**（`debugCommands` フラグ、初期値OFF）
+- デバッグ用に `window.applyStatusEffect(name)` / `window.applyStatusEffectToEnemy(name, instanceId?)` / `window.findPath(...)` / `window.learnSkill(name)` / `window.forgetSkill(name)` / `window.listSkills()` / `window.addExp(n)` / `window.levelUpN(n?)` / `window.addItemModifier(slot, name, count?)` / `window.removeItemModifier(slot, name)` / `window.listMapItems()` / `window.addItem(name, count?)` / `window.addTestItems()` / `window.addEnemyAt(x, y, name?)` / `window.addTrapAt(x, y, name?)` を `setupDebugCommands(game)`（`src/game/scenes/game/GameDebugCommands.ts`）でグローバル公開（DevTools コンソールから利用）。**設定ダイアログの「デバッグコマンド」がONのときのみ実行される**（`debugCommands` フラグ、初期値OFF）
 
 ### ドキュメント更新ルール
 

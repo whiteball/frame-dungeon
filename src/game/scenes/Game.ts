@@ -583,7 +583,7 @@ export class Game extends Scene {
         }
     }
 
-    private buildDungeonRestoreCallbacks(): DungeonRestoreCallbacks {
+    public buildDungeonRestoreCallbacks(): DungeonRestoreCallbacks {
         return {
             onEnterStair: (dungeon: DungeonMap) => this.enterStairMode(dungeon),
             applyTrapEffects: (def: TrapDefinition) => this.interaction.applyTrapEffects(def),
