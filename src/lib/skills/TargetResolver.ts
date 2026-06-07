@@ -1,6 +1,7 @@
 import type { DungeonMap } from '../MapGenerator';
 import type { SkillTarget } from '../SkillsLoader';
 import { getDirectionOffset, rotateDirection } from '../map/MapDirection';
+import { firstEnemyAlongRay } from '../map/Projectile';
 
 export interface TargetCell {
     x: integer;
@@ -10,6 +11,8 @@ export interface TargetCell {
 /**
  * target スコープを解決し、対象セル配列を返す。
  * - front: preSelectedCell を 1 要素返す（未指定なら空）
+ * - straight: preSelectedCell の方向（単位ベクトル）へ直線走査し、射線上の最初の生存敵セルを
+ *   1 要素返す（敵がいなければ空）。走査の遮蔽は投擲と同じ（壁・扉・進入不可オブジェクトで停止）
  * - around: 隣接 8 マスのうち caster から canAttack で到達可能なもののみ（caster 除く、壁越しは除外）
  * - room: getCellsInZone の結果（caster 除く、壁・扉で囲まれた視覚的開放空間）
  * - map: 壁マス（getAt = -1）以外の全セル（caster 除く、視覚的到達性は問わない）
@@ -28,6 +31,16 @@ export function resolveTarget(
 
         case 'front':
             return preSelectedCell ? [{ x: preSelectedCell.x, y: preSelectedCell.y }] : [];
+
+        case 'straight': {
+            // preSelectedCell（front と同じ隣接セル）から方向の単位ベクトルを導き、
+            // 射線上の最初の生存敵セルを 1 つだけ対象にする。敵がいなければ空配列。
+            if (!preSelectedCell) return [];
+            const stepDx = Math.sign(preSelectedCell.x - px);
+            const stepDy = Math.sign(preSelectedCell.y - py);
+            const hit = firstEnemyAlongRay(dungeon, px, py, stepDx, stepDy);
+            return hit ? [hit] : [];
+        }
 
         case 'around': {
             const cells: TargetCell[] = [];
@@ -99,6 +112,7 @@ export function getFrontCandidates(dungeon: DungeonMap): Array<{
 export function formatTargetSummary(target: SkillTarget): string {
     switch (target) {
         case 'front': return '前方';
+        case 'straight': return '直線';
         case 'around': return '周囲';
         case 'room': return '部屋';
         case 'map': return '全体';

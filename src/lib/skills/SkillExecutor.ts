@@ -138,9 +138,10 @@ export function executeActions(
  * - コスト評価・支払いは行わない
  * - 未習得（hasSkill=false）でも発動できる
  * - スタンチェックは行わない（呼び出し元の useConsumableItem 側でブロックされていない仕様に合わせる）
- * - target='front' の場合は selectedTarget で対象セルを指定すること
+ * - target='front' / 'straight' の場合は selectedTarget で方向（隣接セル）を指定すること
  *
- * @returns 発動成功時 true。コンパイル失敗 / アクティブ以外 / front で selectedTarget 未指定の場合 false
+ * @returns 発動成功時 true。コンパイル失敗 / アクティブ以外 /
+ *          front で対象未選択・straight で射線上に敵がいない場合 false
  */
 export function executeSkillFromItem(
     dungeon: DungeonMap,
@@ -156,7 +157,7 @@ export function executeSkillFromItem(
     if (!def.target) return false;
 
     const targetCells = resolveTarget(def.target, dungeon, selectedTarget);
-    if (def.target === 'front' && targetCells.length === 0) return false;
+    if ((def.target === 'front' || def.target === 'straight') && targetCells.length === 0) return false;
 
     EventBus.emit('message-log',
         `スキル「${def.label}」を発動した！`,

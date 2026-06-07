@@ -312,11 +312,15 @@ export function useSkill(
   if ((def.trigger ?? 'active') !== 'active') return false;
   if (!def.target) return false; // active 確定後は target 必須（SkillsLoader 側で保証）
 
-  // target 解決（front は selectedTarget 必須）
+  // target 解決（front / straight は selectedTarget で方向を指定する）
   const targetCells = resolveTarget(def.target, dungeon, selectedTarget);
-  if (def.target === 'front' && targetCells.length === 0) {
+  if ((def.target === 'front' || def.target === 'straight') && targetCells.length === 0) {
+    // front: UI で方向未選択（通常は到達しない）／ straight: 射線上に敵がいない（外し）
+    // どちらもコスト・ターン非消費で差し戻す
     EventBus.emit('message-log',
-      `スキル「${def.label}」を発動できない（対象が選択されていない）`,
+      def.target === 'straight'
+        ? `スキル「${def.label}」の射線上に対象がいない`
+        : `スキル「${def.label}」を発動できない（対象が選択されていない）`,
       dungeon.getTurnCount());
     return false;
   }

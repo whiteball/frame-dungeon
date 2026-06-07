@@ -79,7 +79,9 @@
   - [ ] アイテム投擲と遠距離武器
     - [x] アイテム投擲（直線投擲・壁/扉/障害物で停止し床ドロップ・敵命中で効果発揮）。効果優先順位は `throwEffect` ＞ 武器の仮装備ダメージ（`Player.getThrownWeaponFormulaVars`）＞ 消費アイテムの `applyEffect`/`clearEffect`/数値stat 転用 ＞ 投げ損。射程は `base.yml` の `throwRange`＋装備/パッシブ `throwRange` ボーナス。実装は `src/lib/map/ThrowResolver.ts`
     - [x] 投擲で消費アイテムの `continuous`（持続効果）を敵に適用する（`ContinuousEffectManager` を共有マネージャとして抽出し Player / Enemy が委譲。`Enemy.applyContinuousEffect` / `tickContinuousEffects` を追加、`MapGenerator.tickEnemies` でターン進行。`ThrowResolver.applyConsumableToEnemy` が `spec.continuous` を敵に付与。サンプル `弱体の薬` を追加）
-    - [ ] 遠距離武器（装備したまま離れた敵を攻撃する武器種）
+    - [x] 遠距離攻撃スキル（**方法3**：skill の `target: straight` ＝射線上の最初の敵を対象、MP コスト）。直線判定は `src/lib/map/Projectile.ts`（`canProjectileStep` / `firstEnemyAlongRay`）に集約し投擲と共有。サンプル `toxic_dart`（毒矢）/ `magic_arrow`（魔法の矢）。設計・実装メモは [docs/ranged-attack.md](docs/ranged-attack.md)
+    - [ ] 遠距離武器（**方法2**：魔法の杖＝使用回数つきの道具。撃ちたいときだけ道具使用、回数0で投擲転用も可）。遠距離効果は方法3の `straight` スキルに乗せ、使用回数は modifier システム流用が有力。実装メモ・注意点は [docs/ranged-attack.md](docs/ranged-attack.md)
+    - [ ] 遠距離武器（**方法1・優先度低**：弓＋矢＝装備したまま攻撃ボタンで遠距離攻撃）。飛び道具判定は方法3再利用で軽いが、**インベントリの個数スタック概念の新規実装が必要で重い**ため優先度低。実装メモ・注意点は [docs/ranged-attack.md](docs/ranged-attack.md)
   - [ ] レアリティシステム
   - [x] ランダム生成アイテム（接頭辞・接尾辞）
     - [x] 修飾状態（modifier）システム: `item_modifiers.yml` + `ItemModifiersLoader`。`add_stats` / `cannot_unequip` 効果を装備中のみ発動
@@ -196,7 +198,7 @@
   - [x] レベルアップ抽選による習得（mastery：exact / least+rate、複数 least 評価）
   - [x] アイテム使用による習得（`effect.immediate.learnSkill` 効果、既習得時もアイテム消費）
   - [x] スキル一覧 UI（mode='skill'、disabled / costSummary / targetSummary 表示）
-  - [x] target 解決（front / around / room / map / self）と front 方向選択 UI
+  - [x] target 解決（front / straight / around / room / map / self）と front/straight 方向選択 UI（`straight` ＝射線上の最初の敵を対象にする遠距離スキル。[docs/ranged-attack.md](docs/ranged-attack.md)）
   - [x] コスト評価・支払い・差し戻し（`<stat>_max` 露出、formula 評価、原子適用）
   - [x] action: attack / damage / heal / reveal_trap
   - [x] スタン (`_action: skip`) 連携（UI/ライブラリ 2 段ガード）

@@ -28,6 +28,7 @@
 | 値 | 意味 |
 | --- | --- |
 | `front` | UI で前方3方向から1セル選択。発動者は含まれない |
+| `straight` | UI で前方3方向から1つを選び、その方向の射線上の**最初の生存敵**を対象にする（遠距離攻撃）。壁・扉・進入不可オブジェクトで射線が止まり、その先は狙えない。射線上に敵がいなければ空振り（コスト・ターン非消費） |
 | `around` | 発動者隣接 8 マス（Chebyshev 距離1、発動者除外） |
 | `room` | 発動者と視覚的に繋がった範囲（部屋＋通路、扉で繋がる範囲も含む。発動者除外） |
 | `map` | マップ全体（発動者除外） |
@@ -72,7 +73,7 @@
 
 | trigger | 許可される target |
 | --- | --- |
-| `active` | `front` / `around` / `room` / `map` / `self` |
+| `active` | `front` / `straight` / `around` / `room` / `map` / `self` |
 | `on_attack` | `hit` のみ |
 | `on_turn` | `self` のみ |
 | `on_damage` | `self` または `hit` |
@@ -147,13 +148,14 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 | --- | --- |
 | `self` | caster の現在位置 1 セル |
 | `front` | UI で選ばれた 1 セル（未指定なら空配列、`useSkill` で発動不可と判定） |
+| `straight` | UI で選ばれたセルから単位ベクトル（`Math.sign`）を導き、`firstEnemyAlongRay`（`src/lib/map/Projectile.ts`）で射線上の最初の生存敵セルを 1 つ返す。敵がいなければ空配列。遮蔽判定は投擲と共通の `canProjectileStep`（壁・扉で停止）＋ `isCellBlocked`（宝箱・blocking イベントで停止） |
 | `around` | caster 隣接 8 マス（Chebyshev 距離 1、caster 自身は含まない）のうち、`canAttack` で到達可能なセルのみ。壁に塞がれた方向や、対角線で両側の L 字経路がともに壁の方向は除外される |
 | `room` | `DungeonMap.getCellsInZone(px, py)` の結果から caster を除いたもの。壁・扉で囲まれた視覚的開放空間（`getDoorTargetsInZone` と同じ BFS 方針、扉では止まる） |
 | `map` | マップ全体の playable 範囲 `(1..getWidth(), 1..getHeight())` のうち、壁マス (`getAt = -1`) と caster 位置を除いたセル |
 
 `getCellsInZone(x, y)` は壁または扉ビットが立っていない方向にのみ BFS で展開する（door bit は wall bit と共に立つ実装が前提）。
 
-`target: front` の UI フローは [`enterAttackDirectionMode`](src/game/scenes/Game.ts) を踏襲：
+`target: front` / `target: straight` の UI フローは [`enterAttackDirectionMode`](src/game/scenes/Game.ts) を踏襲する（両者とも方向選択 UI を共有し、`ItemListController` の `use-skill` ハンドラが `def.target === 'front' || def.target === 'straight'` で `enterSkillTargetSelectMode` へ分岐する。`front` は選んだ隣接セルがそのまま対象、`straight` はその方向の射線を走査して対象を決める）：
 
 ```text
 [スキル一覧で front スキル選択]
@@ -167,7 +169,7 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
      ・キャンセル時はコスト未消費、defaultSceneActions に復帰
 ```
 
-`target: self / around / room / map` は即発動（一覧再表示で開いたまま）。
+`target: self / around / room / map` は即発動（一覧再表示で開いたまま）。`target: straight` は `front` と同じ方向選択を経るが、確定後に射線上の最初の敵を対象として action を実行する（射線上に敵がいなければコスト未消費で空振り）。サンプルスキル: `toxic_dart`（毒矢＝射線上の敵に毒付与）/ `magic_arrow`（魔法の矢＝射線上の敵に遠距離ダメージ）。
 
 `buildSkillListPayload` は `formatTargetSummary` の結果を `targetSummary` フィールドに、`formatCostSummary` の結果を `costSummary` フィールドに埋める。`PhaserGame.vue` の `buildSummaryText` ヘルパーが両者を `/` 区切りで括弧内に並べて表示する。表示例：
 

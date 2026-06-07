@@ -2,10 +2,10 @@ import { Parser, type Expression } from 'expr-eval-fork';
 import { YamlDefinitionStore } from './YamlDefinitionStore';
 import { CustomDataStore } from './CustomDataStore';
 
-export type SkillTarget = 'front' | 'around' | 'room' | 'map' | 'self' | 'hit';
+export type SkillTarget = 'front' | 'straight' | 'around' | 'room' | 'map' | 'self' | 'hit';
 export type SkillTrigger = 'active' | 'on_attack' | 'on_turn' | 'on_damage' | 'passive';
 
-const VALID_TARGETS: ReadonlySet<SkillTarget> = new Set<SkillTarget>(['front', 'around', 'room', 'map', 'self', 'hit']);
+const VALID_TARGETS: ReadonlySet<SkillTarget> = new Set<SkillTarget>(['front', 'straight', 'around', 'room', 'map', 'self', 'hit']);
 const VALID_TRIGGERS: ReadonlySet<SkillTrigger> = new Set<SkillTrigger>(['active', 'on_attack', 'on_turn', 'on_damage', 'passive']);
 
 /**

@@ -46,10 +46,13 @@
     - least: 5
       rate: 0.5
 
+# 遠距離スキル（target: straight）：選んだ方向の射線上、最初の敵を対象にする。
+# 壁・扉・宝箱などで射線が止まり、その先の敵は狙えない。射線上に敵がいなければ
+# コスト・ターン非消費で空振りになる。
 - name: toxic_dart
   label: 毒矢
-  description: 正面の敵に毒状態を付与する（確率60%）
-  target: front
+  description: 射線上の最初の敵に毒矢を放ち、毒状態を付与する（確率60%）
+  target: straight
   cost:
     magic: 3
   action:
@@ -59,6 +62,18 @@
   mastery:
     - least: 2
       rate: 0.4
+
+- name: magic_arrow
+  label: 魔法の矢
+  description: 射線上の最初の敵を魔力の矢で射抜く（遠距離ダメージ）
+  target: straight
+  cost:
+    magic: 4
+  action:
+    - damage: "power - target_defense / 2"
+  mastery:
+    - least: 2
+      rate: 0.3
 
 - name: analyze
   label: 分析

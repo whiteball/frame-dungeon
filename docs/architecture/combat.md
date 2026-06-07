@@ -120,6 +120,8 @@
 
 プレイヤー位置を起点に、選択セルへの単位ベクトル（cardinal または diagonal）で1セルずつ前進します（`canProjectileStep`）。
 
+直線飛び道具の経路判定（`isAnyWall` / `canProjectileStep`）は `src/lib/map/Projectile.ts` に集約され、投擲と遠距離スキル（skills の `straight` target）の双方が共有します。`Projectile.firstEnemyAlongRay()` は副作用なしに「射線上の最初の生存敵セル」を返すヘルパーで、`straight` target の解決（`TargetResolver`）が利用します。詳細は [skills.md](./skills.md) の `straight` 節を参照。
+
 - **境界判定**: `canAttack` と同じ論理だが **扉も壁として遮蔽**（`isAnyWall` = 生の壁ビット参照）。斜めは2本のL字経路 pathA/pathB のいずれかが開いていれば通過可。
 - **敵に命中** → 効果を発揮しアイテム消滅（「{敵名}に当たった！」を効果出力前にログ）。
 - **壁・扉 / 進入不可オブジェクト（`isCellBlocked`：宝箱・blocking イベント）/ 射程到達** → 手前セルで停止し床にドロップ（「○が床に落ちた」）。着地は `EnemyDropResolver.findDropTarget`（ItemObject・敵・**トラップ可視不問**・プレイヤーを回避）で空きセルを探す。

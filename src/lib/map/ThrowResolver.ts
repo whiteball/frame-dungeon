@@ -6,7 +6,7 @@ import { StatsLoader } from '../StatsLoader';
 import { EffectsLoader } from '../EffectsLoader';
 import { SkillsLoader } from '../SkillsLoader';
 import { ItemObject } from './MapObjects';
-import { MapDirection } from './MapDirection';
+import { canProjectileStep } from './Projectile';
 import { findDropTarget, tryEnemyDrop } from './EnemyDropResolver';
 import { executeDamageAction } from '../skills/actions/DamageAction';
 import { executeApplyEffectAction } from '../skills/actions/ApplyEffectAction';
@@ -24,38 +24,10 @@ import type { TargetCell } from '../skills/TargetResolver';
  * 直線走査し、壁・扉・進入不可オブジェクト・射程到達で停止して床にドロップ、
  * 敵に命中したら効果を発揮してアイテムを消滅させる。
  *
- * - 走査の境界判定（扉も「壁」として遮蔽）は {@link canProjectileStep}
+ * - 走査の境界判定（扉も「壁」として遮蔽）は {@link canProjectileStep}（`./Projectile`）
  * - 着地ドロップ先は {@link findDropTarget}（ItemObject・敵・トラップ・プレイヤーを回避）
  * - 命中効果の優先順位: throwEffect ＞ 武器の仮装備ダメージ ＞ 消費アイテムの効果転用 ＞ 投げ損
  */
-
-/** 指定セル・指定方向に壁ビットがあるか（扉も壁として扱う＝投擲は扉で停止する） */
-function isAnyWall(dungeon: DungeonMap, x: integer, y: integer, dir: MapDirection): boolean {
-    return !!(dungeon.getAt(x, y) & (1 << dir));
-}
-
-/**
- * (fromX, fromY) から単位ベクトル (dx, dy) 方向へ投擲物が進めるかを判定する。
- * 扉も壁扱いで遮蔽する点が canAttack と異なる。斜めは canAttack と同じ
- * 2 本の L 字経路（pathA / pathB）のいずれかが開いていれば通過可。
- */
-function canProjectileStep(dungeon: DungeonMap, fromX: integer, fromY: integer, dx: integer, dy: integer): boolean {
-    const toX = fromX + dx;
-    const toY = fromY + dy;
-    if (dungeon.getAt(toX, toY) === -1) return false;
-
-    if (dy === 0) {
-        return !isAnyWall(dungeon, fromX, fromY, dx > 0 ? MapDirection.EAST : MapDirection.WEST);
-    }
-    if (dx === 0) {
-        return !isAnyWall(dungeon, fromX, fromY, dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH);
-    }
-    const hDir = dx > 0 ? MapDirection.EAST : MapDirection.WEST;
-    const vDir = dy > 0 ? MapDirection.SOUTH : MapDirection.NORTH;
-    const pathA = !isAnyWall(dungeon, fromX, fromY, hDir) && !isAnyWall(dungeon, toX, fromY, vDir);
-    const pathB = !isAnyWall(dungeon, fromX, fromY, vDir) && !isAnyWall(dungeon, fromX, toY, hDir);
-    return pathA || pathB;
-}
 
 /**
  * 投擲物を直線走査して着弾・命中を解決する。

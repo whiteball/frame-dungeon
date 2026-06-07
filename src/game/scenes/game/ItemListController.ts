@@ -66,7 +66,7 @@ export class ItemListController {
             // 確定でアイテム消費 + スキル発動、キャンセルでアイテム非消費・モード解除のみ。
             const item = this.game.player.getInventory().getItemById(payload.instanceId);
             if (item) {
-                const skillName = this.findFrontExecuteSkill(item);
+                const skillName = this.findDirectionalExecuteSkill(item);
                 if (skillName !== null) {
                     this.closeList();
                     this.game.enterSkillFromItemTargetSelectMode(payload.instanceId);
@@ -95,8 +95,8 @@ export class ItemListController {
                 return;
             }
 
-            if (def.target === 'front') {
-                // リストを閉じて方向選択モードに移行
+            if (def.target === 'front' || def.target === 'straight') {
+                // リストを閉じて方向選択モードに移行（front=隣接 / straight=射線方向。UI は共通）
                 this.closeList();
                 this.game.enterSkillTargetSelectMode(payload.skillName);
                 return;
@@ -161,17 +161,18 @@ export class ItemListController {
     }
 
     /**
-     * 消耗品の immediate.executeSkill を走査し、target='front' のスキル名を返す。
-     * 該当する spec が無ければ null。複数 spec がある場合は最初に見つかったものを返す。
+     * 消耗品の immediate.executeSkill を走査し、方向選択を要する（target='front' または
+     * 'straight'）スキル名を返す。該当する spec が無ければ null。
+     * 複数 spec がある場合は最初に見つかったものを返す。
      */
-    private findFrontExecuteSkill(item: Item): string | null {
+    private findDirectionalExecuteSkill(item: Item): string | null {
         if (!item.isConsumable()) return null;
         const loader = SkillsLoader.getInstance();
         for (const spec of item.getEffectSpecs()) {
             const name = spec.immediate?.executeSkill;
             if (typeof name !== 'string') continue;
             const def = loader.getSkill(name);
-            if (def && def.target === 'front') return name;
+            if (def && (def.target === 'front' || def.target === 'straight')) return name;
         }
         return null;
     }

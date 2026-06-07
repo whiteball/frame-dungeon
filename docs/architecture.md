@@ -38,7 +38,8 @@
 | セーブデータ構造・`yamlDigest` 整合性チェック | [gameplay.md](./architecture/gameplay.md) |
 | ZIP カスタムデータ（`CustomDataStore`） | [gameplay.md](./architecture/gameplay.md) |
 | スキル定義・`cost` / `target` / `action` / `mastery` | [skills.md](./architecture/skills.md) |
-| スキル `target` スコープ解決（front/around/room/map/self/hit） | [skills.md](./architecture/skills.md) |
+| スキル `target` スコープ解決（front/straight/around/room/map/self/hit） | [skills.md](./architecture/skills.md) |
 | 実装済み action（`attack` / `damage` / `heal` / `reveal_trap` / `apply_effect`） | [skills.md](./architecture/skills.md) |
 | 敵のパッシブスキル（`trigger: on_attack`） | [skills.md](./architecture/skills.md) |
 | 汎用イベントオブジェクト（回復ポイント / 祭壇 / 能力依存判定） | [events.md](./architecture/events.md) |
+| 遠距離攻撃の設計（`straight` スキル / 弓+矢 / 魔法の杖の検討） | [ranged-attack.md](./ranged-attack.md) |
