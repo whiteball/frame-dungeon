@@ -170,6 +170,16 @@ export class BaseLoader {
     private loaded = false;
     private name = 'Dungeon Game';
     private goalFloor = 10;
+    /** タイトルテキストの文字色（CSS カラー文字列）。null なら既定 #ffffff */
+    private titleColor: string | null = null;
+    /** タイトルテキストの縁取り色（CSS カラー文字列）。null なら既定 #000000 */
+    private titleStrokeColor: string | null = null;
+    /** タイトル画面の背景色（CSS カラー文字列）。指定時は bg.png の代わりに単色塗りつぶし */
+    private backgroundColor: string | null = null;
+    /** あらすじ/バックストーリーのテキスト。null/空ならタイトル画面に「あらすじ」ボタンを出さない */
+    private story: string | null = null;
+    /** 作者名。指定時はあらすじダイアログに「作者：{author}」を表示。null/空なら非表示 */
+    private author: string | null = null;
     private rawFloorConfigs: Map<number, FloorConfigRaw> = new Map();
     private resolvedCache: Map<number, ResolvedFloorConfig> = new Map();
     private parser = new Parser();
@@ -244,6 +254,22 @@ export class BaseLoader {
             if (typeof parsed.goalFloor === 'number') {
                 this.goalFloor = parsed.goalFloor;
                 this._goalFloorExplicit = true;
+            }
+
+            if (typeof parsed.titleColor === 'string' && parsed.titleColor.trim()) {
+                this.titleColor = parsed.titleColor.trim();
+            }
+            if (typeof parsed.titleStrokeColor === 'string' && parsed.titleStrokeColor.trim()) {
+                this.titleStrokeColor = parsed.titleStrokeColor.trim();
+            }
+            if (typeof parsed.backgroundColor === 'string' && parsed.backgroundColor.trim()) {
+                this.backgroundColor = parsed.backgroundColor.trim();
+            }
+            if (typeof parsed.story === 'string' && parsed.story.trim()) {
+                this.story = parsed.story;
+            }
+            if (typeof parsed.author === 'string' && parsed.author.trim()) {
+                this.author = parsed.author.trim();
             }
 
             if (Array.isArray(parsed.floors)) {
@@ -513,6 +539,31 @@ export class BaseLoader {
 
     getName(): string {
         return this.name;
+    }
+
+    /** タイトルテキストの文字色（CSS カラー文字列）。未指定なら null */
+    getTitleColor(): string | null {
+        return this.titleColor;
+    }
+
+    /** タイトルテキストの縁取り色（CSS カラー文字列）。未指定なら null */
+    getTitleStrokeColor(): string | null {
+        return this.titleStrokeColor;
+    }
+
+    /** タイトル画面の背景色（CSS カラー文字列）。未指定なら null（bg.png を使用） */
+    getBackgroundColor(): string | null {
+        return this.backgroundColor;
+    }
+
+    /** あらすじ/バックストーリーのテキスト。未指定/空なら null */
+    getStory(): string | null {
+        return this.story;
+    }
+
+    /** 作者名。未指定/空なら null */
+    getAuthor(): string | null {
+        return this.author;
     }
 
     getGoalFloor(): number {

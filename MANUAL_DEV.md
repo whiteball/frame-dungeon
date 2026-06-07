@@ -259,6 +259,11 @@ base.yml は項目数が多く、特にマップ生成系（隠し部屋・宝�
 | --- | --- | :-: | --- |
 | `name` | string | 任意 | ゲーム名（タイトル・セーブメタ）。既定 `'Dungeon Game'` |
 | `goalFloor` | number | 任意 | このフロアの階段でゲームクリア。既定 `10` |
+| `titleColor` | string | 任意 | タイトル文字の色（CSS カラー文字列 例 `"#ffd966"`）。未指定なら白 `#ffffff` |
+| `titleStrokeColor` | string | 任意 | タイトル文字の縁取り色（CSS カラー文字列）。未指定なら黒 `#000000` |
+| `backgroundColor` | string | 任意 | タイトル画面の背景色（CSS カラー文字列）。指定すると `bg.png` の代わりに単色で塗りつぶす（タイトル画面のみ） |
+| `story` | string | 任意 | あらすじ/バックストーリー。指定するとタイトル画面に「あらすじ」ボタンが出てダイアログで全文表示。複数行はブロックスカラー `\|` で記述可 |
+| `author` | string | 任意 | 作者名。指定するとあらすじダイアログのタイトルとストーリーの間に「作者：{author}」を右寄せ表示 |
 | `playerInitialStats` | map | 任意 | 各ステータスの開始値（例 `{ life: 100, power: 10 }`）。未記載は 0 |
 | `defaultDamageStat` | string | ✅ | プレイヤーの死亡判定・トラップダメージ等の既定対象ステータス（通常 `life`） |
 | `defaultEnemyDamageStat` | string | 任意 | 敵側のダメージ対象。既定は `defaultDamageStat` |

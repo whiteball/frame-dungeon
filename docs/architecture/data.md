@@ -71,6 +71,11 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | --- | --- | --- | --- |
 | `name` | 任意 | `'Dungeon Game'` | タイトル・セーブメタの `gameName` |
 | `goalFloor` | 任意 | `10` | このフロアの階段で `GameClear` シーンへ遷移 |
+| `titleColor` | 任意 | `null`（=`#ffffff`） | タイトル文字の色（CSS カラー文字列）。`MainMenu` のタイトルテキストに適用。`BaseLoader.getTitleColor()` |
+| `titleStrokeColor` | 任意 | `null`（=`#000000`） | タイトル文字の縁取り色（CSS カラー文字列）。`BaseLoader.getTitleStrokeColor()` |
+| `backgroundColor` | 任意 | `null`（=`bg.png`） | タイトル画面の背景色（CSS カラー文字列）。指定時は `MainMenu` が `bg.png` の代わりに `cameras.main.setBackgroundColor()` で単色塗りつぶし（`MainMenu` 限定。`GameOver`/`GameClear` は従来通り `bg.png`）。`BaseLoader.getBackgroundColor()` |
+| `story` | 任意 | `null`（ボタン非表示） | あらすじ/バックストーリー文（複数行可）。非空のときタイトル画面に「あらすじ」ボタンを追加し `EventBus.emit('open-story', { title, text, author })` → `StoryDialog` で全文表示。`BaseLoader.getStory()` |
+| `author` | 任意 | `null`（非表示） | 作者名。指定時はあらすじダイアログのタイトルとストーリーの間に「作者：{author}」を右寄せ表示。`BaseLoader.getAuthor()` |
 | `playerInitialStats` | 任意 | 全ステータス `0` | `stats.yml` で定義した各ステータスの開始値（例: `life: 100`）。未記載ステータスは `0` |
 | `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
 | `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |

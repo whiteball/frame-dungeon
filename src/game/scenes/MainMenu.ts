@@ -7,7 +7,7 @@ import type { SaveData } from '../../lib/SaveManager';
 
 export class MainMenu extends Scene
 {
-    background: GameObjects.Image;
+    background?: GameObjects.Image;
     title: GameObjects.Text;
     private viewRange = 3;
     private enableFog = true;
@@ -53,16 +53,24 @@ export class MainMenu extends Scene
     async create ()
     {
         this.loadSettings();
-        await BaseLoader.getInstance().load(CustomDataStore.get('base'));
-        const gameName = BaseLoader.getInstance().getName();
+        const base = BaseLoader.getInstance();
+        await base.load(CustomDataStore.get('base'));
+        const gameName = base.getName();
 
         this.cameras.main.setViewport(10, 10, 1004, 520);
 
-        this.background = this.add.image(502, 260, 'background');
+        // 背景色が指定されていれば単色で塗りつぶし、なければ従来通り bg.png を表示する
+        const backgroundColor = base.getBackgroundColor();
+        if (backgroundColor) {
+            this.cameras.main.setBackgroundColor(backgroundColor);
+        } else {
+            this.background = this.add.image(502, 260, 'background');
+        }
 
         this.title = this.add.text(502, 200, gameName, {
-            fontFamily: 'Arial Black', fontSize: 54, color: '#ffffff',
-            stroke: '#000000', strokeThickness: 8,
+            fontFamily: 'Arial Black', fontSize: 54,
+            color: base.getTitleColor() ?? '#ffffff',
+            stroke: base.getTitleStrokeColor() ?? '#000000', strokeThickness: 8,
             align: 'center'
         }).setOrigin(0.5).setDepth(100);
 
@@ -70,11 +78,17 @@ export class MainMenu extends Scene
 
         EventBus.emit('reset-message-log');
 
-        EventBus.emit('scene-actions', [
+        const sceneActions = [
             { label: 'ゲーム開始', onClick: () => this.changeScene() },
             { label: 'ロード', onClick: () => EventBus.emit('open-load-dialog') },
             { label: '設定', onClick: () => EventBus.emit('open-settings', { viewRange: this.viewRange, enableFog: this.enableFog, showAllEnemies: this.showAllEnemies, swapQEandAD: this.swapQEandAD, swapSandShiftS: this.swapSandShiftS, debugCommands: this.debugCommands, closeListAfterAction: this.closeListAfterAction }) },
-        ]);
+        ];
+        const story = base.getStory();
+        if (story) {
+            const author = base.getAuthor();
+            sceneActions.push({ label: 'あらすじ', onClick: () => EventBus.emit('open-story', { title: gameName, text: story, author }) });
+        }
+        EventBus.emit('scene-actions', sceneActions);
 
         EventBus.on('settings-confirmed', (data: { viewRange: number; enableFog: boolean; showAllEnemies: boolean; swapQEandAD: boolean; swapSandShiftS: boolean; debugCommands: boolean; closeListAfterAction: boolean }) => {
             this.viewRange = data.viewRange;

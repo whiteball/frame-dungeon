@@ -1,5 +1,24 @@
 name: Sample Game
 goalFloor: 10
+# 作者名（任意）。指定するとあらすじダイアログに「作者：{author}」を右寄せ表示する
+author: Sample Author
+
+# タイトル画面の見た目（いずれも任意）
+# titleColor:       タイトル文字の色（CSS カラー文字列）。未指定なら #ffffff
+# titleStrokeColor: タイトル文字の縁取り色（CSS カラー文字列）。未指定なら #000000
+# backgroundColor:  タイトル画面の背景色（CSS カラー文字列）。指定すると bg.png の代わりに単色で塗りつぶす
+# titleColor: "#ffd966"
+# titleStrokeColor: "#402000"
+# backgroundColor: "#101820"
+
+# あらすじ/バックストーリー。指定するとタイトル画面に「あらすじ」ボタンが追加され、
+# ダイアログで全文を表示する。複数行は YAML のブロックスカラー（|）で記述できる。
+story: |
+  かつて栄えた地下迷宮には、今も尽きせぬ財宝が眠るという。
+  だが、そこへ挑んだ者で生きて帰った者はいない。
+
+  あなたは last floor に封じられし宝を求め、
+  この危険なダンジョンへと足を踏み入れた――。
 
 playerInitialStats:
   life: 100

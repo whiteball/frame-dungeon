@@ -9,6 +9,7 @@ import type { SaveData, SlotMeta } from '../lib/SaveManager';
 import { CustomDataStore, YAML_KEYS } from '../lib/CustomDataStore';
 import SettingsDialog from '../components/dialogs/SettingsDialog.vue';
 import StatusDialog from '../components/dialogs/StatusDialog.vue';
+import StoryDialog from '../components/dialogs/StoryDialog.vue';
 import SaveDialog from '../components/dialogs/SaveDialog.vue';
 import LoadDialog from '../components/dialogs/LoadDialog.vue';
 import YamlErrorDialog from '../components/dialogs/YamlErrorDialog.vue';
@@ -103,6 +104,11 @@ const settingsCloseListAfterAction = ref(false);
 
 const statusVisible = ref(false);
 const statusText = ref('');
+
+const storyVisible = ref(false);
+const storyText = ref('');
+const storyTitle = ref('あらすじ');
+const storyAuthor = ref<string | null>(null);
 
 const resultVisible = ref(false);
 const resultText = ref('');
@@ -411,6 +417,13 @@ onMounted(() => {
         statusVisible.value = true;
     });
 
+    EventBus.on('open-story', (payload: { text: string; title?: string; author?: string | null }) => {
+        storyText.value = payload.text;
+        storyTitle.value = payload.title ?? 'あらすじ';
+        storyAuthor.value = payload.author ?? null;
+        storyVisible.value = true;
+    });
+
     EventBus.on('open-result', (text: string) => {
         resultText.value = text;
         resultVisible.value = true;
@@ -450,6 +463,7 @@ onUnmounted(() => {
     EventBus.removeListener('set-mode-label');
     EventBus.removeListener('open-settings');
     EventBus.removeListener('open-status');
+    EventBus.removeListener('open-story');
     EventBus.removeListener('open-result');
     EventBus.removeListener('open-save-dialog');
     EventBus.removeListener('close-save-dialog', handleCloseSaveDialog);
@@ -676,6 +690,13 @@ defineExpose({ scene, game });
             :status-text="resultText"
             title="リザルト"
             @close="resultVisible = false"
+        />
+        <StoryDialog
+            :visible="storyVisible"
+            :text="storyText"
+            :title="storyTitle"
+            :author="storyAuthor"
+            @close="storyVisible = false"
         />
         <SaveDialog
             :visible="saveDialogVisible"

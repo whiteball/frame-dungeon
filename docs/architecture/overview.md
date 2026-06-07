@@ -87,6 +87,7 @@ src/components/dialogs/
   ModalOverlay.vue       共通オーバーレイ外枠（全ダイアログが使用）
   SettingsDialog.vue     設定（視界範囲・フォグ・敵表示）
   StatusDialog.vue       キャラクターステータス表示
+  StoryDialog.vue        あらすじ/バックストーリー表示（タイトル画面）
   SaveDialog.vue         セーブスロット選択・メモ入力
   LoadDialog.vue         ロードスロット選択・ダイジェスト確認
   YamlErrorDialog.vue    YAMLバリデーションエラー一覧
@@ -100,6 +101,7 @@ src/components/dialogs/
 | --- | --- | --- |
 | `SettingsDialog` | `localViewRange/Fog/ShowAllEnemies`（`visible` watch でリセット） | `settingsVisible`, `settingsViewRange/Fog/ShowAllEnemies` |
 | `StatusDialog` | なし | `statusVisible`, `statusText` |
+| `StoryDialog` | なし | `storyVisible`, `storyText`, `storyTitle`, `storyAuthor` |
 | `SaveDialog` | `selectedSlot`, `memo`（`visible` watch でリセット） | `saveDialogVisible`, `saveSlotMetas` |
 | `LoadDialog` | `digestMismatchVisible`, `digestMismatchSaveData`, `importPendingData`, `importErrorMessage`, `isDragOver` | `loadDialogVisible`, `loadSlotMetas` |
 | `YamlErrorDialog` | なし | `yamlErrorVisible`, `yamlValidationErrors` |
@@ -117,6 +119,7 @@ src/components/dialogs/
 | `open-settings` | Phaser→Vue | `{ viewRange, enableFog, showAllEnemies }` | 設定ダイアログを開く |
 | `settings-confirmed` | Vue→Phaser | `{ viewRange, enableFog, showAllEnemies }` | 設定を確定してゲームに反映（`Game.ts` 内部では `revealAll` フィールドに格納） |
 | `open-status` | Phaser→Vue | `string` | ステータスダイアログを開く |
+| `open-story` | Phaser→Vue | `{ text: string, title?: string, author?: string \| null }` | あらすじダイアログ（`StoryDialog`）を開く（`base.yml` の `story` 指定時にタイトル画面から発行。`author` 指定時は「作者：{author}」を右寄せ表示） |
 | `open-result` | Phaser→Vue | `string` | リザルトダイアログを開く（GameClear/GameOver シーンから発行） |
 | `open-save-dialog` | Phaser→Vue | なし | セーブダイアログを開く |
 | `save-to-slot` | Vue→Phaser | `{ slot: number, memo: string }` | セーブ実行 |
