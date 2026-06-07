@@ -191,11 +191,13 @@ function applyThrowEffectEntries(
 }
 
 /**
- * 消費アイテムの immediate 効果のうち、敵に転用可能なもののみを適用する。
+ * 消費アイテムの効果のうち、敵に転用可能なもののみを適用する。
+ * immediate:
  * - applyEffect: 状態異常付与
  * - clearEffect: 状態異常解除（利敵も許容）
  * - 数値 stat: addStat（max クランプ・死亡フラグは Enemy 側で処理。life 減少はダメージ表記）
- * continuous / learnSkill / executeSkill / add_modifier / remove_modifier_kind は無視（敵に無意味）。
+ * continuous: 数ターンの能力値変動／耐性を敵にも付与（Enemy.applyContinuousEffect）。
+ * learnSkill / executeSkill / add_modifier / remove_modifier_kind は無視（敵に無意味）。
  */
 function applyConsumableToEnemy(
     dungeon: DungeonMap,
@@ -211,43 +213,63 @@ function applyConsumableToEnemy(
 
     for (const spec of item.getEffectSpecs()) {
         const imm = spec.immediate;
-        if (!imm) continue;
-        for (const [key, value] of Object.entries(imm)) {
-            if (!enemy.isAlive()) break;
-            if (key === 'applyEffect') {
-                if (typeof value !== 'string') continue;
-                const r = enemy.applyStatusEffect(value);
-                const label = effectsLoader.getEffect(value)?.label ?? value;
-                if (r === 'applied') {
-                    EventBus.emit('message-log', `${enemy.getLabel()}は${label}状態になった！`, turn);
-                    anything = true;
-                } else if (r === 'resisted') {
-                    EventBus.emit('message-log', `${enemy.getLabel()}は${label}を耐性で防いだ`, turn);
-                    anything = true;
-                }
-            } else if (key === 'clearEffect') {
-                if (typeof value === 'string' && enemy.clearStatusEffect(value)) {
+        if (imm) {
+            for (const [key, value] of Object.entries(imm)) {
+                if (!enemy.isAlive()) break;
+                if (key === 'applyEffect') {
+                    if (typeof value !== 'string') continue;
+                    const r = enemy.applyStatusEffect(value);
                     const label = effectsLoader.getEffect(value)?.label ?? value;
-                    EventBus.emit('message-log', `${enemy.getLabel()}の${label}が解けた`, turn);
-                    anything = true;
-                }
-            } else if (typeof value === 'number') {
-                const before = enemy.getStat(key);
-                enemy.addStat(key, value);
-                const delta = enemy.getStat(key) - before;
-                if (delta === 0) continue;
-                anything = true;
-                if (key === damageStat && delta < 0) {
-                    EventBus.emit('attack-flash', 0xFF2222);
-                    EventBus.emit('message-log', `${enemy.getLabel()}に${-delta}のダメージ！`, turn);
-                    const cleared = enemy.notifyDamageTaken();
-                    for (const c of cleared) {
-                        EventBus.emit('message-log', `${enemy.getLabel()}の${c.label}が解けた`, turn);
+                    if (r === 'applied') {
+                        EventBus.emit('message-log', `${enemy.getLabel()}は${label}状態になった！`, turn);
+                        anything = true;
+                    } else if (r === 'resisted') {
+                        EventBus.emit('message-log', `${enemy.getLabel()}は${label}を耐性で防いだ`, turn);
+                        anything = true;
                     }
-                } else {
-                    const abbr = statsLoader.getAbbreviation(key) || key;
-                    EventBus.emit('message-log', `${enemy.getLabel()}の${abbr}が${delta > 0 ? '+' : ''}${delta}`, turn);
+                } else if (key === 'clearEffect') {
+                    if (typeof value === 'string' && enemy.clearStatusEffect(value)) {
+                        const label = effectsLoader.getEffect(value)?.label ?? value;
+                        EventBus.emit('message-log', `${enemy.getLabel()}の${label}が解けた`, turn);
+                        anything = true;
+                    }
+                } else if (typeof value === 'number') {
+                    const before = enemy.getStat(key);
+                    enemy.addStat(key, value);
+                    const delta = enemy.getStat(key) - before;
+                    if (delta === 0) continue;
+                    anything = true;
+                    if (key === damageStat && delta < 0) {
+                        EventBus.emit('attack-flash', 0xFF2222);
+                        EventBus.emit('message-log', `${enemy.getLabel()}に${-delta}のダメージ！`, turn);
+                        const cleared = enemy.notifyDamageTaken();
+                        for (const c of cleared) {
+                            EventBus.emit('message-log', `${enemy.getLabel()}の${c.label}が解けた`, turn);
+                        }
+                    } else {
+                        const abbr = statsLoader.getAbbreviation(key) || key;
+                        EventBus.emit('message-log', `${enemy.getLabel()}の${abbr}が${delta > 0 ? '+' : ''}${delta}`, turn);
+                    }
                 }
+            }
+        }
+        // continuous（持続効果）を敵に付与する
+        if (spec.continuous && enemy.isAlive()) {
+            const applied = enemy.applyContinuousEffect(spec.continuous, item.getLabel());
+            const parts: string[] = [];
+            for (const [stat, value] of applied) {
+                const abbr = statsLoader.getAbbreviation(stat) || stat;
+                parts.push(`${abbr}が${value > 0 ? '+' : ''}${value}`);
+            }
+            if (Array.isArray(spec.continuous.resist)) {
+                for (const effName of spec.continuous.resist) {
+                    const label = effectsLoader.getEffect(effName)?.label ?? effName;
+                    parts.push(`${label}に耐性`);
+                }
+            }
+            if (parts.length) {
+                EventBus.emit('message-log', `${enemy.getLabel()}は${spec.continuous.turns}ターンの間 ${parts.join('、')}`, turn);
+                anything = true;
             }
         }
     }

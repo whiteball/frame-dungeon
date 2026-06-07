@@ -129,7 +129,7 @@
 
 1. アイテムに `throwEffect` 定義あり → `executeDamageAction` / `executeApplyEffectAction`（スキル action 実行器）を単一セル対象で再利用、`clear_effect` は `enemy.clearStatusEffect`
 2. 武器（throwEffect 無し）→ **仮装備ダメージ**: `Player.getThrownWeaponFormulaVars(item)` で武器スロットだけを投擲武器に差し替えた実効ステータスを構築し、`enemy.takeDamageFromPlayer()` に渡す（現装備武器の寄与は除外、投擲武器自身の modifier は反映、passive/continuous/permanent は維持）
-3. 消費アイテム（throwEffect 無し）→ `applyEffect` / `clearEffect` / 数値 stat のみ敵へ転用（利敵も許容）。`continuous` は未対応（[TODO.md] 参照）
+3. 消費アイテム（throwEffect 無し）→ `immediate` の `applyEffect` / `clearEffect` / 数値 stat を敵へ転用（利敵も許容）。加えて `continuous`（数ターンの能力値変動／耐性）も `Enemy.applyContinuousEffect` で敵に付与し、`MapGenerator.tickEnemies()` でターン進行する（`弱体の薬` 等で敵をデバフ可能）
 4. 防具・その他 → 投げ損（消滅のみ）
 
 敵撃破時はマップ除去・撃破数・経験値・レベルアップ・ドロップ（`tryEnemyDrop`）を AttackAction / DamageAction と同等に処理します（`awardEnemyDefeat`）。スタン中（`_action: skip`）は「動けない！」でターン消費し投擲しません。

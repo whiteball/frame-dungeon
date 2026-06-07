@@ -38,6 +38,15 @@
       turns: 5
       power: 10
   description: 一時的に力を高める薬
+- name: weakening potion
+  label: 弱体の薬
+  type: consumable
+  effect:
+    continuous:
+      turns: 5
+      power: -5
+      defense: -5
+  description: 投げつけた相手の力と守りを一時的に下げる薬
 - name: poison potion
   label: 毒薬
   type: consumable

@@ -7,14 +7,8 @@ import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { BaseLoader } from './BaseLoader';
 import { SkillsLoader } from './SkillsLoader';
 import { ItemModifiersLoader } from './ItemModifiersLoader';
+import { ContinuousEffectManager, type ActiveContinuousEffect, type ExpiredContinuousEffect } from './ContinuousEffectManager';
 import type { PlayerSaveData } from './SaveManager';
-
-interface ActiveContinuousEffect {
-    effects: Map<string, number>;
-    remainingTurns: number;
-    sourceLabel: string;
-    resists: string[];
-}
 
 export interface ActiveStatusEffect {
     name: string;
@@ -44,7 +38,7 @@ export class Player {
     private equippedSubArmor2: Item | null = null;
 
     // 持続効果スロット（同じアイテムを複数使用しても各エントリ独立に管理）
-    private activeContinuousEffects: ActiveContinuousEffect[] = [];
+    private continuousEffects = new ContinuousEffectManager();
 
     // 状態異常/強化効果スロット（同名効果は 1 エントリのみ、count をリセット）
     private activeStatusEffects: ActiveStatusEffect[] = [];
@@ -278,54 +272,22 @@ export class Player {
      * @returns 能力値名 → 加算量
      */
     applyContinuousEffect(effect: ContinuousEffect, sourceLabel: string): Map<string, number> {
-        const effects = new Map<string, number>();
-        for (const [statName, value] of Object.entries(effect)) {
-            if (statName === 'turns' || statName === 'resist') continue;
-            if (typeof value !== 'number') continue;
-            effects.set(statName, value);
-        }
-        const resists = Array.isArray(effect.resist) ? [...effect.resist] : [];
-        if ((effects.size === 0 && resists.length === 0) || effect.turns <= 0) return effects;
-
-        this.activeContinuousEffects.push({
-            effects,
-            remainingTurns: effect.turns,
-            sourceLabel,
-            resists,
-        });
-        return effects;
+        return this.continuousEffects.apply(effect, sourceLabel);
     }
 
     /**
      * 持続効果を1ターン経過させる。残ターン数が0以下になったエントリは自動削除。
-     * @returns 期限切れになったエントリの { sourceLabel, effects } 配列
+     * @returns 期限切れになったエントリの配列
      */
-    tickContinuousEffects(): Array<{ sourceLabel: string; effects: Map<string, number>; resists: string[] }> {
-        const expired: Array<{ sourceLabel: string; effects: Map<string, number>; resists: string[] }> = [];
-        const remaining: ActiveContinuousEffect[] = [];
-        for (const entry of this.activeContinuousEffects) {
-            entry.remainingTurns--;
-            if (entry.remainingTurns <= 0) {
-                expired.push({ sourceLabel: entry.sourceLabel, effects: entry.effects, resists: entry.resists });
-            } else {
-                remaining.push(entry);
-            }
-        }
-        this.activeContinuousEffects = remaining;
-        return expired;
+    tickContinuousEffects(): ExpiredContinuousEffect[] {
+        return this.continuousEffects.tick();
     }
 
     /**
      * 全アクティブ持続効果のボーナス合計（能力値名 → 合計変動量）
      */
     getContinuousBonuses(): Map<string, number> {
-        const bonuses = new Map<string, number>();
-        for (const entry of this.activeContinuousEffects) {
-            for (const [stat, value] of entry.effects) {
-                bonuses.set(stat, (bonuses.get(stat) ?? 0) + value);
-            }
-        }
-        return bonuses;
+        return this.continuousEffects.getBonuses();
     }
 
     /**
@@ -458,9 +420,7 @@ export class Player {
             for (const r of item.getEquipmentResists()) resists.add(r);
         }
         // 持続効果
-        for (const entry of this.activeContinuousEffects) {
-            for (const r of entry.resists) resists.add(r);
-        }
+        for (const r of this.continuousEffects.getResists()) resists.add(r);
         // 付与中 status effect 自身の resist 付随効果
         for (const entry of this.activeStatusEffects) {
             for (const r of EffectsLoader.getInstance().getResistsOf(entry.name)) resists.add(r);
@@ -623,12 +583,7 @@ export class Player {
      * アクティブな持続効果のスナップショットを取得（UI表示用）
      */
     getActiveContinuousEffects(): ActiveContinuousEffect[] {
-        return this.activeContinuousEffects.map(e => ({
-            effects: new Map(e.effects),
-            remainingTurns: e.remainingTurns,
-            sourceLabel: e.sourceLabel,
-            resists: [...e.resists],
-        }));
+        return this.continuousEffects.getSnapshot();
     }
 
     /**
@@ -1074,12 +1029,7 @@ export class Player {
             equippedMainArmorId: this.equippedMainArmor?.getInstanceId() ?? null,
             equippedSubArmor1Id: this.equippedSubArmor1?.getInstanceId() ?? null,
             equippedSubArmor2Id: this.equippedSubArmor2?.getInstanceId() ?? null,
-            activeContinuousEffects: this.activeContinuousEffects.map(e => ({
-                effects: Object.fromEntries(e.effects),
-                remainingTurns: e.remainingTurns,
-                sourceLabel: e.sourceLabel,
-                resists: [...e.resists],
-            })),
+            activeContinuousEffects: this.continuousEffects.serialize(),
             activeStatusEffects: this.activeStatusEffects.map(e => ({
                 name: e.name,
                 count: e.count,
@@ -1117,12 +1067,7 @@ export class Player {
             ? this.inventory.getItemById(data.equippedSubArmor2Id) ?? null : null;
 
         // 持続効果復元
-        this.activeContinuousEffects = data.activeContinuousEffects.map(e => ({
-            effects: new Map(Object.entries(e.effects)),
-            remainingTurns: e.remainingTurns,
-            sourceLabel: e.sourceLabel,
-            resists: Array.isArray(e.resists) ? [...e.resists] : [],
-        }));
+        this.continuousEffects.restore(data.activeContinuousEffects);
 
         // 状態異常復元
         this.activeStatusEffects = data.activeStatusEffects.map(e => ({

@@ -8,7 +8,9 @@ import type { DungeonMap } from './MapGenerator';
 import { getDirectionOffset, MapDirection } from './map/MapDirection';
 import { getRandomInt } from './util/random';
 import type { ActiveStatusEffect, ApplyStatusEffectResult, StatusEffectTickResult } from './Player';
-import type { StatusEffectSaveData } from './SaveManager';
+import type { StatusEffectSaveData, ContinuousEffectSaveData } from './SaveManager';
+import { ContinuousEffectManager, type ExpiredContinuousEffect } from './ContinuousEffectManager';
+import type { ContinuousEffect } from './ItemsLoader';
 import { executeEnemyOnAttackSkill } from './skills/EnemySkillExecutor';
 import { executePlayerOnDamageSkill } from './skills/PlayerSkillExecutor';
 
@@ -25,6 +27,8 @@ export class Enemy extends MapObject {
     private target: { x: integer; y: integer } | null = null;
     // 状態異常/強化効果スロット（Player と同形式、同名効果は 1 エントリ）
     private activeStatusEffects: ActiveStatusEffect[] = [];
+    // 持続効果スロット（Player と同形式。投擲消費アイテムの continuous 等を保持）
+    private continuousEffects = new ContinuousEffectManager();
     // 最後に扉を越えた出発セル。getDoorTargetsInZone で折り返しを防ぐために使用
     private lastEnteredFrom: { x: integer; y: integer } | null = null;
     // 有効な扉目標がなくランダムウォークした連続ターン数
@@ -285,12 +289,31 @@ export class Enemy extends MapObject {
     }
 
     /**
-     * 装備や持続効果がない代わりに、definition.resist と付与中 status effect 自身の
+     * 持続効果（continuous）を付与する。投擲した消費アイテム等から呼ばれる。
+     * Player.applyContinuousEffect と同形式。
+     * @returns 能力値名 → 加算量
+     */
+    applyContinuousEffect(effect: ContinuousEffect, sourceLabel: string): Map<string, number> {
+        return this.continuousEffects.apply(effect, sourceLabel);
+    }
+
+    /**
+     * 持続効果を1ターン経過させる。残ターン数が0以下になったエントリは自動削除。
+     * @returns 期限切れになったエントリの配列
+     */
+    tickContinuousEffects(): ExpiredContinuousEffect[] {
+        return this.continuousEffects.tick();
+    }
+
+    /**
+     * definition.resist と付与中 status effect 自身の resist、および持続効果が付与する
      * resist を集約した「現在新規付与を阻止する effect 名」集合を返す
      */
     getEffectiveResists(): Set<string> {
         const resists = new Set<string>();
         for (const r of this.definition.resist ?? []) resists.add(r);
+        // 持続効果（continuous）が付与する耐性
+        for (const r of this.continuousEffects.getResists()) resists.add(r);
         const effectsLoader = EffectsLoader.getInstance();
         for (const entry of this.activeStatusEffects) {
             for (const r of effectsLoader.getResistsOf(entry.name)) resists.add(r);
@@ -327,6 +350,8 @@ export class Enemy extends MapObject {
      */
     getEffectiveStat(key: string): number {
         let value = this.getStat(key);
+        // 持続効果（continuous）のボーナスを加算（base → continuous → permanent の順）
+        value += this.continuousEffects.getBonuses().get(key) ?? 0;
         const effectsLoader = EffectsLoader.getInstance();
         for (const entry of this.activeStatusEffects) {
             const compiled = effectsLoader.getCompiledEffect(entry.name);
@@ -644,6 +669,7 @@ export class Enemy extends MapObject {
         stats: Record<string, number>; maxStats: Record<string, number>;
         isDead: boolean; target: { x: number; y: number } | null;
         activeStatusEffects: StatusEffectSaveData[];
+        activeContinuousEffects: ContinuousEffectSaveData[];
     } {
         return {
             instanceId: this.instanceId,
@@ -655,6 +681,7 @@ export class Enemy extends MapObject {
             isDead: this.isDead,
             target: this.target ? { ...this.target } : null,
             activeStatusEffects: this.activeStatusEffects.map(e => ({ name: e.name, count: e.count })),
+            activeContinuousEffects: this.continuousEffects.serialize(),
         };
     }
 
@@ -664,11 +691,13 @@ export class Enemy extends MapObject {
         isDead: boolean,
         target: { x: number; y: number } | null,
         activeStatusEffects?: StatusEffectSaveData[],
+        activeContinuousEffects?: ContinuousEffectSaveData[],
     ): void {
         this.stats = new Map(Object.entries(stats));
         this.maxStats = new Map(Object.entries(maxStats));
         this.isDead = isDead;
         this.target = target;
+        this.continuousEffects.restore(activeContinuousEffects);
 
         this.activeStatusEffects = [];
         const effectsLoader = EffectsLoader.getInstance();

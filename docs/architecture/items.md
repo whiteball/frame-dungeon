@@ -116,7 +116,7 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 | アイテム種別 | 投擲命中時の効果 |
 | --- | --- |
 | `weapon` | 仮装備ダメージ（`Player.getThrownWeaponFormulaVars` で武器スロットを差し替えた実効値を `enemy.takeDamageFromPlayer` へ） |
-| `consumable` | `immediate` の `applyEffect` / `clearEffect` / 数値 stat のみ敵へ転用（`life` 減少はダメージ表記・`notifyDamageTaken` 連携）。`continuous`・`learnSkill`・`executeSkill`・`add_modifier`・`remove_modifier_kind` は無視。回復薬を敵に投げると敵を回復させる（利敵を許容） |
+| `consumable` | `immediate` の `applyEffect` / `clearEffect` / 数値 stat を敵へ転用（`life` 減少はダメージ表記・`notifyDamageTaken` 連携）。加えて `continuous`（数ターンの能力値変動／耐性）も `Enemy.applyContinuousEffect` で敵に付与する。`learnSkill`・`executeSkill`・`add_modifier`・`remove_modifier_kind` は無視。回復薬・強化薬を敵に投げると敵を利する（利敵を許容。`弱体の薬` 等で敵をデバフできる） |
 | `main_armor` / `sub_armor` | 投げ損（消滅のみ）。救済したい防具は `throwEffect` を付ける |
 
 検証：`validateItemDefinition` が `throwEffect` の形状を、`YamlCrossValidator` が `apply_effect` / `clear_effect` の effect 名を effects.yml と照合する。
@@ -135,6 +135,10 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 ### 持続効果のターン進行
 
 `DungeonMap.dispatchObjectEvent()` は player の行動 → 敵反撃 を処理した最後で `Player.tickContinuousEffects()` を呼び、各エントリの残ターン数を1減らします。残ターン数が 0 以下になったエントリは削除され、「○○の効果が切れた」とログ出力されます。
+
+敵も同形式の持続効果を持ち（投擲消費アイテムの `continuous` 等で付与）、`MapGenerator.tickEnemies()` が `enemy.act()` → `tickStatusEffects()` の後に `enemy.tickContinuousEffects()` を呼んで 1 ターン進めます。期限切れ時は「○○の△△の効果が切れた」とログ出力されます。
+
+持続効果のロジック本体は `ContinuousEffectManager`（`src/lib/ContinuousEffectManager.ts`）に集約されており、Player / Enemy が 1 つずつ保持して `apply` / `tick` / `getBonuses` / `getResists` / `serialize` / `restore` を委譲します。
 
 回転（`turnLeftPlayer`/`turnRightPlayer`/`turnBackPlayer`）は `dispatchObjectEvent` を呼ばずターン非消費のため、持続効果も進行しません。
 
@@ -190,8 +194,9 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 Player と同じシグネチャ・同じ意味で以下を実装：
 
 - `applyStatusEffect(name)` / `clearStatusEffect(name)` / `getActiveStatusEffects()`
-- `getEffectiveResists()`（definition.resist + 付与中 effect 自身の resist を集約）
-- `getEffectiveStat(key)` / `getEffectiveFormulaVars()`（permanent 効果を反映した実効値。装備・continuous は持たない）
+- `getEffectiveResists()`（definition.resist + 持続効果の resist + 付与中 effect 自身の resist を集約）
+- `getEffectiveStat(key)` / `getEffectiveFormulaVars()`（base → continuous ボーナス → permanent 効果 formula の順で反映した実効値。装備は持たないが、continuous は Player と同形式で持つ）
+- `applyContinuousEffect(effect, sourceLabel)` / `tickContinuousEffects()`：Player と同形式の持続効果。`ContinuousEffectManager` に委譲。投擲消費アイテムの `continuous` 付与と `MapGenerator.tickEnemies()` のターン進行で使用
 - `getActionDirective()`：`_action: skip` で `'skip'` を返す。`Enemy.act()` 先頭で評価し、stun / sleep 中の敵は移動・攻撃をスキップ
 - `tickStatusEffects()`：Player と同じく onTurnEnd → count++ → clear 判定。`MapGenerator.tickEnemies()` から `enemy.act()` 後に呼ばれ、結果は message-log に流される
 - `notifyDamageTaken()`：`Enemy.damage()` の内部から呼ばれる。`takeDamageFromPlayer()` は `{ dealt, cleared }` を返し、呼び出し側（AttackAction / DamageAction）がログを出す

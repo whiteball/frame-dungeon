@@ -1350,6 +1350,10 @@ export class DungeonMap {
       for (const c of result.cleared) {
         EventBus.emit('message-log', `${enemy.getLabel()}の${c.label}が解けた`, turn);
       }
+      // 持続効果（continuous）を1ターン進め、期限切れをログ出力
+      for (const e of enemy.tickContinuousEffects()) {
+        EventBus.emit('message-log', `${enemy.getLabel()}の${e.sourceLabel}の効果が切れた`, turn);
+      }
       if (!enemy.isAlive()) {
         EventBus.emit('message-log', `${enemy.getLabel()}は力尽きた`, turn);
         this.removeEnemy(enemy.x, enemy.y);
@@ -1735,7 +1739,7 @@ export class DungeonMap {
       const def = enemyLoader.getEnemy(enemyData.name);
       if (!def) continue;
       const enemy = new Enemy(def, enemyData.x, enemyData.y, enemyData.instanceId);
-      enemy.restoreAfterLoad(enemyData.stats, enemyData.maxStats, enemyData.isDead, enemyData.target, enemyData.activeStatusEffects);
+      enemy.restoreAfterLoad(enemyData.stats, enemyData.maxStats, enemyData.isDead, enemyData.target, enemyData.activeStatusEffects, enemyData.activeContinuousEffects);
       this._objectStore.add(enemy);
     }
 

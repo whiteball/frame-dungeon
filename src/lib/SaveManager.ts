@@ -77,6 +77,8 @@ export interface EnemySaveData {
     isDead: boolean;
     target: { x: number; y: number } | null;
     activeStatusEffects?: StatusEffectSaveData[];
+    /** 持続効果（continuous）。旧セーブ互換のため optional（欠落時は空として復元） */
+    activeContinuousEffects?: ContinuousEffectSaveData[];
 }
 
 interface RectData {
