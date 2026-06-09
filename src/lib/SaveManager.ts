@@ -116,6 +116,11 @@ export interface SaveData {
         yamlDigest: string;
     };
     floor: number;
+    /**
+     * セーブ時点の整形済みフロアラベル（例 "B5F"）。表示専用。
+     * 旧セーブ互換のため optional（欠落時はダイアログ側で `{floor}F` にフォールバック）。
+     */
+    floorLabel?: string;
     player: PlayerSaveData;
     dungeon: DungeonSaveData;
 }
@@ -126,6 +131,8 @@ export interface SlotMeta {
     savedAt?: string;
     memo?: string;
     floor?: number;
+    /** セーブ時点の整形済みフロアラベル。欠落時はダイアログ側で `{floor}F` にフォールバック */
+    floorLabel?: string;
 }
 
 // ─── SaveManager ──────────────────────────────────────────────────────────────
@@ -183,6 +190,7 @@ export class SaveManager {
             savedAt: data.meta.savedAt,
             memo: data.meta.memo,
             floor: data.floor,
+            floorLabel: data.floorLabel,
         };
     }
 

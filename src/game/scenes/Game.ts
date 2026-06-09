@@ -99,7 +99,7 @@ export class Game extends Scene {
         this.miniMapView.render(this.dungeon, this.revealAll);
         this.mainView.render(this.dungeon, this.getOpenDoors());
         this.params = buildDisplayParams(this.player);
-        this.infoView.render(this.floor, this.params);
+        this.infoView.render(BaseLoader.getInstance().formatFloorLabel(this.floor), this.params);
         this.equipmentView.render({
             weapon: this.player.getEquippedWeapon(),
             mainArmor: this.player.getEquippedMainArmor(),
@@ -522,16 +522,17 @@ export class Game extends Scene {
     }
 
     private enterStairMode(dungeon: DungeonMap): void {
-        const goalFloor = BaseLoader.getInstance().getGoalFloor();
+        const base = BaseLoader.getInstance();
+        const goalFloor = base.getGoalFloor();
         if (this.floor >= goalFloor) {
-            EventBus.emit('message-log', `${this.floor}階の階段を登り切った！クリア！`, dungeon.getTurnCount());
+            EventBus.emit('message-log', base.getClearMessage(this.floor), dungeon.getTurnCount());
             EventBus.emit('game-clear');
             return;
         }
-        EventBus.emit('message-log', `${this.floor + 1}階への階段だ`, dungeon.getTurnCount());
+        EventBus.emit('message-log', `${base.formatFloorLabel(this.floor + 1)}への階段だ`, dungeon.getTurnCount());
         this.mode.enterStairConfirmMode(() => {
             this.floor++;
-            EventBus.emit('message-log', `${this.floor}階に移動した`, dungeon.getTurnCount());
+            EventBus.emit('message-log', `${base.formatFloorLabel(this.floor)}に移動した`, dungeon.getTurnCount());
             EventBus.emit('go-to-next-floor', dungeon);
         });
     }

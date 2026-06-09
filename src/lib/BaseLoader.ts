@@ -170,6 +170,16 @@ export class BaseLoader {
     private loaded = false;
     private name = 'Dungeon Game';
     private goalFloor = 10;
+    /** 階層表示の書式。`{floor}` を表示用フロア数値で置換する。例 `B{floor}F` */
+    private floorLabelFormat = '{floor}F';
+    /**
+     * 表示用フロア数値を求める数式。null なら内部フロア値をそのまま表示する。
+     * 利用可能変数: currentFloor / goalFloor / maxFloor（maxFloor は goalFloor の別名）。
+     * 例 `goalFloor - currentFloor + 1`（脱出テーマで降順表示）。
+     */
+    private floorDisplayFormula: Expression | null = null;
+    /** ゴール到達メッセージのテンプレート。`{floor}` を整形済みフロアラベルで置換する */
+    private clearMessageTemplate = '{floor}の階段を登り切った！クリア！';
     /** タイトルテキストの文字色（CSS カラー文字列）。null なら既定 #ffffff */
     private titleColor: string | null = null;
     /** タイトルテキストの縁取り色（CSS カラー文字列）。null なら既定 #000000 */
@@ -270,6 +280,24 @@ export class BaseLoader {
             }
             if (typeof parsed.author === 'string' && parsed.author.trim()) {
                 this.author = parsed.author.trim();
+            }
+
+            if (typeof parsed.floorLabelFormat === 'string' && parsed.floorLabelFormat.length > 0) {
+                this.floorLabelFormat = parsed.floorLabelFormat;
+                if (!this.floorLabelFormat.includes('{floor}')) {
+                    console.warn(`base.yml の floorLabelFormat に {floor} が含まれていません。フロア番号が表示されません: ${this.floorLabelFormat}`);
+                }
+            }
+            if (typeof parsed.floorDisplayFormula === 'string' && parsed.floorDisplayFormula.trim()) {
+                try {
+                    this.floorDisplayFormula = this.parser.parse(parsed.floorDisplayFormula);
+                } catch (e) {
+                    console.warn(`base.yml の floorDisplayFormula のパースに失敗しました。内部フロア値をそのまま表示します: ${parsed.floorDisplayFormula}`);
+                    this.floorDisplayFormula = null;
+                }
+            }
+            if (typeof parsed.clearMessage === 'string' && parsed.clearMessage.length > 0) {
+                this.clearMessageTemplate = parsed.clearMessage;
             }
 
             if (Array.isArray(parsed.floors)) {
@@ -568,6 +596,39 @@ export class BaseLoader {
 
     getGoalFloor(): number {
         return this.goalFloor;
+    }
+
+    /**
+     * 内部フロア値を表示用のラベル文字列に整形する。
+     * `floorDisplayFormula`（あれば）で表示用数値を求め（Math.floor で整数化、
+     * 下限クランプはしない＝負値はそのまま表示）、`floorLabelFormat` の `{floor}` を置換する。
+     * 数式評価に失敗した場合は内部フロア値をそのまま用いる。
+     */
+    formatFloorLabel(internalFloor: number): string {
+        let displayValue = internalFloor;
+        if (this.floorDisplayFormula) {
+            try {
+                const result = Number(this.floorDisplayFormula.evaluate({
+                    currentFloor: internalFloor,
+                    goalFloor: this.goalFloor,
+                    maxFloor: this.goalFloor,
+                }));
+                if (isFinite(result)) {
+                    displayValue = Math.floor(result);
+                }
+            } catch {
+                displayValue = internalFloor;
+            }
+        }
+        return this.floorLabelFormat.replace(/\{floor\}/g, String(displayValue));
+    }
+
+    /**
+     * ゴール到達メッセージ。`clearMessage` テンプレートの `{floor}` を
+     * 整形済みフロアラベルで置換して返す。
+     */
+    getClearMessage(internalFloor: number): string {
+        return this.clearMessageTemplate.replace(/\{floor\}/g, this.formatFloorLabel(internalFloor));
     }
 
     /** 長居警告/強制移動用のメッセージ配列。null のとき機構は無効 */

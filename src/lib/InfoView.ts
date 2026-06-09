@@ -34,7 +34,7 @@ export class InfoView {
     this.height = height;
     this.fontFamily = fontFamily;
 
-    this.floorText = factory.text(x, y, '-F').setFontFamily(fontFamily).setDepth(10);
+    this.floorText = factory.text(x, y, '-').setFontFamily(fontFamily).setDepth(10);
 
     this.textLabelList = [];
     this.textValueList = [];
@@ -42,18 +42,18 @@ export class InfoView {
 
   /**
    * 情報パネルをレンダリングする
-   * フロア番号とゲーム情報を表示する
-   * @param floor 現在のフロア番号
+   * フロアラベルとゲーム情報を表示する
+   * @param floorLabel 表示用に整形済みのフロアラベル文字列（例 "B5F"）
    * @param info 表示するゲーム情報のMap（ラベルと値のペア）
    */
-  render(floor: number, info: Map<string, number | string>) {
+  render(floorLabel: string, info: Map<string, number | string>) {
     const graph = this.graph;
     graph.clear();
     graph.fillStyle(0, 1);
     graph.lineStyle(1, 0xFFFFFF, 1);
     graph.fillRect(0, 0, this.width, this.height);
 
-    this.floorText.setText(floor + 'F');
+    this.floorText.setText(floorLabel);
     graph.lineBetween(0, this.floorText.height + 2, this.width, this.floorText.height + 2);
     graph.lineBetween(0, this.floorText.height + 4, this.width, this.floorText.height + 4);
     let cur = 0, y = this.floorText.height + 7;

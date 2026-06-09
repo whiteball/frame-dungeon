@@ -76,6 +76,9 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | `backgroundColor` | 任意 | `null`（=`bg.png`） | タイトル画面の背景色（CSS カラー文字列）。指定時は `MainMenu` が `bg.png` の代わりに `cameras.main.setBackgroundColor()` で単色塗りつぶし（`MainMenu` 限定。`GameOver`/`GameClear` は従来通り `bg.png`）。`BaseLoader.getBackgroundColor()` |
 | `story` | 任意 | `null`（ボタン非表示） | あらすじ/バックストーリー文（複数行可）。非空のときタイトル画面に「あらすじ」ボタンを追加し `EventBus.emit('open-story', { title, text, author })` → `StoryDialog` で全文表示。`BaseLoader.getStory()` |
 | `author` | 任意 | `null`（非表示） | 作者名。指定時はあらすじダイアログのタイトルとストーリーの間に「作者：{author}」を右寄せ表示。`BaseLoader.getAuthor()` |
+| `floorLabelFormat` | 任意 | `'{floor}F'` | 階層表示の書式。`{floor}` を表示用フロア数値で置換（例 `'B{floor}F'` → B1F, B2F…）。情報パネル・フロア移動/階段メッセージ・ステータス/リザルト・セーブ一覧のすべてに適用。`{floor}` を含まない場合は起動時に warn。`BaseLoader.formatFloorLabel()` |
+| `floorDisplayFormula` | 任意 | `null`（=内部フロア値そのまま） | 表示用フロア数値を求める数式。利用可能変数 `currentFloor` / `goalFloor` / `maxFloor`（`maxFloor` は `goalFloor` の別名）。例 `'goalFloor - currentFloor + 1'`（脱出テーマで 10F→1F の降順表示）。結果は `Math.floor` で整数化のみ（下限クランプなし＝負値はそのまま表示）。**表示専用でゲームロジックには一切影響しない**（フロア構成参照・クリア判定・セーブ復元は内部フロア値を使用）。パース失敗時は warn して恒等にフォールバック |
+| `clearMessage` | 任意 | `'{floor}の階段を登り切った！クリア！'` | ゴール到達メッセージのテンプレート。`{floor}` は整形済みフロアラベルで置換。脱出/降下テーマで「登り切った」が不適切なとき差し替える。`BaseLoader.getClearMessage()` |
 | `playerInitialStats` | 任意 | 全ステータス `0` | `stats.yml` で定義した各ステータスの開始値（例: `life: 100`）。未記載ステータスは `0` |
 | `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
 | `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |

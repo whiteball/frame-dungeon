@@ -40,7 +40,9 @@ Phaser のシーン構成は `src/game/main.ts` で定義：`Boot` → `Preloade
 
 `Game.ts` 本体は薄いオーケストレータに留め、責務ごとの実装は `src/game/scenes/game/` 配下のヘルパーモジュールへ委譲します（後述「Game シーンのヘルパーモジュール構成」）。
 
-**ゴール到達処理:** `enterStairMode()` で `this.floor >= BaseLoader.getGoalFloor()` のとき `GameClear` シーンへ遷移。それ以外は階段確認ダイアログ→`floor++`→マップ再生成。
+**ゴール到達処理:** `enterStairMode()` で `this.floor >= BaseLoader.getGoalFloor()` のとき `GameClear` シーンへ遷移（メッセージは `BaseLoader.getClearMessage(floor)` で `base.yml` の `clearMessage` を反映）。それ以外は階段確認ダイアログ→`floor++`→マップ再生成。
+
+**階層表示の書式化:** 内部フロア値 `this.floor` は不変のまま、全表示箇所（情報パネル `InfoView`・フロア移動/階段メッセージ・ステータス/リザルト・セーブ一覧）は `BaseLoader.formatFloorLabel(floor)` を通してラベル化する。書式・降順表示は `base.yml` の `floorLabelFormat` / `floorDisplayFormula` で制御（[data.md](data.md) 参照）。セーブデータには整形済みラベルを `floorLabel` として保存し、異なるデータセットのセーブでも保存時の表示を再現する（旧セーブは `{floor}F` にフォールバック）。
 
 ## Game シーンのヘルパーモジュール構成
 

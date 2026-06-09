@@ -1,4 +1,5 @@
 import { StatsLoader } from '../../../lib/StatsLoader';
+import { BaseLoader } from '../../../lib/BaseLoader';
 import type { Player } from '../../../lib/Player';
 import type { DungeonMap } from '../../../lib/MapGenerator';
 
@@ -114,7 +115,7 @@ export function buildStatusText(args: { floor: number; dungeon: DungeonMap; play
     const { floor, dungeon, player } = args;
     const lines: string[] = [];
 
-    lines.push(`現在の階層：${floor}`);
+    lines.push(`現在の階層：${BaseLoader.getInstance().formatFloorLabel(floor)}`);
     lines.push(`総経過ターン数：${dungeon.getTurnCount()}`);
     lines.push(`現在の階層のターン数：${dungeon.getFloorTurnCount()}`);
     lines.push(`レベル：${player.level}`);
@@ -149,7 +150,7 @@ export function buildResultText(args: {
     const { floor, dungeon, player, settings } = args;
     const lines: string[] = [];
 
-    lines.push(`最終到達階層：${floor}`);
+    lines.push(`最終到達階層：${BaseLoader.getInstance().formatFloorLabel(floor)}`);
     lines.push(`総経過ターン数：${dungeon.getTurnCount()}`);
     lines.push(`レベル：${player.level}`);
     lines.push(`次のレベルまでの経験値：${player.expToNextLevel() - player.exp}`);

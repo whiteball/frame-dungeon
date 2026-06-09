@@ -159,6 +159,7 @@
 | **`状態異常変数`** | `x`（効果の対象ステータスの現在値）、`count`（付与からの経過ターン数） | `effects.yml` の `timing.*.formula` |
 | **`解除確率変数`** | `count`（付与からの経過ターン数） | `effects.yml` の `clear.formula` |
 | **`敵出現判定変数`** | 敵の各 `<stat>`（生値）、`currentFloor`、`maxFloor`、`rank`、`minRank`、`maxRank` | `base.yml` の `autoSpawner` |
+| **`階層表示変数`** | `currentFloor`（内部フロア値 1,2,…）、`goalFloor`、`maxFloor`（=`goalFloor` の別名） | `base.yml` の `floorDisplayFormula` |
 | **`修飾状態変数`** | `count`（重ねがけ数）、対象ステータス名（`= 装備込みの素値`）、プレイヤーの各 base `<stat>`・`level`・`exp` | `item_modifiers.yml` の `add_stats` の `formula` |
 | **`イベント関数`** | （add-on）`has_item("名前")`、`item_count("名前")`、`has_skill("名前")` | `events.yml` の各 formula に**追加で**使える |
 
@@ -264,6 +265,9 @@ base.yml は項目数が多く、特にマップ生成系（隠し部屋・宝�
 | `backgroundColor` | string | 任意 | タイトル画面の背景色（CSS カラー文字列）。指定すると `bg.png` の代わりに単色で塗りつぶす（タイトル画面のみ） |
 | `story` | string | 任意 | あらすじ/バックストーリー。指定するとタイトル画面に「あらすじ」ボタンが出てダイアログで全文表示。複数行はブロックスカラー `\|` で記述可 |
 | `author` | string | 任意 | 作者名。指定するとあらすじダイアログのタイトルとストーリーの間に「作者：{author}」を右寄せ表示 |
+| `floorLabelFormat` | string | 任意 | 階層表示の書式。`{floor}` を表示用フロア数値で置換。既定 `'{floor}F'`。例 `'B{floor}F'` → `B1F, B2F…`。情報パネル・移動/階段メッセージ・ステータス/リザルト・セーブ一覧すべてに適用。`{floor}` が無いと起動時に warn |
+| `floorDisplayFormula` | string\|formula | 任意 | 表示用フロア数値を求める数式（[`階層表示変数`](#3-数式変数リファレンスまとめ)）。未指定なら内部フロア値（1,2,…）をそのまま表示。例 `'goalFloor - currentFloor + 1'` → `10F,9F,…1F`（脱出テーマの降順）。結果は `Math.floor` で整数化のみ（下限クランプ無し＝負値もそのまま表示）。**表示専用でゲーム進行には影響しない** |
+| `clearMessage` | string | 任意 | ゴール到達メッセージ。`{floor}` を整形済みフロアラベルで置換。既定 `'{floor}の階段を登り切った！クリア！'`。降下/脱出テーマで「登り切った」が不適切なとき差し替える |
 | `playerInitialStats` | map | 任意 | 各ステータスの開始値（例 `{ life: 100, power: 10 }`）。未記載は 0 |
 | `defaultDamageStat` | string | ✅ | プレイヤーの死亡判定・トラップダメージ等の既定対象ステータス（通常 `life`） |
 | `defaultEnemyDamageStat` | string | 任意 | 敵側のダメージ対象。既定は `defaultDamageStat` |

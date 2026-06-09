@@ -75,14 +75,16 @@ export class SaveLoadController {
 
     private async buildSaveData(memo: string): Promise<SaveData> {
         const yamlDigest = await SaveManager.calculateDigest();
+        const base = BaseLoader.getInstance();
         return {
             meta: {
                 savedAt: new Date().toISOString(),
                 memo,
-                gameName: BaseLoader.getInstance().getName(),
+                gameName: base.getName(),
                 yamlDigest,
             },
             floor: this.game.floor,
+            floorLabel: base.formatFloorLabel(this.game.floor),
             player: this.game.player.serialize(),
             dungeon: this.game.dungeon.serialize(),
         };

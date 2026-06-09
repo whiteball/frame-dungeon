@@ -150,7 +150,7 @@ function onErrorClose() {
                     このデータを読み込みます。よろしいですか？
                 </p>
                 <div style="font-size: 11px; line-height: 1.6; margin-bottom: 12px;">
-                    {{ importPendingData.meta.gameName }} {{ importPendingData.floor }}F<br>
+                    {{ importPendingData.meta.gameName }} {{ importPendingData.floorLabel ?? importPendingData.floor + 'F' }}<br>
                     {{ importPendingData.meta.savedAt.slice(0, 16).replace('T', ' ') }}<br>
                     <span style="opacity: 0.7;">{{ importPendingData.meta.memo ? '「' + importPendingData.meta.memo + '」' : '' }}</span>
                 </div>
@@ -188,7 +188,7 @@ function onErrorClose() {
                     >ロード</button>
                     <span style="flex: 1; font-size: 11px; line-height: 1.5;">
                         <template v-if="slotMetas[i-1] && !slotMetas[i-1].isEmpty">
-                            {{ slotMetas[i-1].gameName }} {{ slotMetas[i-1].floor }}F<br>
+                            {{ slotMetas[i-1].gameName }} {{ slotMetas[i-1].floorLabel ?? slotMetas[i-1].floor + 'F' }}<br>
                             {{ slotMetas[i-1].savedAt?.slice(0, 16).replace('T', ' ') }}<br>
                             <span style="opacity: 0.7;">{{ slotMetas[i-1].memo ? '「' + slotMetas[i-1].memo + '」' : '' }}</span>
                         </template>

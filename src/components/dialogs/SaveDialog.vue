@@ -44,7 +44,7 @@ watch(() => props.visible, (v) => {
                     <span style="flex: 1; font-size: 11px; line-height: 1.5;">
                         <span style="opacity: 0.7;">スロット{{ String(i).padStart(2, '0') }} </span>
                         <template v-if="slotMetas[i-1] && !slotMetas[i-1].isEmpty">
-                            {{ slotMetas[i-1].gameName }} {{ slotMetas[i-1].floor }}F<br>
+                            {{ slotMetas[i-1].gameName }} {{ slotMetas[i-1].floorLabel ?? slotMetas[i-1].floor + 'F' }}<br>
                             {{ slotMetas[i-1].savedAt?.slice(0, 16).replace('T', ' ') }}<br>
                             <span style="opacity: 0.7;">{{ slotMetas[i-1].memo }}</span>
                         </template>
