@@ -108,23 +108,6 @@ export class Game extends Scene {
         });
     }
 
-
-    static fontFamily = '\'BIZ UDゴシック\', Consolas, monospace';
-    playerInfo: Map<string, number>;
-    floorText: Phaser.GameObjects.Text;
-    playerTextLabel: Phaser.GameObjects.Text;
-    playerTextValue: Phaser.GameObjects.Text;
-    redrawInfo() {
-        this.floorText.setText(this.floor + 'F');
-        let buf = '', buf2 = '';
-        this.playerInfo.forEach((value, key) => {
-            buf += key + ' : ' + '\n';
-            buf2 += value + '\n';
-        })
-        this.playerTextLabel.setText(buf);
-        this.playerTextValue.setText(buf2);
-    }
-
     async create() {
         // シーン再開（リスタート）に備えて、このシーンが扱うイベントの旧リスナを一掃する
         // 古いシーンインスタンスのハンドラが残ると、scene.manager が null の dead scene で
