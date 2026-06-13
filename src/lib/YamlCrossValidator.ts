@@ -8,6 +8,7 @@ import { SkillsLoader } from './SkillsLoader';
 import { ItemModifiersLoader } from './ItemModifiersLoader';
 import { EventsLoader } from './EventsLoader';
 import type { EventActionEntry, EventChoice, RandomOutcomeEntry } from './EventsLoader';
+import { validateActionValue } from './effects/StatusActionResolver';
 
 export interface ValidationResult {
     errors: string[];
@@ -286,6 +287,20 @@ export class YamlCrossValidator {
                 for (const s of specArray) {
                     if (!s.target.startsWith('_') && !stats.getStat(s.target)) {
                         errors.push(`effects.yml "${effect.name}": timing.${timing}.target "${s.target}" が stats.yml に存在しません`);
+                    }
+                    // onAction の _action value（強制/禁止アクションツリー）の構造＋クロス参照を検証
+                    if (timing === 'onAction' && s.target === '_action' && s.value !== undefined) {
+                        errors.push(...validateActionValue(
+                            s.value,
+                            `effects.yml "${effect.name}": onAction.value`,
+                            {
+                                hasItem: (n) => !!items.getItem(n),
+                                hasActiveSkill: (n) => {
+                                    const d = skills.getSkill(n);
+                                    return !!d && (d.trigger ?? 'active') === 'active';
+                                },
+                            },
+                        ));
                     }
                 }
             }

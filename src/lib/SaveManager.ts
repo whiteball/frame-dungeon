@@ -22,6 +22,8 @@ export interface ContinuousEffectSaveData {
 export interface StatusEffectSaveData {
     name: string;
     count: number;
+    /** onAction リストの選択インデックス。旧セーブ互換のため optional（欠落時は 0 として復元） */
+    actionIndex?: number;
 }
 
 export interface PlayerSaveData {

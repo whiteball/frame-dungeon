@@ -2,6 +2,7 @@ import type { EnemyDefinition } from './EnemyLoader';
 import { MapObject, MapMark, MapShape } from './MapObject';
 import { StatsLoader } from './StatsLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
+import { aggregateDirective, type AggregatedDirective, type ForceVerb } from './effects/StatusActionResolver';
 import { BaseLoader } from './BaseLoader';
 import { EventBus } from '../game/EventBus';
 import type { DungeonMap } from './MapGenerator';
@@ -74,17 +75,28 @@ export class Enemy extends MapObject {
     public act(dungeon: DungeonMap): void {
         if (!this.isAlive()) return;
 
-        if (this.getActionDirective() === 'skip') {
-            EventBus.emit('message-log', `${this.getLabel()}は動けない！`, dungeon.getTurnCount());
+        // onAction ディレクティブ解決。行動決定時に actionIndex 前進の印を付ける。
+        this.markStatusEffectsActionEligible();
+        const directive = this.getActionDirective();
+        if (directive.force) {
+            this.executeForce(dungeon, directive.force);
             return;
         }
+        const noAttack = directive.forbid.has('attack'); // not_attack / not_action
+        const noMove = directive.forbid.has('move');     // not_move
 
         const walkMode = this.definition.walk ?? 'default';
         const { x: px, y: py } = dungeon.getPlayerPos();
 
-        if (dungeon.canAttack(this.x, this.y, px, py)) {
+        if (!noAttack && dungeon.canAttack(this.x, this.y, px, py)) {
             this.target = { x: px, y: py };
             this.attackPlayer(dungeon);
+            return;
+        }
+
+        if (noMove) {
+            // 移動禁止で攻撃も行えなかった → 何もせずターンを消費
+            EventBus.emit('message-log', `${this.getLabel()}は動けない！`, dungeon.getTurnCount());
             return;
         }
 
@@ -259,6 +271,50 @@ export class Enemy extends MapObject {
         }
     }
 
+    /**
+     * 状態異常 onAction の強制行動を敵に対して実行する。
+     * item/equip/unequip/use_skill 系は敵では実行不能のため skip に倒す（メッセージのみ）。
+     * 自滅（attack_self）で死亡した場合は tickEnemies 側で回収される。
+     */
+    private executeForce(dungeon: DungeonMap, leaf: { verb: ForceVerb; arg?: string }): void {
+        const turn = dungeon.getTurnCount();
+        switch (leaf.verb) {
+            case 'attack': {
+                const { x: px, y: py } = dungeon.getPlayerPos();
+                if (dungeon.canAttack(this.x, this.y, px, py)) {
+                    this.target = { x: px, y: py };
+                    this.attackPlayer(dungeon);
+                } else {
+                    EventBus.emit('message-log', `${this.getLabel()}は攻撃する相手がいない！`, turn);
+                }
+                return;
+            }
+            case 'attack_self': {
+                const { dealt, cleared } = this.takeDamageFromPlayer(this.getEffectiveFormulaVars());
+                EventBus.emit('attack-flash', 0xFF2222);
+                EventBus.emit('message-log', `${this.getLabel()}は自分を攻撃した！ ${dealt}のダメージ！`, turn);
+                for (const c of cleared) {
+                    EventBus.emit('message-log', `${this.getLabel()}の${c.label}が解けた`, turn);
+                }
+                return;
+            }
+            case 'move': {
+                // 敵は player 相対トークンを持たないため常にランダム方向へ移動
+                dungeon.tryMoveEnemy(this, getRandomInt(0, 4) as MapDirection);
+                return;
+            }
+            case 'skip':
+            case 'use_item':
+            case 'equip':
+            case 'unequip':
+            case 'use_skill': {
+                const msg = leaf.verb === 'skip' && leaf.arg ? leaf.arg : `${this.getLabel()}は動けない！`;
+                EventBus.emit('message-log', msg, turn);
+                return;
+            }
+        }
+    }
+
     private generateInstanceId(): string {
         return `enemy_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     }
@@ -389,10 +445,6 @@ export class Enemy extends MapObject {
         return null;
     }
 
-    private static literalValueOf(spec: CompiledTargetSpec): string | number | null {
-        return spec.value ?? null;
-    }
-
     /**
      * 状態異常/強化効果を付与する
      * 同名効果が既にあれば count を 0 にリセット（重複は 1 エントリのみ）
@@ -409,8 +461,10 @@ export class Enemy extends MapObject {
         const existing = this.activeStatusEffects.find(e => e.name === name);
         if (existing) {
             existing.count = 0;
+            existing.actionIndex = 0;
+            existing.eligibleAdvance = false;
         } else {
-            this.activeStatusEffects.push({ name, count: 0 });
+            this.activeStatusEffects.push({ name, count: 0, actionIndex: 0, eligibleAdvance: false });
         }
         return 'applied';
     }
@@ -426,22 +480,20 @@ export class Enemy extends MapObject {
     }
 
     /**
-     * onAction の効果を走査し、行動を上書きするディレクティブを返す
-     * 現状は _action: skip のみサポート
+     * 有効な onAction 効果を集約し、その手番の敵ディレクティブを返す（純粋・副作用なし）。
      */
-    getActionDirective(): 'skip' | null {
-        const effectsLoader = EffectsLoader.getInstance();
+    getActionDirective(): AggregatedDirective {
+        return aggregateDirective(
+            this.activeStatusEffects,
+            (name) => EffectsLoader.getInstance().getCompiledEffect(name)?.onAction ?? [],
+        );
+    }
+
+    /** 行動決定時（act 冒頭）に呼び、有効な効果へ actionIndex 前進の印を付ける（Player と同形式）。 */
+    markStatusEffectsActionEligible(): void {
         for (const entry of this.activeStatusEffects) {
-            const compiled = effectsLoader.getCompiledEffect(entry.name);
-            if (!compiled) continue;
-            for (const spec of compiled.onAction) {
-                if (spec.target === '_action') {
-                    const v = Enemy.literalValueOf(spec);
-                    if (v === 'skip') return 'skip';
-                }
-            }
+            entry.eligibleAdvance = true;
         }
-        return null;
     }
 
     /**
@@ -482,6 +534,11 @@ export class Enemy extends MapObject {
         const remaining: ActiveStatusEffect[] = [];
         for (const entry of this.activeStatusEffects) {
             entry.count++;
+            // onAction の actionIndex は行動決定時に印が付いた効果のみ前進（Player と同形式）
+            if (entry.eligibleAdvance) {
+                entry.actionIndex++;
+                entry.eligibleAdvance = false;
+            }
             const compiled = effectsLoader.getCompiledEffect(entry.name);
             let cleared = false;
             if (compiled?.clearFormula) {
@@ -626,7 +683,7 @@ export class Enemy extends MapObject {
         clone.lastEnteredFrom = this.lastEnteredFrom ? { ...this.lastEnteredFrom } : null;
         clone.blockedCells = this.blockedCells ? [ ...this.blockedCells ] : [];
         clone.randomWalkCount = this.randomWalkCount;
-        clone.activeStatusEffects = this.activeStatusEffects.map(e => ({ name: e.name, count: e.count }));
+        clone.activeStatusEffects = this.activeStatusEffects.map(e => ({ name: e.name, count: e.count, actionIndex: e.actionIndex, eligibleAdvance: false }));
         return clone;
     }
 
@@ -680,7 +737,7 @@ export class Enemy extends MapObject {
             maxStats: Object.fromEntries(this.maxStats),
             isDead: this.isDead,
             target: this.target ? { ...this.target } : null,
-            activeStatusEffects: this.activeStatusEffects.map(e => ({ name: e.name, count: e.count })),
+            activeStatusEffects: this.activeStatusEffects.map(e => ({ name: e.name, count: e.count, actionIndex: e.actionIndex })),
             activeContinuousEffects: this.continuousEffects.serialize(),
         };
     }
@@ -703,7 +760,7 @@ export class Enemy extends MapObject {
         const effectsLoader = EffectsLoader.getInstance();
         for (const e of activeStatusEffects ?? []) {
             if (effectsLoader.hasEffect(e.name)) {
-                this.activeStatusEffects.push({ name: e.name, count: e.count });
+                this.activeStatusEffects.push({ name: e.name, count: e.count, actionIndex: e.actionIndex ?? 0, eligibleAdvance: false });
             } else {
                 console.warn(`Unknown status effect in save data, skipped: ${e.name}`);
             }

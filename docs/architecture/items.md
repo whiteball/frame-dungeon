@@ -164,13 +164,17 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 
 発動タイミング：
 
-- `onAction`：行動主体（プレイヤー／敵）の入力受付前。`_action: skip` で行動スキップを指示できる
+- `onAction`：行動主体（プレイヤー／敵）の行動入力時。`_action` で行動を**強制**または**禁止**できる
 - `onTurnEnd`：ターン終了時（`dispatchObjectEvent` 内、`tickContinuousEffects` の後）
 - `permanent`：常時（`Player.getEffectiveStat` 計算時に formula を順次適用）
 
-特殊 target：
+特殊 target `_action`：
 
-- `_action: skip`：プレイヤーの W/Space 入力／敵の `act()` を無視してターン消費（麻痺・睡眠）。Player は `getPlayerActionDirective`、Enemy は `getActionDirective` で参照
+- `value` はアクションノード（文字列 / `[verb, arg]` / `[random|repeat, [...]]`）の単体またはリスト。データ仕様の全リストは [MANUAL_DEV.md](../../MANUAL_DEV.md) の「`target: _action`」節を参照
+- 2 系統：**force**（`skip`/`attack`/`attack_self`/`move`/`use_item`/`equip`/`unequip`/`use_skill` ＝入力を上書きしてターン消費）と **forbid**（`not_move`/`not_skill`/`not_attack`/`not_action` ＝一部入力を拒否・ターン非消費）
+- 解決は純粋関数 `src/lib/effects/StatusActionResolver.ts`（`aggregateDirective`）。Player は `getPlayerActionDirective`、Enemy は `getActionDirective` が呼び、戻り値は `{ forbid: Map<category,msg>, force? }`
+- リスト選択は効果ごとの `actionIndex`（後述）。実行は Player=`src/lib/map/ForcedActionExecutor.ts`、Enemy=`Enemy.executeForce`。入力ゲートウェイは `Game.handlePlayerActionDirective(category)` に集約し、メニュー操作（アイテム/装備/スキル/足下）も `ItemListController.blockByDirective` で gating する
+- 複数効果同時付与：forbid は和集合、force は付与順で最初の 1 つ。force のカテゴリが forbid に入れば `skip` へ降格。敵では item/equip/skill 系 force と `not_skill` は無効（skip 扱い）
 
 `clear` セクション：
 
@@ -183,8 +187,9 @@ modifier formula 内の `power` 等の名前は元値（preModValue）を参照�
 
 - `applyStatusEffect(name)`：効果を付与。同名効果が既にあれば `count` を 0 にリセット（重複は 1 エントリのみ）。戻り値は `'applied' | 'resisted' | 'unknown'`（`getEffectiveResists()` に含まれる effect は `'resisted'` を返して付与しない）
 - `getEffectiveResists()`：装備 + 持続効果 + 付与中 status effect の `resist` を集約した `Set<string>`
-- `getPlayerActionDirective()`：`_action: skip` などのディレクティブを返す
-- `tickStatusEffects()`：onTurnEnd 効果適用 → `count++` → clear 判定。`MapObjectStore.dispatchEvent` から呼ばれる
+- `getPlayerActionDirective()`：有効な `_action` 効果を集約した `AggregatedDirective`（`{ forbid, force }`）を返す純粋関数。UI / パッシブ判定が何度呼んでも `actionIndex` は進まない
+- `markStatusEffectsActionEligible()`：行動決定時に呼び、有効効果へ「次の tick で `actionIndex` 前進可」の印を付ける（罠等の当該手番付与は対象外＝先頭要素が飛ばない）
+- `tickStatusEffects()`：onTurnEnd 効果適用 → `count++`／印付き効果は `actionIndex++` → clear 判定。`MapObjectStore.dispatchEvent` から呼ばれる
 - `notifyDamageTaken()`：被弾時に `clear.onDamage: true` のエントリを即座に解除。`Enemy` の around-1 攻撃ハンドラから呼ばれる
 - `getEffectiveStat(key)`：base + 装備 + 持続効果ボーナスに加え、`permanent` 効果の formula を順次適用した値を返す
 - `getActiveStatusEffects()`：UI 表示用のスナップショット（label, description, count）
@@ -197,17 +202,18 @@ Player と同じシグネチャ・同じ意味で以下を実装：
 - `getEffectiveResists()`（definition.resist + 持続効果の resist + 付与中 effect 自身の resist を集約）
 - `getEffectiveStat(key)` / `getEffectiveFormulaVars()`（base → continuous ボーナス → permanent 効果 formula の順で反映した実効値。装備は持たないが、continuous は Player と同形式で持つ）
 - `applyContinuousEffect(effect, sourceLabel)` / `tickContinuousEffects()`：Player と同形式の持続効果。`ContinuousEffectManager` に委譲。投擲消費アイテムの `continuous` 付与と `MapGenerator.tickEnemies()` のターン進行で使用
-- `getActionDirective()`：`_action: skip` で `'skip'` を返す。`Enemy.act()` 先頭で評価し、stun / sleep 中の敵は移動・攻撃をスキップ
+- `getActionDirective()` / `markStatusEffectsActionEligible()` / `executeForce()`：Player と同形式。`Enemy.act()` 先頭で評価し、force なら `executeForce`（item/equip/skill 系は skip 扱い・`attack_self` で自滅した敵は `tickEnemies` が回収）、forbid なら攻撃/移動を制限
 - `tickStatusEffects()`：Player と同じく onTurnEnd → count++ → clear 判定。`MapGenerator.tickEnemies()` から `enemy.act()` 後に呼ばれ、結果は message-log に流される
 - `notifyDamageTaken()`：`Enemy.damage()` の内部から呼ばれる。`takeDamageFromPlayer()` は `{ dealt, cleared }` を返し、呼び出し側（AttackAction / DamageAction）がログを出す
 - `Enemy.calculateDamageToPlayer` / `takeDamageFromPlayer` は実効値経路。`DamageAction` の formula 評価でも `target_<stat>` は実効値を渡す
 - tick 経過で敵が死亡した場合は `MapGenerator.tickEnemies()` がマップから除去するが、経験値は付与しない（プレイヤーが直接倒したわけではないため）
 
-### `count` の進行ルール
+### `count` / `actionIndex` の進行ルール
 
-- 効果適用時は `count = 0`
-- `tickStatusEffects` の処理順序：(1) onTurnEnd を `count` 現在値で適用 → (2) `count++` → (3) clear 判定
+- 効果適用時は `count = 0` / `actionIndex = 0`
+- `tickStatusEffects` の処理順序：(1) onTurnEnd を `count` 現在値で適用 → (2) `count++`（印付き効果は `actionIndex++` も）→ (3) clear 判定
 - 例：stun の `count > 1 ? 1 : 0` は適用ターン末で `count=1`（解除されず）、次ターン onAction で skip → そのターン末で `count=2`（解除）→ "1 ターン動けない" と一致
+- `actionIndex` は **`_action` リストの選択専用**で `count` とは独立。前進は「その効果が行動を支配した手番」のみ（`markStatusEffectsActionEligible` の印 → tick で前進）。付与した手番では印が付かないため、罠で自己付与しても先頭要素 `value[0]` が必ず最初に使われる。セーブ対象（旧セーブは 0 復元）
 
 ### デバッグ用付与
 

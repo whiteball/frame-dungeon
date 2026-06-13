@@ -352,12 +352,12 @@ UI 連携：`Game.buildSkillListPayload` が各スキルについて `evaluateCo
 
 ## 状態異常との相互作用
 
-プレイヤーが `_action: skip` ディレクティブを持つ状態異常（麻痺・睡眠等）にかかっている間はスキル発動も封じられる。W/Space キーの既存挙動と整合させた「動けない！」+ 1 ターン消費の扱いで、防御を 2 段で構成する：
+プレイヤーが `_action` の **force（skip など）** または **forbid（`not_skill`/`not_attack`/`not_action`）** に該当する状態異常にかかっている間はスキル発動が封じられる（`_action` 全般の仕様は [items.md](./items.md) 参照）。防御を 2 段で構成する：
 
-- **UI 側ガード**：`Game.buildSkillListPayload` がスタンを検出してスキル一覧の全項目を `disabled = true, disabledReason: '動けない'` に設定する。スタンはコスト不足判定より優先（ツールチップ上も「動けない」が表示）。プレイヤーは項目を見られるが click / dblclick / Enter で発動できない（`confirmSelect` の `it.disabled` 早期 return）
-- **ライブラリ側ガード**：`PlayerActions.useSkill` の冒頭でも `Player.getPlayerActionDirective()` を検査し、スタン中は「動けない！」ログ発行 + `dispatchObjectEvent` でターン消費して return する。DevTools 等から直接 `dungeon.useSkill` を呼んだ場合も同じく無効化される
+- **UI 側ガード**：`ItemListController.buildSkillListPayload` がディレクティブ（force あり or forbid が `skill` を含む）を検出してスキル一覧の active 項目を `disabled = true, disabledReason: '動けない'` に設定する（コスト不足判定より優先）。`use-skill` ハンドラ側も `blockByDirective('skill')` で active 発動を拒否（toggle 切替は対象外）
+- **ライブラリ側**：判定は入力ゲートウェイ（`Game.handlePlayerActionDirective` / `ItemListController`）へ集約済み。`PlayerActions.useSkill` 自体は中核処理として skip ガードを持たない（強制 `use_skill` から直接呼べるようにするため）。`isPlayerPassiveBlocked` は force が `skip` に解決されるときのみ true（既存スタン挙動を維持）
 
-スタン解除は既存の状態異常システム（`Player.tickStatusEffects` / `effects.yml` の `clear.formula`）に従う。
+解除は既存の状態異常システム（`Player.tickStatusEffects` / `effects.yml` の `clear.formula`）に従う。
 
 ## スキル発動 UI フロー
 

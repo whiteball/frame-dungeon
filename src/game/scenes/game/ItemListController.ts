@@ -6,6 +6,7 @@ import { formatItemTypeLabel, formatItemEffect } from '../../../lib/ItemDescript
 import { ItemObject } from '../../../lib/map/MapObjects';
 import type { Item } from '../../../lib/Item';
 import type { MapObject } from '../../../lib/MapObject';
+import type { ActionCategory } from '../../../lib/effects/StatusActionResolver';
 import type { Game } from '../Game';
 
 export type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw' | 'inventory';
@@ -62,6 +63,7 @@ export class ItemListController {
         EventBus.removeAllListeners('drop-item');
 
         EventBus.on('use-item', (payload: { instanceId: string }) => {
+            if (this.blockByDirective('item')) return;
             // executeSkill が target='front' のスキルなら方向選択モードへ移行する。
             // 確定でアイテム消費 + スキル発動、キャンセルでアイテム非消費・モード解除のみ。
             const item = this.game.player.getInventory().getItemById(payload.instanceId);
@@ -95,6 +97,9 @@ export class ItemListController {
                 return;
             }
 
+            // active スキルの発動は skip/禁止で封じる（toggle 切替は上で処理済みなので影響しない）
+            if (this.blockByDirective('skill')) return;
+
             if (def.target === 'front' || def.target === 'straight') {
                 // リストを閉じて方向選択モードに移行（front=隣接 / straight=射線方向。UI は共通）
                 this.closeList();
@@ -113,6 +118,7 @@ export class ItemListController {
         });
 
         EventBus.on('equip-item', (payload: { instanceId: string }) => {
+            if (this.blockByDirective('equip')) return;
             const result = this.game.dungeon.changeEquipment(payload.instanceId);
             if (result.success) {
                 this.reopenCurrentList();
@@ -121,6 +127,7 @@ export class ItemListController {
         });
 
         EventBus.on('throw-item', (payload: { instanceId: string }) => {
+            if (this.blockByDirective('item')) return;
             // リストを閉じて投擲方向選択モードへ移行。確定で throwItem、キャンセルで何もしない。
             this.closeList();
             this.game.enterThrowTargetSelectMode(payload.instanceId);
@@ -193,6 +200,20 @@ export class ItemListController {
      * - 足下にイベント対象オブジェクトがあれば dispatchSelfEvent でターン非消費発火
      * - 何もなければ drop 一覧（設置フロー）を開く
      */
+    /**
+     * onAction ディレクティブにより、指定カテゴリのメニュー操作を弾くべきか判定する。
+     * force 中（自由行動不可）または該当カテゴリが forbid されていればメッセージを出して true。
+     * 強制行動自体は移動/攻撃キーのゲートウェイで発火するため、メニューでは実行せず拒否のみ。
+     */
+    private blockByDirective(category: ActionCategory): boolean {
+        const d = this.game.player.getPlayerActionDirective();
+        if (d.force || d.forbid.has(category)) {
+            EventBus.emit('message-log', d.forbid.get(category) ?? '今はそれができない！', this.game.dungeon.getTurnCount());
+            return true;
+        }
+        return false;
+    }
+
     onUnderfoot(): void {
         if (this.listMode === 'drop') {
             this.closeList();
@@ -201,6 +222,8 @@ export class ItemListController {
         if (this.listMode !== null) {
             this.closeList();
         }
+        // 足下の調査系ギミック発火 / 設置リストは investigate カテゴリ。skip/禁止中は弾く。
+        if (this.blockByDirective('investigate')) return;
         const dispatched = this.game.dungeon.dispatchSelfEvent();
         if (!dispatched) {
             this.openList('drop');
@@ -342,7 +365,9 @@ export class ItemListController {
     }
 
     private buildSkillListPayload(skillNames: string[]): SkillListEntry[] {
-        const stunned = this.game.player.getPlayerActionDirective() === 'skip';
+        // skip（force あり）または禁止が skill を含むとき、active スキルは発動不可表示にする
+        const directive = this.game.player.getPlayerActionDirective();
+        const stunned = !!directive.force || directive.forbid.has('skill');
         const loader = SkillsLoader.getInstance();
         const result: SkillListEntry[] = [];
         for (const name of skillNames) {

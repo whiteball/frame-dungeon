@@ -1340,7 +1340,13 @@ export class DungeonMap {
     for (const enemy of enemies) {
       if (!enemy.isAlive()) continue;
       enemy.act(this);
-      if (!enemy.isAlive()) continue;
+      if (!enemy.isAlive()) {
+        // act 中の自滅（強制 attack_self 等）で死亡した場合の回収
+        EventBus.emit('message-log', `${enemy.getLabel()}は力尽きた`, turn);
+        this.removeEnemy(enemy.x, enemy.y);
+        this._playerInstance?.incrementEnemiesDefeated();
+        continue;
+      }
 
       const result = enemy.tickStatusEffects();
       for (const a of result.applied) {

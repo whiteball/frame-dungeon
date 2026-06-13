@@ -129,7 +129,9 @@ export function executePlayerOnDamageSkill(
  * - passive（常時 stat 修飾）は別経路（getEffectiveStat 内）で常時適用される
  */
 export function isPlayerPassiveBlocked(player: Player): boolean {
-    return player.getPlayerActionDirective() === 'skip';
+    // 完全行動不能（force が skip に解決される）ときのみパッシブを抑制（既存スタン挙動を維持）。
+    // 他の強制行動（attack/use_skill 等）は中核処理が通常のパッシブ hook を発火する。
+    return player.getPlayerActionDirective().force?.verb === 'skip';
 }
 
 /**

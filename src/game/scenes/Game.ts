@@ -11,6 +11,8 @@ import { GameDataLoader } from '../../lib/GameDataLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { getFrontCandidates } from '../../lib/skills/TargetResolver';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
+import { executePlayerForce } from '../../lib/map/ForcedActionExecutor';
+import type { ActionCategory } from '../../lib/effects/StatusActionResolver';
 import { setupDebugCommands } from './game/GameDebugCommands';
 import { populateFloor } from './game/FloorPopulator';
 import { SceneModeController } from './game/SceneModeController';
@@ -22,6 +24,16 @@ import { BaseLoader } from '../../lib/BaseLoader';
 import { YamlCrossValidator } from '../../lib/YamlCrossValidator';
 import type { SaveData } from '../../lib/SaveManager';
 import type { DungeonRestoreCallbacks } from '../../lib/MapGenerator';
+
+/** 禁止系（not_*）で行動を弾いたときの既定メッセージ（effects.yml で引数指定があればそちら優先）。 */
+const DEFAULT_FORBID_MESSAGE: Record<ActionCategory, string> = {
+    move: '動けない！',
+    attack: '攻撃できない！',
+    skill: 'スキルが使えない！',
+    item: 'アイテムが使えない！',
+    equip: '装備を変えられない！',
+    investigate: '調べられない！',
+};
 
 export class Game extends Scene {
     keys: {
@@ -214,12 +226,12 @@ export class Game extends Scene {
                 return;
             }
             if (this.mode.isModalMode) return;
-            if (this.handlePlayerActionDirective()) return;
+            if (this.handlePlayerActionDirective('move')) return;
             this.executeAction(() => this.dungeon.goPlayer() > 0);
         })
         this.keys.keySpace?.on('down', (event: KeyboardEvent) => {
             if (this.mode.isModalMode) return;
-            if (this.handlePlayerActionDirective()) return;
+            if (this.handlePlayerActionDirective('attack')) return;
             this.tryAttackOrShowDirections(event.shiftKey);
         })
         this.keys.keyA?.on('down', () => {
@@ -230,7 +242,7 @@ export class Game extends Scene {
             }
             if (this.mode.isModalMode) return;
             if (this.swapQEandAD) {
-                if (this.handlePlayerActionDirective()) return;
+                if (this.handlePlayerActionDirective('move')) return;
                 this.executeAction(() => this.dungeon.goLeftPlayer() > 0);
             } else {
                 this.executeAction(() => this.dungeon.turnLeftPlayer());
@@ -245,7 +257,7 @@ export class Game extends Scene {
             if (this.mode.isModalMode) return;
             const doStrafeBack = this.swapSandShiftS ? !event.shiftKey : event.shiftKey;
             if (doStrafeBack) {
-                if (this.handlePlayerActionDirective()) return;
+                if (this.handlePlayerActionDirective('move')) return;
                 this.executeAction(() => this.dungeon.goBackPlayer() > 0);
             } else {
                 this.executeAction(() => this.dungeon.turnBackPlayer());
@@ -259,7 +271,7 @@ export class Game extends Scene {
             }
             if (this.mode.isModalMode) return;
             if (this.swapQEandAD) {
-                if (this.handlePlayerActionDirective()) return;
+                if (this.handlePlayerActionDirective('move')) return;
                 this.executeAction(() => this.dungeon.goRightPlayer() > 0);
             } else {
                 this.executeAction(() => this.dungeon.turnRightPlayer());
@@ -270,7 +282,7 @@ export class Game extends Scene {
             if (this.swapQEandAD) {
                 this.executeAction(() => this.dungeon.turnRightPlayer());
             } else {
-                if (this.handlePlayerActionDirective()) return;
+                if (this.handlePlayerActionDirective('move')) return;
                 this.executeAction(() => this.dungeon.goRightPlayer() > 0);
             }
         })
@@ -279,7 +291,7 @@ export class Game extends Scene {
             if (this.swapQEandAD) {
                 this.executeAction(() => this.dungeon.turnLeftPlayer());
             } else {
-                if (this.handlePlayerActionDirective()) return;
+                if (this.handlePlayerActionDirective('move')) return;
                 this.executeAction(() => this.dungeon.goLeftPlayer() > 0);
             }
         })
@@ -298,7 +310,7 @@ export class Game extends Scene {
 
         this.keys.keyC?.on('down', () => {
             if (this.mode.isModalMode) return;
-            if (this.handlePlayerActionDirective()) return;
+            if (this.handlePlayerActionDirective('investigate')) return;
             this.interaction.trySearch();
         })
 
@@ -536,17 +548,28 @@ export class Game extends Scene {
     }
 
     /**
-     * プレイヤー行動ディレクティブ（onAction の状態異常効果）を処理する
-     * skip ディレクティブの場合は空アクションでターン消費し true を返す
-     * @returns ディレクティブにより通常アクションをスキップした場合 true
+     * プレイヤー行動ディレクティブ（onAction の状態異常効果）を処理する。
+     * - 強制（force）：意図入力を捨て、強制行動を実行してターン消費（true）
+     * - 禁止（forbid）：意図カテゴリが封じられていればメッセージのみ・ターン非消費（true）
+     * - それ以外：通常行動を許可（false）。ターン消費されれば tick で actionIndex 前進
+     * @param category 実行しようとしている行動カテゴリ
+     * @returns 通常アクションを行わせない（強制実行 or 拒否）場合 true
      */
-    private handlePlayerActionDirective(): boolean {
-        const directive = this.player?.getPlayerActionDirective();
-        if (directive === 'skip') {
-            EventBus.emit('message-log', '動けない！', this.dungeon.getTurnCount());
-            this.executeAction(() => { this.dungeon.dispatchObjectEvent(); return true; });
+    private handlePlayerActionDirective(category: ActionCategory): boolean {
+        if (!this.player) return false;
+        const directive = this.player.getPlayerActionDirective();
+        if (directive.force) {
+            this.player.markStatusEffectsActionEligible();
+            const force = directive.force;
+            this.executeAction(() => { executePlayerForce(this.dungeon, force); return true; });
             return true;
         }
+        if (directive.forbid.has(category)) {
+            const msg = directive.forbid.get(category) ?? DEFAULT_FORBID_MESSAGE[category];
+            EventBus.emit('message-log', msg, this.dungeon.getTurnCount());
+            return true;
+        }
+        this.player.markStatusEffectsActionEligible();
         return false;
     }
 

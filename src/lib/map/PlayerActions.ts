@@ -296,12 +296,8 @@ export function useSkill(
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
 
-  // スタン中（_action: skip）はスキル発動も封じる。W/Space と同じ「動けない！」処理
-  if (player.getPlayerActionDirective() === 'skip') {
-    EventBus.emit('message-log', '動けない！', dungeon.getTurnCount());
-    dungeon.dispatchObjectEvent();
-    return true;
-  }
+  // _action（skip/禁止）ガードは入力ゲートウェイ側に集約。ここは中核処理として
+  // 直接呼ばれる（強制 use_skill 実行を自己ブロックしないため）。
 
   if (!player.hasSkill(skillName)) return false;
   const compiled = SkillsLoader.getInstance().getCompiledSkill(skillName);
@@ -367,11 +363,7 @@ export function throwItem(
   const player = dungeon.getPlayerInstance();
   if (!player) return false;
 
-  if (player.getPlayerActionDirective() === 'skip') {
-    EventBus.emit('message-log', '動けない！', dungeon.getTurnCount());
-    dungeon.dispatchObjectEvent();
-    return true;
-  }
+  // _action（skip/禁止）ガードは入力ゲートウェイ側に集約（throw-item ハンドラで判定）。
 
   const inventory = player.getInventory();
   const item = inventory.getItemById(instanceId);

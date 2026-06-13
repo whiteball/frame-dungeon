@@ -76,3 +76,31 @@
   clear:
     formula: "count >= 30 ? 1 : 0"
   onExpire: death_curse_payload
+# 行動強制（force）の例: 混乱。onAction.value にアクションのリストを与えると、状態異常ごとの
+# actionIndex（0 起点）で順に選ばれる。リスト長を超えると末尾要素を繰り返す。末尾が repeat なら
+# そのサブリストを巡回する。force 系は移動キー等の入力を上書きしてターンを消費する。
+- name: confuse
+  label: 混乱
+  description: 意のままに動けず、勝手に行動してしまう
+  timing:
+    onAction:
+      target: _action
+      value:
+        - [skip, "ぼーっとしている"]
+        - attack
+        - [repeat, [move, attack_self]]
+  clear:
+    formula: "(count ^ 2) * 0.03"
+    onDamage: true
+# 行動禁止（forbid）の例: 拘束。not_* は一部カテゴリの入力を拒否する（ターン非消費）。
+# 引数付き単一アクションは、配列リテラル誤読を避けるため必ずリスト要素（- ...）で書く。
+- name: bound
+  label: 拘束
+  description: 足を捕らえられて動けない（攻撃やアイテムは可能）
+  timing:
+    onAction:
+      target: _action
+      value:
+        - [not_move, "拘束されていて動けない！"]
+  clear:
+    formula: "(count ^ 2) * 0.05"

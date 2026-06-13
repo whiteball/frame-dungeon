@@ -1,17 +1,19 @@
 import { Parser, type Expression } from 'expr-eval-fork';
 import { YamlDefinitionStore } from './YamlDefinitionStore';
 import { CustomDataStore } from './CustomDataStore';
+import { parseActionValue, type CompiledActionNode } from './effects/StatusActionResolver';
 
 /**
  * 効果（状態異常/強化）の単一ターゲット指定
  * - target: 変化対象パラメータ名。"_action" など "_" 始まりは特殊指定
  * - formula: 式（変数 x = 対象パラメータの現在値）
- * - value: リテラル値（formula と排他、_action: skip などで使用）
+ * - value: リテラル値（formula と排他）。`_action` の場合はアクションノード（文字列 /
+ *   `[verb, arg]` / `[random|repeat, [...]]` / それらのリスト）を表す
  */
 export interface EffectTargetSpec {
     target: string;
     formula?: string;
-    value?: string | number;
+    value?: string | number | unknown[];
 }
 
 /**
@@ -58,7 +60,9 @@ export type EffectTiming = 'onAction' | 'onTurnEnd' | 'permanent';
 interface CompiledTargetSpec {
     target: string;
     formula?: Expression;
-    value?: string | number;
+    value?: string | number | unknown[];
+    /** target === '_action' のとき、value を正規化したアクションツリー */
+    actionTree?: CompiledActionNode[];
 }
 
 interface CompiledEffect {
@@ -118,7 +122,15 @@ export class EffectsLoader {
                         console.warn(`Failed to parse formula "${s.formula}" in effect "${def.name}":`, e);
                     }
                 }
-                return { target: s.target, formula, value: s.value };
+                let actionTree: CompiledActionNode[] | undefined;
+                if (s.target === '_action' && s.value !== undefined) {
+                    const { tree, errors } = parseActionValue(s.value);
+                    if (errors.length > 0) {
+                        console.warn(`Invalid _action value in effect "${def.name}":`, errors);
+                    }
+                    actionTree = tree;
+                }
+                return { target: s.target, formula, value: s.value, actionTree };
             });
         };
 

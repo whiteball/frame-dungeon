@@ -4,6 +4,7 @@ import { Inventory } from './Inventory';
 import { Item } from './Item';
 import { ItemsLoader, type ImmediateEffect, type ContinuousEffect, type RemoveModifierKindSpec } from './ItemsLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
+import { aggregateDirective, type AggregatedDirective } from './effects/StatusActionResolver';
 import { BaseLoader } from './BaseLoader';
 import { SkillsLoader } from './SkillsLoader';
 import { ItemModifiersLoader } from './ItemModifiersLoader';
@@ -13,6 +14,14 @@ import type { PlayerSaveData } from './SaveManager';
 export interface ActiveStatusEffect {
     name: string;
     count: number;
+    /** onAction リストの選択インデックス（共有 count とは独立・付与時 0）。 */
+    actionIndex: number;
+    /**
+     * 次の tick で actionIndex を前進させてよいか。
+     * 行動決定時（入力ゲートウェイ / Enemy.act 冒頭）に true をセットし、tick で前進＆リセット。
+     * 罠等でその手番中に新規付与された効果は false のままなので先頭要素が飛ばない。非シリアライズ。
+     */
+    eligibleAdvance: boolean;
 }
 
 export type ApplyStatusEffectResult = 'applied' | 'resisted' | 'unknown';
@@ -402,13 +411,6 @@ export class Player {
     }
 
     /**
-     * spec.value をリテラル文字列として取得（_action: skip など）
-     */
-    private static literalValueOf(spec: CompiledTargetSpec): string | number | null {
-        return spec.value ?? null;
-    }
-
-    /**
      * 装備・持続効果・付与中 status effect の resist を集約し、
      * 「現在新規付与を阻止する effect 名」の集合を返す
      */
@@ -447,28 +449,33 @@ export class Player {
         const existing = this.activeStatusEffects.find(e => e.name === name);
         if (existing) {
             existing.count = 0;
+            existing.actionIndex = 0;
+            existing.eligibleAdvance = false;
         } else {
-            this.activeStatusEffects.push({ name, count: 0 });
+            this.activeStatusEffects.push({ name, count: 0, actionIndex: 0, eligibleAdvance: false });
         }
         return 'applied';
     }
 
     /**
-     * onAction の効果を走査し、プレイヤーの行動を上書きするディレクティブを返す
-     * 現状は _action: skip のみサポート
+     * 有効な onAction 効果を集約し、その手番のプレイヤーディレクティブを返す（純粋・副作用なし）。
+     * UI 表示・パッシブ判定が何度呼んでも actionIndex は進まない。
      */
-    getPlayerActionDirective(): 'skip' | null {
+    getPlayerActionDirective(): AggregatedDirective {
+        return aggregateDirective(
+            this.activeStatusEffects,
+            (name) => EffectsLoader.getInstance().getCompiledEffect(name)?.onAction ?? [],
+        );
+    }
+
+    /**
+     * 行動決定時に呼び、現在有効な status effect へ「次の tick で actionIndex を前進してよい」印を付ける。
+     * 罠等でこの後に付与される効果はこの時点で未存在なので印が付かず、先頭要素 value[0] が飛ばない。
+     */
+    markStatusEffectsActionEligible(): void {
         for (const entry of this.activeStatusEffects) {
-            const compiled = EffectsLoader.getInstance().getCompiledEffect(entry.name);
-            if (!compiled) continue;
-            for (const spec of compiled.onAction) {
-                if (spec.target === '_action') {
-                    const v = Player.literalValueOf(spec);
-                    if (v === 'skip') return 'skip';
-                }
-            }
+            entry.eligibleAdvance = true;
         }
-        return null;
     }
 
     /**
@@ -512,6 +519,12 @@ export class Player {
         const remaining: ActiveStatusEffect[] = [];
         for (const entry of this.activeStatusEffects) {
             entry.count++;
+            // onAction の actionIndex は「行動決定時に有効だった効果」のみ前進（eligibleAdvance）。
+            // その手番中に新規付与（罠等）された効果は印が無いので前進せず、先頭要素が飛ばない。
+            if (entry.eligibleAdvance) {
+                entry.actionIndex++;
+                entry.eligibleAdvance = false;
+            }
             const compiled = EffectsLoader.getInstance().getCompiledEffect(entry.name);
             let cleared = false;
             if (compiled?.clearFormula) {
@@ -1033,6 +1046,7 @@ export class Player {
             activeStatusEffects: this.activeStatusEffects.map(e => ({
                 name: e.name,
                 count: e.count,
+                actionIndex: e.actionIndex,
             })),
             learnedSkills: Array.from(this.learnedSkills),
             disabledSkills: Array.from(this.disabledSkills),
@@ -1073,6 +1087,8 @@ export class Player {
         this.activeStatusEffects = data.activeStatusEffects.map(e => ({
             name: e.name,
             count: e.count,
+            actionIndex: e.actionIndex ?? 0,
+            eligibleAdvance: false,
         }));
 
         // 習得スキル復元（旧セーブには存在しないため ?? [] で互換、未定義スキル名は警告 + スキップ）

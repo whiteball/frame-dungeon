@@ -134,4 +134,4 @@
 3. 消費アイテム（throwEffect 無し）→ `immediate` の `applyEffect` / `clearEffect` / 数値 stat を敵へ転用（利敵も許容）。加えて `continuous`（数ターンの能力値変動／耐性）も `Enemy.applyContinuousEffect` で敵に付与し、`MapGenerator.tickEnemies()` でターン進行する（`弱体の薬` 等で敵をデバフ可能）
 4. 防具・その他 → 投げ損（消滅のみ）
 
-敵撃破時はマップ除去・撃破数・経験値・レベルアップ・ドロップ（`tryEnemyDrop`）を AttackAction / DamageAction と同等に処理します（`awardEnemyDefeat`）。スタン中（`_action: skip`）は「動けない！」でターン消費し投擲しません。
+敵撃破時はマップ除去・撃破数・経験値・レベルアップ・ドロップ（`tryEnemyDrop`）を AttackAction / DamageAction と同等に処理します（`awardEnemyDefeat`）。投擲は `_action` の force（skip など）/ forbid（`not_action` 等で `item` カテゴリ封鎖）中は `throw-item` ハンドラの `blockByDirective('item')` で弾かれます（`_action` 全般は [items.md](./items.md) 参照）。
