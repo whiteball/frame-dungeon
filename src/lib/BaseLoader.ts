@@ -205,6 +205,10 @@ export class BaseLoader {
     private compiledScheduledEvents: CompiledScheduledEvent[] = [];
     private autoSpawnerFormula: Expression | null = null;
     private playerInitialStats: Map<string, number> = new Map();
+    /** プレイヤーが最初から習得しているスキル名（`skills.yml` の name）。重複は除外する */
+    private playerInitialSkills: string[] = [];
+    /** プレイヤーが最初から所持しているアイテム（`items.yml` の name → 個数）。string 指定は count 1 に正規化 */
+    private playerInitialItems: { name: string; count: number }[] = [];
     private _longStayMessages: string[] | null = null;
     private _longStayFactor: number = 4;
     /** アイテム投擲の射程（セル数）。0 以下なら無制限。装備/パッシブで延長される基準値 */
@@ -391,7 +395,34 @@ export class BaseLoader {
 
             if (parsed.playerInitialStats && typeof parsed.playerInitialStats === 'object') {
                 for (const [key, value] of Object.entries(parsed.playerInitialStats)) {
-                    if (typeof value === 'number') {
+                    if (key === 'skills') {
+                        // 初期習得スキル名の配列。重複は除外（learnSkill は冪等だが定義として無意味なため）
+                        if (Array.isArray(value)) {
+                            for (const s of value) {
+                                if (typeof s === 'string' && s && !this.playerInitialSkills.includes(s)) {
+                                    this.playerInitialSkills.push(s);
+                                }
+                            }
+                        }
+                    } else if (key === 'items') {
+                        // 初期所持アイテム。string なら count 1、{ name, count } で個数指定可
+                        if (Array.isArray(value)) {
+                            for (const entry of value) {
+                                if (typeof entry === 'string' && entry) {
+                                    this.playerInitialItems.push({ name: entry, count: 1 });
+                                } else if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+                                    const name = (entry as { name?: unknown }).name;
+                                    const rawCount = (entry as { count?: unknown }).count;
+                                    if (typeof name === 'string' && name) {
+                                        const count = typeof rawCount === 'number' && isFinite(rawCount) && rawCount > 0
+                                            ? Math.floor(rawCount)
+                                            : 1;
+                                        this.playerInitialItems.push({ name, count });
+                                    }
+                                }
+                            }
+                        }
+                    } else if (typeof value === 'number') {
                         this.playerInitialStats.set(key, value);
                     }
                 }
@@ -563,6 +594,21 @@ export class BaseLoader {
 
     getPlayerInitialStat(statName: string): number {
         return this.playerInitialStats.get(statName) ?? 0;
+    }
+
+    /** プレイヤーが最初から習得しているスキル名の配列（重複除外済み）。コピーを返す */
+    getPlayerInitialSkills(): string[] {
+        return [...this.playerInitialSkills];
+    }
+
+    /** プレイヤーが最初から所持しているアイテム（name → count）の配列。コピーを返す */
+    getPlayerInitialItems(): { name: string; count: number }[] {
+        return this.playerInitialItems.map(e => ({ ...e }));
+    }
+
+    /** 初期所持アイテムの合計個数（インベントリ上限検証用） */
+    getPlayerInitialItemTotalCount(): number {
+        return this.playerInitialItems.reduce((sum, e) => sum + e.count, 0);
     }
 
     getName(): string {

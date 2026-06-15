@@ -2,13 +2,20 @@ import { Item } from './Item';
 import type { ItemType } from './ItemsLoader';
 
 /**
+ * プレイヤーインベントリの既定容量。`Player` の初期化と、
+ * `base.yml` の `playerInitialStats.items` が上限を超えていないか検証する
+ * `YamlCrossValidator` の双方が参照する単一の真実。
+ */
+export const DEFAULT_INVENTORY_CAPACITY = 20;
+
+/**
  * プレイヤーのインベントリを管理するクラス
  */
 export class Inventory {
     private items: Item[] = [];
     private capacity: number;
 
-    constructor(capacity: number = 20) {
+    constructor(capacity: number = DEFAULT_INVENTORY_CAPACITY) {
         this.capacity = capacity;
     }
 

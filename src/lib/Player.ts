@@ -1,7 +1,8 @@
 
 import { StatsLoader } from './StatsLoader';
-import { Inventory } from './Inventory';
+import { Inventory, DEFAULT_INVENTORY_CAPACITY } from './Inventory';
 import { Item } from './Item';
+import { ItemFactory } from './ItemFactory';
 import { ItemsLoader, type ImmediateEffect, type ContinuousEffect, type RemoveModifierKindSpec } from './ItemsLoader';
 import { EffectsLoader, type CompiledTargetSpec } from './EffectsLoader';
 import { aggregateDirective, type AggregatedDirective } from './effects/StatusActionResolver';
@@ -66,8 +67,9 @@ export class Player {
     constructor() {
         this.stats = new Map();
         this.maxStats = new Map();
-        this.inventory = new Inventory(20);
+        this.inventory = new Inventory(DEFAULT_INVENTORY_CAPACITY);
         this.initializeStats();
+        this.initializeLoadout();
     }
 
     private initializeStats(): void {
@@ -80,6 +82,25 @@ export class Player {
             const initialValue = this.getInitialValue(statName);
             this.stats.set(statName, initialValue);
             this.maxStats.set(statName, initialValue);
+        }
+    }
+
+    /**
+     * `base.yml` の `playerInitialStats.skills` / `items` に従って初期スキル・初期アイテムを付与する。
+     * スキル名/アイテム名の存在とアイテム合計数の上限超過は起動時の `YamlCrossValidator` で検証済みのため、
+     * ここでは存在しない定義や満杯による失敗は黙って無視する（防御的フォールバック）。
+     * セーブデータからのロード時は本処理後に `deserialize` がインベントリ/習得スキルを上書きする。
+     */
+    private initializeLoadout(): void {
+        const base = BaseLoader.getInstance();
+        for (const name of base.getPlayerInitialSkills()) {
+            this.learnSkill(name);
+        }
+        for (const { name, count } of base.getPlayerInitialItems()) {
+            for (let i = 0; i < count; i++) {
+                const item = ItemFactory.createItem(name);
+                if (item) this.inventory.addItem(item);
+            }
         }
     }
 

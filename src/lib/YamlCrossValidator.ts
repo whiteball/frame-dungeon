@@ -9,6 +9,7 @@ import { ItemModifiersLoader } from './ItemModifiersLoader';
 import { EventsLoader } from './EventsLoader';
 import type { EventActionEntry, EventChoice, RandomOutcomeEntry } from './EventsLoader';
 import { validateActionValue } from './effects/StatusActionResolver';
+import { DEFAULT_INVENTORY_CAPACITY } from './Inventory';
 
 export interface ValidationResult {
     errors: string[];
@@ -70,6 +71,25 @@ export class YamlCrossValidator {
         }
 
         // ─── ERRORレベル: クロスYAML参照 ──────────────────────────────────────────
+
+        // base.yml playerInitialStats.skills / items → skills.yml / items.yml
+        // 初期スキル・初期アイテムの存在チェックと、初期アイテム合計数のインベントリ上限チェック。
+        const initialSkills = base.getPlayerInitialSkills();
+        for (let i = 0; i < initialSkills.length; i++) {
+            if (!skills.hasSkill(initialSkills[i])) {
+                errors.push(`base.yml playerInitialStats.skills[${i}] "${initialSkills[i]}" が skills.yml に存在しません`);
+            }
+        }
+        const initialItems = base.getPlayerInitialItems();
+        for (let i = 0; i < initialItems.length; i++) {
+            if (!items.getItem(initialItems[i].name)) {
+                errors.push(`base.yml playerInitialStats.items[${i}] "${initialItems[i].name}" が items.yml に存在しません`);
+            }
+        }
+        const initialItemTotal = base.getPlayerInitialItemTotalCount();
+        if (initialItemTotal > DEFAULT_INVENTORY_CAPACITY) {
+            errors.push(`base.yml playerInitialStats.items: 初期アイテム合計数 ${initialItemTotal} がインベントリ上限 ${DEFAULT_INVENTORY_CAPACITY} を超えています`);
+        }
 
         // base.yml floors → enemies.yml / traps.yml / item_modifiers.yml
         for (const [floorKey, rawConfig] of base.getRawFloorConfigs()) {

@@ -33,6 +33,16 @@ story: |
   あなたは last floor に封じられし宝を求め、
   この危険なダンジョンへと足を踏み入れた――。
 
+# プレイヤーの開始時設定。各ステータスの初期値（未記載は 0）に加え、
+# skills（初期習得スキル名の配列）と items（初期所持アイテム）を指定できる。
+# items は文字列で個数 1、`{ name, count }` で個数指定可。アイテム合計数が
+# インベントリ上限（20）を超える、または存在しないスキル/アイテム名を指定すると
+# 起動時のクロスバリデーションでエラーになる。
+# skills:
+#   - double_attack
+# items:
+#   - potion
+#   - { name: mana potion, count: 3 }
 playerInitialStats:
   life: 100
   magic: 50

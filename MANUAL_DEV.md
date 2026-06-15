@@ -244,7 +244,7 @@ appearance:
   default: 50          # base が 50 の間はステータス画面に出さない
 ```
 
-各ステータスの**初期値**は `base.yml` の `playerInitialStats` で設定します（未記載は 0）。
+各ステータスの**初期値**は `base.yml` の `playerInitialStats` で設定します（未記載は 0）。`playerInitialStats` には初期習得スキル（`skills`）と初期所持アイテム（`items`）も指定できます（[5.2 base.yml](#52-baseyml--ゲーム全体設定) 参照）。
 
 ---
 
@@ -268,7 +268,27 @@ base.yml は項目数が多く、特にマップ生成系（隠し部屋・宝�
 | `floorLabelFormat` | string | 任意 | 階層表示の書式。`{floor}` を表示用フロア数値で置換。既定 `'{floor}F'`。例 `'B{floor}F'` → `B1F, B2F…`。情報パネル・移動/階段メッセージ・ステータス/リザルト・セーブ一覧すべてに適用。`{floor}` が無いと起動時に warn |
 | `floorDisplayFormula` | string\|formula | 任意 | 表示用フロア数値を求める数式（[`階層表示変数`](#3-数式変数リファレンスまとめ)）。未指定なら内部フロア値（1,2,…）をそのまま表示。例 `'goalFloor - currentFloor + 1'` → `10F,9F,…1F`（脱出テーマの降順）。結果は `Math.floor` で整数化のみ（下限クランプ無し＝負値もそのまま表示）。**表示専用でゲーム進行には影響しない** |
 | `clearMessage` | string | 任意 | ゴール到達メッセージ。`{floor}` を整形済みフロアラベルで置換。既定 `'{floor}の階段を登り切った！クリア！'`。降下/脱出テーマで「登り切った」が不適切なとき差し替える |
-| `playerInitialStats` | map | 任意 | 各ステータスの開始値（例 `{ life: 100, power: 10 }`）。未記載は 0 |
+| `playerInitialStats` | map | 任意 | 各ステータスの開始値（例 `{ life: 100, power: 10 }`）。未記載は 0。加えて `skills`（初期習得スキル名の配列）と `items`（初期所持アイテム）を指定可。下表参照 |
+
+`playerInitialStats` のステータス値以外に、以下の 2 キーで開始時の所持品を設定できます。
+
+| キー | 型 | 説明 |
+| --- | --- | --- |
+| `skills` | string[] | 初期習得スキル名の配列（`skills.yml` の `name`）。重複は無視。存在しない名前は起動時にバリデーションエラー |
+| `items` | array | 初期所持アイテム。要素は文字列（個数 1）または `{ name, count }`（個数指定）。存在しないアイテム名、または合計個数がインベントリ上限（20）超過で起動時にバリデーションエラー |
+
+```yaml
+playerInitialStats:
+  life: 100
+  power: 10
+  skills:
+    - double_attack
+  items:
+    - potion
+    - { name: mana potion, count: 3 }
+```
+
+> 初期アイテムはインベントリに追加されるだけで自動装備はされません。セーブデータからのロード時はセーブ内容が優先され、初期所持品は付与されません。
 | `defaultDamageStat` | string | ✅ | プレイヤーの死亡判定・トラップダメージ等の既定対象ステータス（通常 `life`） |
 | `defaultEnemyDamageStat` | string | 任意 | 敵側のダメージ対象。既定は `defaultDamageStat` |
 | `longStayFactor` | number | 任意 | フロア長居警告の規定ターン算出倍率。既定 `4`。詳細は data.md |
@@ -1024,6 +1044,7 @@ floors:
 - `items.yml` の `learnSkill` / `executeSkill` が `skills.yml` に存在するか（`executeSkill` はアクティブのみ）
 - `events.yml` の action 内参照（`give_item`/`consume_item`→items、`spawn_enemy`→enemies、`learn_skill`/`execute_skill`→skills、`add_modifier`→item_modifiers、`apply_effect`→effects、`mod_stat.stat`→stats 等）
 - `base.yml` の `scheduledEvents[].event` と `effects.yml` の `onExpire` が `events.yml` に存在し、かつ `action` / `random_outcome` 形式（`choices` 不可）か
+- `base.yml` の `playerInitialStats.skills` が `skills.yml`、`playerInitialStats.items` が `items.yml` に存在し、初期アイテム合計数がインベントリ上限（20）以下か
 - `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` が `effects.yml` に存在するか
 
 > ステータス名は `stats.yml` を基準に検査されます。`base.yml` の `throwRange` のような stats.yml 非登録の派生キーは、検査対象から除外されています（装備の `throwRange` 等）。

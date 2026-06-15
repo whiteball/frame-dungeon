@@ -79,7 +79,7 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | `floorLabelFormat` | 任意 | `'{floor}F'` | 階層表示の書式。`{floor}` を表示用フロア数値で置換（例 `'B{floor}F'` → B1F, B2F…）。情報パネル・フロア移動/階段メッセージ・ステータス/リザルト・セーブ一覧のすべてに適用。`{floor}` を含まない場合は起動時に warn。`BaseLoader.formatFloorLabel()` |
 | `floorDisplayFormula` | 任意 | `null`（=内部フロア値そのまま） | 表示用フロア数値を求める数式。利用可能変数 `currentFloor` / `goalFloor` / `maxFloor`（`maxFloor` は `goalFloor` の別名）。例 `'goalFloor - currentFloor + 1'`（脱出テーマで 10F→1F の降順表示）。結果は `Math.floor` で整数化のみ（下限クランプなし＝負値はそのまま表示）。**表示専用でゲームロジックには一切影響しない**（フロア構成参照・クリア判定・セーブ復元は内部フロア値を使用）。パース失敗時は warn して恒等にフォールバック |
 | `clearMessage` | 任意 | `'{floor}の階段を登り切った！クリア！'` | ゴール到達メッセージのテンプレート。`{floor}` は整形済みフロアラベルで置換。脱出/降下テーマで「登り切った」が不適切なとき差し替える。`BaseLoader.getClearMessage()` |
-| `playerInitialStats` | 任意 | 全ステータス `0` | `stats.yml` で定義した各ステータスの開始値（例: `life: 100`）。未記載ステータスは `0` |
+| `playerInitialStats` | 任意 | 全ステータス `0` | `stats.yml` で定義した各ステータスの開始値（例: `life: 100`）。未記載ステータスは `0`。加えて `skills`（初期習得スキル名の配列）/ `items`（初期所持アイテム。文字列または `{ name, count }`）を指定可。`Player` のコンストラクタが `initializeLoadout()` で `BaseLoader.getPlayerInitialSkills()` / `getPlayerInitialItems()` を読み付与する。存在しないスキル/アイテム名・合計個数がインベントリ上限（`DEFAULT_INVENTORY_CAPACITY=20`）超過は `YamlCrossValidator` がエラー化。`BaseLoader.getPlayerInitialStat()` |
 | `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
 | `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |
 | `regenerate` | 任意 | `[]`（自動回復なし） | 一定ターンごとの自動回復ルール配列。各要素 `{ target, turn, formula }`。後述「自動回復 (`regenerate`)」参照 |
@@ -363,6 +363,7 @@ autoSpawner:
 - `items.yml` の `effect.immediate.learnSkill` が `skills.yml` に存在するか
 - `events.yml` action 内のクロス参照（`give_item` / `consume_item` → items / `spawn_enemy` → enemies / `learn_skill` / `execute_skill` → skills / `add_modifier` → item_modifiers / `apply_effect.effect` → effects / `mod_stat.stat` → stats 等）
 - `base.yml` の `scheduledEvents[].event` と `effects.yml` の `onExpire` が `events.yml` に存在し、かつ `action` / `random_outcome` 形式（`choices` 不可）であるか
+- `base.yml` の `playerInitialStats.skills[]` が `skills.yml` に、`playerInitialStats.items[]` が `items.yml` に存在し、初期アイテム合計数が `DEFAULT_INVENTORY_CAPACITY`（20）以下であるか
 - `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` 要素が `effects.yml` に存在するか
 - `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
 
