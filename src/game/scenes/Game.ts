@@ -6,8 +6,12 @@ import { MainView } from '../../lib/MainView';
 import { MiniMapView } from '../../lib/MiniMapView';
 import { InfoView } from '../../lib/InfoView';
 import { EquipmentView } from '../../lib/EquipmentView';
-import { Player } from '../../lib/Player';
+import { Player, type PlayerCreationChoices } from '../../lib/Player';
 import { GameDataLoader } from '../../lib/GameDataLoader';
+import { StatsLoader } from '../../lib/StatsLoader';
+import { SkillsLoader } from '../../lib/SkillsLoader';
+import { ItemsLoader } from '../../lib/ItemsLoader';
+import type { CharacterPreset } from '../../lib/BaseLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { getFrontCandidates } from '../../lib/skills/TargetResolver';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
@@ -92,6 +96,71 @@ export class Game extends Scene {
         return this.closeListAfterAction;
     }
 
+    /**
+     * キャラメイク（プリセット選択）ダイアログを開き、選択結果を待つ。
+     * Vue 側へ表示用に整形したプリセット一覧を送り、`character-creation-confirmed`(index)
+     * または `character-creation-cancelled` の発火で解決する（リスナは解決時に自己掃除）。
+     * @returns 選択プリセットから組み立てた {@link PlayerCreationChoices}、キャンセル時は null
+     */
+    private runCharacterCreation(): Promise<PlayerCreationChoices | null> {
+        const base = BaseLoader.getInstance();
+        const presets = base.getCharacterPresets();
+        const prompt = base.getCharacterCreationPrompt() ?? 'キャラクターを選択してください';
+
+        return new Promise((resolve) => {
+            const cleanup = () => {
+                EventBus.removeListener('character-creation-confirmed', onConfirm);
+                EventBus.removeListener('character-creation-cancelled', onCancel);
+            };
+            const onConfirm = (index: number) => {
+                cleanup();
+                const preset = presets[index];
+                if (!preset) { resolve(null); return; }
+                resolve({
+                    statOverrides: { ...preset.stats },
+                    addSkills: [...preset.skills],
+                    addItems: preset.items.map(i => ({ ...i })),
+                });
+            };
+            const onCancel = () => {
+                cleanup();
+                resolve(null);
+            };
+            EventBus.on('character-creation-confirmed', onConfirm);
+            EventBus.on('character-creation-cancelled', onCancel);
+            EventBus.emit('open-character-creation', {
+                prompt,
+                presets: presets.map(p => this.buildPresetDisplay(p)),
+            });
+        });
+    }
+
+    /**
+     * プリセットを Vue ダイアログ表示用に整形する（loader 参照は scene 側に閉じる既存方針）。
+     * stat はキー単位の上書き値、skill/item はラベルで表示する。
+     */
+    private buildPresetDisplay(preset: CharacterPreset): {
+        label: string;
+        description: string;
+        statLines: { label: string; value: number }[];
+        skillLabels: string[];
+        itemLabels: string[];
+    } {
+        const statsLoader = StatsLoader.getInstance();
+        const skillsLoader = SkillsLoader.getInstance();
+        const itemsLoader = ItemsLoader.getInstance();
+        const statLines = Object.entries(preset.stats).map(([name, value]) => ({
+            label: statsLoader.getAbbreviation(name) || name,
+            value,
+        }));
+        const skillLabels = preset.skills.map(name => skillsLoader.getSkill(name)?.label ?? name);
+        const itemLabels = preset.items.map(({ name, count }) => {
+            const label = itemsLoader.getItem(name)?.label ?? name;
+            return count > 1 ? `${label} ×${count}` : label;
+        });
+        return { label: preset.label, description: preset.description, statLines, skillLabels, itemLabels };
+    }
+
     private getOpenDoors(): Set<string> {
         const open = new Set<string>();
         const pos = this.dungeon.getPlayerPos();
@@ -166,7 +235,21 @@ export class Game extends Scene {
             return;
         }
 
-        this.player = new Player();
+        // 新規ゲーム（ロードでない）かつキャラメイク定義があればプリセット選択を挟む。
+        // ロード時は deserialize が全上書きするためスキップ（後方互換）。
+        let creationChoices: PlayerCreationChoices | undefined;
+        const base = BaseLoader.getInstance();
+        if (!this.pendingSaveData && base.hasCharacterCreation()) {
+            const choice = await this.runCharacterCreation();
+            if (choice === null) {
+                // キャンセル: ゲーム開始を中止してタイトルへ戻る
+                this.scene.start('MainMenu');
+                return;
+            }
+            creationChoices = choice;
+        }
+
+        this.player = new Player(creationChoices);
         this.params = buildDisplayParams(this.player);
 
         this.mainView = new MainView(this.add, 10, 10, 760, 520);

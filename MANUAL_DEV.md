@@ -289,6 +289,42 @@ playerInitialStats:
 ```
 
 > 初期アイテムはインベントリに追加されるだけで自動装備はされません。セーブデータからのロード時はセーブ内容が優先され、初期所持品は付与されません。
+
+**キャラクターメイク（`characterCreation`・任意）**: `characterCreation.presets` を 1 件以上定義すると、**新規ゲーム開始時**にプリセット（職業）選択ダイアログが表示されます。選んだプリセットは上記 `playerInitialStats` を土台に「ベース＋上書き」で合成されます。ロード時・未定義時はダイアログは出ず、従来どおり `playerInitialStats` 固定でスタートします。
+
+| キー | 型 | 説明 |
+| --- | --- | --- |
+| `prompt` | string | ダイアログ見出し（任意）。未指定なら既定文言 |
+| `presets` | array | プリセット定義の配列。1 件以上で機能有効。各要素は下表 |
+
+プリセット 1 件のキー：
+
+| キー | 型 | 説明 |
+| --- | --- | --- |
+| `label` | string | プリセット名（必須。UI 表示・空なら無視） |
+| `description` | string | 説明文（任意。複数行はブロックスカラー `\|` 可） |
+| `stats` | map | `playerInitialStats` を**キー単位で上書き**（記載キーのみ変更／現在値・最大値の両方に反映）。キーは `stats.yml` に存在必須 |
+| `skills` | string[] | `playerInitialStats.skills` に**追加**（union・重複除外）。`skills.yml` に存在必須 |
+| `items` | array | `playerInitialStats.items` に**追記**。文字列（個数 1）または `{ name, count }`。`items.yml` に存在必須 |
+
+合成後アイテム合計数（`playerInitialStats.items` ＋プリセット `items`）がインベントリ上限（20）を超えると起動時にバリデーションエラーになります。
+
+```yaml
+characterCreation:
+  prompt: 冒険者の生き方を選びなさい。
+  presets:
+    - label: 戦士
+      description: 攻撃と防御に優れた近接型。
+      stats: { power: 16, defense: 9 }   # life/magic/karma は playerInitialStats から継承
+      skills: [double_attack]
+      items:
+        - { name: iron sword, count: 1 }
+        - { name: potion, count: 2 }
+    - label: 冒険者                        # stats 省略＝playerInitialStats そのまま
+      skills: [self_heal]
+      items: [potion]
+```
+
 | `defaultDamageStat` | string | ✅ | プレイヤーの死亡判定・トラップダメージ等の既定対象ステータス（通常 `life`） |
 | `defaultEnemyDamageStat` | string | 任意 | 敵側のダメージ対象。既定は `defaultDamageStat` |
 | `longStayFactor` | number | 任意 | フロア長居警告の規定ターン算出倍率。既定 `4`。詳細は data.md |
@@ -1045,6 +1081,7 @@ floors:
 - `events.yml` の action 内参照（`give_item`/`consume_item`→items、`spawn_enemy`→enemies、`learn_skill`/`execute_skill`→skills、`add_modifier`→item_modifiers、`apply_effect`→effects、`mod_stat.stat`→stats 等）
 - `base.yml` の `scheduledEvents[].event` と `effects.yml` の `onExpire` が `events.yml` に存在し、かつ `action` / `random_outcome` 形式（`choices` 不可）か
 - `base.yml` の `playerInitialStats.skills` が `skills.yml`、`playerInitialStats.items` が `items.yml` に存在し、初期アイテム合計数がインベントリ上限（20）以下か
+- `base.yml` の `characterCreation.presets[]` の `stats` キーが `stats.yml`、`skills` が `skills.yml`、`items` が `items.yml` に存在し、合成後アイテム合計数（`playerInitialStats.items` ＋プリセット）が上限（20）以下か
 - `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` が `effects.yml` に存在するか
 
 > ステータス名は `stats.yml` を基準に検査されます。`base.yml` の `throwRange` のような stats.yml 非登録の派生キーは、検査対象から除外されています（装備の `throwRange` 等）。

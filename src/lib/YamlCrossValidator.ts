@@ -91,6 +91,41 @@ export class YamlCrossValidator {
             errors.push(`base.yml playerInitialStats.items: 初期アイテム合計数 ${initialItemTotal} がインベントリ上限 ${DEFAULT_INVENTORY_CAPACITY} を超えています`);
         }
 
+        // base.yml characterCreation.presets → stats.yml / skills.yml / items.yml
+        // プリセットの stats 上書きキー・追加スキル・追加アイテムの存在チェックと、
+        // 合成後（playerInitialStats.items ＋ preset.items）のインベントリ上限チェック。
+        const presets = base.getCharacterPresets();
+        for (let i = 0; i < presets.length; i++) {
+            const preset = presets[i];
+            const ctx = `base.yml characterCreation.presets[${i}]`;
+            for (const statName of Object.keys(preset.stats)) {
+                if (!stats.getStat(statName)) {
+                    errors.push(`${ctx} ("${preset.label}"): stats のキー "${statName}" が stats.yml に存在しません`);
+                }
+            }
+            for (let j = 0; j < preset.skills.length; j++) {
+                if (!skills.hasSkill(preset.skills[j])) {
+                    errors.push(`${ctx} ("${preset.label}"): skills[${j}] "${preset.skills[j]}" が skills.yml に存在しません`);
+                }
+            }
+            let presetItemTotal = 0;
+            for (let j = 0; j < preset.items.length; j++) {
+                const it = preset.items[j];
+                if (!items.getItem(it.name)) {
+                    errors.push(`${ctx} ("${preset.label}"): items[${j}] "${it.name}" が items.yml に存在しません`);
+                }
+                if (typeof it.count !== 'number' || it.count <= 0) {
+                    errors.push(`${ctx} ("${preset.label}"): items[${j}].count は正の数値である必要があります`);
+                } else {
+                    presetItemTotal += it.count;
+                }
+            }
+            // 合成後の所持数（土台 playerInitialStats.items ＋ preset.items）が上限を超えないか
+            if (initialItemTotal + presetItemTotal > DEFAULT_INVENTORY_CAPACITY) {
+                errors.push(`${ctx} ("${preset.label}"): 合成後の初期アイテム合計数 ${initialItemTotal + presetItemTotal} がインベントリ上限 ${DEFAULT_INVENTORY_CAPACITY} を超えています`);
+            }
+        }
+
         // base.yml floors → enemies.yml / traps.yml / item_modifiers.yml
         for (const [floorKey, rawConfig] of base.getRawFloorConfigs()) {
             for (const entry of rawConfig.enemies ?? []) {

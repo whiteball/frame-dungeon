@@ -93,6 +93,7 @@ src/components/dialogs/
   SaveDialog.vue         セーブスロット選択・メモ入力
   LoadDialog.vue         ロードスロット選択・ダイジェスト確認
   YamlErrorDialog.vue    YAMLバリデーションエラー一覧
+  CharacterCreationDialog.vue  キャラメイク（プリセット選択。新規ゲーム開始時）
 ```
 
 **`ModalOverlay.vue`** は `v-show` によるオーバーレイ背景とダイアログ枠を提供し、`slot` で内部コンテンツを受け取ります。`variant="error"` を指定すると背景・枠線をエラー配色（`#1a0a0a` / `#f55`）に切り替えます。
@@ -107,6 +108,7 @@ src/components/dialogs/
 | `SaveDialog` | `selectedSlot`, `memo`（`visible` watch でリセット） | `saveDialogVisible`, `saveSlotMetas` |
 | `LoadDialog` | `digestMismatchVisible`, `digestMismatchSaveData`, `importPendingData`, `importErrorMessage`, `isDragOver` | `loadDialogVisible`, `loadSlotMetas` |
 | `YamlErrorDialog` | なし | `yamlErrorVisible`, `yamlValidationErrors` |
+| `CharacterCreationDialog` | `selectedIndex`（`visible` watch で 0 リセット。Escape=cancel / Enter=confirm の window keydown） | `characterCreationVisible`, `characterCreationPrompt`, `characterCreationPresets` |
 
 **`LoadDialog` のダイジェスト確認フロー：** コンポーネント内で `SaveManager.loadFromSlot()` と `calculateDigest()` を実行し、バージョン不一致時は内部パネルを表示します。ロード確定時のみ `loadConfirmed` emit が発火し、`PhaserGame.vue` が `EventBus.emit('load-game', saveData)` を呼びます。
 
@@ -131,6 +133,9 @@ src/components/dialogs/
 | `close-load-dialog` | Phaser→Vue | なし | ロードダイアログを閉じる |
 | `load-game` | Vue→Phaser | `SaveData` | ロード実行 |
 | `yaml-cross-validation-errors` | Phaser→Vue | `string[]` | YAMLエラーモーダルを開く |
+| `open-character-creation` | Phaser→Vue | `{ prompt: string, presets: PresetDisplay[] }` | キャラメイク（プリセット選択）ダイアログを開く。`Game.runCharacterCreation()` が新規ゲーム開始時（`base.yml` の `characterCreation` 定義時）に発行。`presets` の各要素は `{ label, description, statLines, skillLabels, itemLabels }`（loader 解決済み表示用） |
+| `character-creation-confirmed` | Vue→Phaser | `index: number` | 選択プリセットの確定。`Game` 側が選択プリセットを `PlayerCreationChoices` に変換し `new Player(...)` で合成 |
+| `character-creation-cancelled` | Vue→Phaser | なし | キャラメイク中止。`Game` は `MainMenu` シーンへ戻る |
 | `set-mode-label` | Phaser→Vue | `string` | MainView 上のモードラベルを設定・クリア（空文字でクリア）。攻撃/調査の方向選択モード入退時に `Game.ts` が発行 |
 
 ## マップ系モジュール構成

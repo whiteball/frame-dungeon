@@ -13,6 +13,15 @@ import StoryDialog from '../components/dialogs/StoryDialog.vue';
 import SaveDialog from '../components/dialogs/SaveDialog.vue';
 import LoadDialog from '../components/dialogs/LoadDialog.vue';
 import YamlErrorDialog from '../components/dialogs/YamlErrorDialog.vue';
+import CharacterCreationDialog from '../components/dialogs/CharacterCreationDialog.vue';
+
+type PresetDisplay = {
+    label: string;
+    description: string;
+    statLines: { label: string; value: number }[];
+    skillLabels: string[];
+    itemLabels: string[];
+};
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw' | 'inventory';
@@ -127,6 +136,11 @@ const zipLoading = ref(false);
 // YamlCrossValidatorエラー表示
 const yamlValidationErrors = ref<string[]>([]);
 const yamlErrorVisible = ref(false);
+
+// キャラメイク（プリセット選択）
+const characterCreationVisible = ref(false);
+const characterCreationPrompt = ref('');
+const characterCreationPresets = ref<PresetDisplay[]>([]);
 
 const emit = defineEmits(['current-active-scene']);
 
@@ -448,6 +462,12 @@ onMounted(() => {
         yamlErrorVisible.value = true;
     });
 
+    EventBus.on('open-character-creation', (data: { prompt: string; presets: PresetDisplay[] }) => {
+        characterCreationPrompt.value = data.prompt;
+        characterCreationPresets.value = data.presets;
+        characterCreationVisible.value = true;
+    });
+
 });
 
 onUnmounted(() => {
@@ -470,6 +490,7 @@ onUnmounted(() => {
     EventBus.removeListener('open-load-dialog');
     EventBus.removeListener('close-load-dialog');
     EventBus.removeListener('yaml-cross-validation-errors');
+    EventBus.removeListener('open-character-creation');
 
     if (game.value)
     {
@@ -715,6 +736,13 @@ defineExpose({ scene, game });
             :visible="yamlErrorVisible"
             :errors="yamlValidationErrors"
             @close="yamlErrorVisible = false"
+        />
+        <CharacterCreationDialog
+            :visible="characterCreationVisible"
+            :prompt="characterCreationPrompt"
+            :presets="characterCreationPresets"
+            @confirm="(i: number) => { EventBus.emit('character-creation-confirmed', i); characterCreationVisible = false; }"
+            @cancel="() => { EventBus.emit('character-creation-cancelled'); characterCreationVisible = false; }"
         />
     </div>
 </template>

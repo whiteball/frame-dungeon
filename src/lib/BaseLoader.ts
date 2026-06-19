@@ -128,6 +128,23 @@ export interface ResolvedTreasureConfig {
     items: ResolvedTreasureItemEntry[];
 }
 
+/**
+ * キャラクターメイクのプリセット（職業）1 件。
+ * 選択時、`playerInitialStats` を土台に stats はキー単位で上書き、skills/items は追加合成される。
+ */
+export interface CharacterPreset {
+    /** プリセット名（UI 表示用） */
+    label: string;
+    /** プリセットの説明文（UI 表示用） */
+    description: string;
+    /** playerInitialStats をキー単位で上書きするステータス（stat 名 → 値） */
+    stats: Record<string, number>;
+    /** playerInitialStats.skills に追加する習得スキル名（重複は合成側で除外） */
+    skills: string[];
+    /** playerInitialStats.items に追記する初期所持アイテム（name → count） */
+    items: { name: string; count: number }[];
+}
+
 export interface ResolvedFloorConfig {
     width: number;
     height: number;
@@ -209,6 +226,10 @@ export class BaseLoader {
     private playerInitialSkills: string[] = [];
     /** プレイヤーが最初から所持しているアイテム（`items.yml` の name → 個数）。string 指定は count 1 に正規化 */
     private playerInitialItems: { name: string; count: number }[] = [];
+    /** キャラメイクのダイアログ見出し。null/空ならフォールバック文言を使用 */
+    private characterCreationPrompt: string | null = null;
+    /** キャラメイクのプリセット一覧。空ならキャラメイク無効（従来どおり固定スタート） */
+    private characterPresets: CharacterPreset[] = [];
     private _longStayMessages: string[] | null = null;
     private _longStayFactor: number = 4;
     /** アイテム投擲の射程（セル数）。0 以下なら無制限。装備/パッシブで延長される基準値 */
@@ -428,6 +449,53 @@ export class BaseLoader {
                 }
             }
 
+            if (parsed.characterCreation && typeof parsed.characterCreation === 'object' && !Array.isArray(parsed.characterCreation)) {
+                const cc = parsed.characterCreation as { prompt?: unknown; presets?: unknown };
+                if (typeof cc.prompt === 'string' && cc.prompt.trim()) {
+                    this.characterCreationPrompt = cc.prompt;
+                }
+                if (Array.isArray(cc.presets)) {
+                    for (const entry of cc.presets) {
+                        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+                        const e = entry as { label?: unknown; description?: unknown; stats?: unknown; skills?: unknown; items?: unknown };
+                        const label = typeof e.label === 'string' && e.label.trim() ? e.label : '';
+                        if (!label) continue; // label 必須（無ければプリセットとして無意味）
+                        const description = typeof e.description === 'string' ? e.description : '';
+                        const stats: Record<string, number> = {};
+                        if (e.stats && typeof e.stats === 'object' && !Array.isArray(e.stats)) {
+                            for (const [k, v] of Object.entries(e.stats)) {
+                                if (typeof v === 'number' && isFinite(v)) stats[k] = v;
+                            }
+                        }
+                        const skills: string[] = [];
+                        if (Array.isArray(e.skills)) {
+                            for (const s of e.skills) {
+                                if (typeof s === 'string' && s && !skills.includes(s)) skills.push(s);
+                            }
+                        }
+                        // 初期所持アイテムと同じ string/{name,count} 正規化ロジック
+                        const items: { name: string; count: number }[] = [];
+                        if (Array.isArray(e.items)) {
+                            for (const item of e.items) {
+                                if (typeof item === 'string' && item) {
+                                    items.push({ name: item, count: 1 });
+                                } else if (item && typeof item === 'object' && !Array.isArray(item)) {
+                                    const name = (item as { name?: unknown }).name;
+                                    const rawCount = (item as { count?: unknown }).count;
+                                    if (typeof name === 'string' && name) {
+                                        const count = typeof rawCount === 'number' && isFinite(rawCount) && rawCount > 0
+                                            ? Math.floor(rawCount)
+                                            : 1;
+                                        items.push({ name, count });
+                                    }
+                                }
+                            }
+                        }
+                        this.characterPresets.push({ label, description, stats, skills, items });
+                    }
+                }
+            }
+
             if (Array.isArray(parsed.regenerate)) {
                 for (const entry of parsed.regenerate as RawRegenerateSpec[]) {
                     if (!entry || typeof entry.target !== 'string') continue;
@@ -609,6 +677,27 @@ export class BaseLoader {
     /** 初期所持アイテムの合計個数（インベントリ上限検証用） */
     getPlayerInitialItemTotalCount(): number {
         return this.playerInitialItems.reduce((sum, e) => sum + e.count, 0);
+    }
+
+    /** キャラメイク（プリセット選択）が有効か（プリセットが 1 件以上定義されているか） */
+    hasCharacterCreation(): boolean {
+        return this.characterPresets.length > 0;
+    }
+
+    /** キャラメイクダイアログの見出し。未指定なら null（呼び出し側でフォールバック文言を使う） */
+    getCharacterCreationPrompt(): string | null {
+        return this.characterCreationPrompt;
+    }
+
+    /** キャラメイクのプリセット一覧。コピー（stats/skills/items も複製）を返す */
+    getCharacterPresets(): CharacterPreset[] {
+        return this.characterPresets.map(p => ({
+            label: p.label,
+            description: p.description,
+            stats: { ...p.stats },
+            skills: [...p.skills],
+            items: p.items.map(i => ({ ...i })),
+        }));
     }
 
     getName(): string {

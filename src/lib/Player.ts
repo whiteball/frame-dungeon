@@ -27,6 +27,19 @@ export interface ActiveStatusEffect {
 
 export type ApplyStatusEffectResult = 'applied' | 'resisted' | 'unknown';
 
+/**
+ * キャラメイクで選択したプリセットを Player 構築時に注入するための選択結果。
+ * `base.yml` の `playerInitialStats` を土台に「ベース＋上書き」で合成される。
+ * - statOverrides: 初期ステータスをキー単位で上書き（現在値・最大値の両方へ反映）
+ * - addSkills: 初期習得スキルに追加（learnSkill は重複を自動で無視）
+ * - addItems: 初期所持アイテムに追記
+ */
+export interface PlayerCreationChoices {
+    statOverrides?: Record<string, number>;
+    addSkills?: string[];
+    addItems?: { name: string; count: number }[];
+}
+
 export interface StatusEffectTickResult {
     applied: Array<{ label: string; statName: string; delta: number }>;
     /** 解除されたエントリ。`expireEvent` は満了発火する events.yml イベント名（onExpire 設定時のみ） */
@@ -64,22 +77,27 @@ export class Player {
     private enemiesDefeated: number = 0;
     private itemsUsed: number = 0;
 
-    constructor() {
+    constructor(creationChoices?: PlayerCreationChoices) {
         this.stats = new Map();
         this.maxStats = new Map();
         this.inventory = new Inventory(DEFAULT_INVENTORY_CAPACITY);
-        this.initializeStats();
-        this.initializeLoadout();
+        this.initializeStats(creationChoices);
+        this.initializeLoadout(creationChoices);
     }
 
-    private initializeStats(): void {
+    private initializeStats(creationChoices?: PlayerCreationChoices): void {
         // stats.yml が GameDataLoader.loadAll() で読み込まれている前提
         const statNames = StatsLoader.getInstance().getStatNames();
         if (statNames.length === 0) {
             throw new Error('StatsLoader not loaded. Game cannot start without stats configuration.');
         }
+        const overrides = creationChoices?.statOverrides;
         for (const statName of statNames) {
-            const initialValue = this.getInitialValue(statName);
+            // base.yml playerInitialStats を土台に、キャラメイクの statOverrides があればキー単位で上書き。
+            // override 値は現在値・最大値の両方に設定する（既存の fluctuation 初期化仕様どおり）。
+            const initialValue = overrides && statName in overrides
+                ? overrides[statName]
+                : this.getInitialValue(statName);
             this.stats.set(statName, initialValue);
             this.maxStats.set(statName, initialValue);
         }
@@ -91,12 +109,15 @@ export class Player {
      * ここでは存在しない定義や満杯による失敗は黙って無視する（防御的フォールバック）。
      * セーブデータからのロード時は本処理後に `deserialize` がインベントリ/習得スキルを上書きする。
      */
-    private initializeLoadout(): void {
+    private initializeLoadout(creationChoices?: PlayerCreationChoices): void {
         const base = BaseLoader.getInstance();
-        for (const name of base.getPlayerInitialSkills()) {
-            this.learnSkill(name);
+        // base.yml の初期スキル/アイテム（土台）を先に付与し、その上にキャラメイクの追加分を合成する。
+        const skills = [...base.getPlayerInitialSkills(), ...(creationChoices?.addSkills ?? [])];
+        for (const name of skills) {
+            this.learnSkill(name); // 重複は learnSkill 内で自動的に無視される
         }
-        for (const { name, count } of base.getPlayerInitialItems()) {
+        const items = [...base.getPlayerInitialItems(), ...(creationChoices?.addItems ?? [])];
+        for (const { name, count } of items) {
             for (let i = 0; i < count; i++) {
                 const item = ItemFactory.createItem(name);
                 if (item) this.inventory.addItem(item);

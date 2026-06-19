@@ -50,6 +50,52 @@ playerInitialStats:
   defense: 5
   karma: 50
 
+# ゲーム開始時のキャラクターメイク（任意）。
+# characterCreation.presets を 1 件以上定義すると、新規ゲーム開始時に
+# プリセット（職業）選択ダイアログが表示される（ロード時・未定義時は表示されず従来どおり固定スタート）。
+# 各プリセットは上の playerInitialStats を土台に「ベース＋上書き」で合成される：
+#   - stats:  playerInitialStats をキー単位で上書き（記載キーのみ変更／現在値・最大値の両方に反映）
+#   - skills: playerInitialStats.skills に追加（重複除外）
+#   - items:  playerInitialStats.items に追記（文字列で個数 1、`{ name, count }` で個数指定）
+# stats のキー名 / skills 名 / items 名、および合成後アイテム合計数（上限 20）は
+# 起動時クロスバリデーションで検証される。このブロックを消すと固定スタートに戻る。
+# prompt はダイアログ見出し（任意。未指定なら既定文言）。
+characterCreation:
+  prompt: 冒険者の生き方を選びなさい。
+  presets:
+    - label: 戦士
+      description: |
+        攻撃力と防御力に優れた近接型。
+        鉄の剣と回復薬を携えて始まる。
+      stats:
+        power: 16
+        defense: 9
+      skills:
+        - double_attack
+      items:
+        - { name: iron sword, count: 1 }
+        - { name: potion, count: 2 }
+    - label: 魔術師
+      description: |
+        魔力に長けるが打たれ弱い。
+        魔法の矢を操り、マナ回復薬を持つ。
+      stats:
+        magic: 90
+        life: 70
+        power: 6
+      skills:
+        - magic_arrow
+      items:
+        - { name: mana potion, count: 2 }
+    - label: 冒険者
+      description: |
+        平均的な能力のバランス型。
+        自己回復スキルと回復薬を持つ。
+      skills:
+        - self_heal
+      items:
+        - { name: potion, count: 1 }
+
 defaultDamageStat: life
 
 dead:
