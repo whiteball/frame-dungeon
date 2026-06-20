@@ -126,6 +126,22 @@ export class YamlCrossValidator {
             }
         }
 
+        // base.yml characterCreation.skillGroups → skills.yml
+        // 各グループの選択肢スキルの存在チェックと、pick が選択肢数を超えていないかの検証。
+        const skillGroups = base.getSkillGroups();
+        for (let i = 0; i < skillGroups.length; i++) {
+            const group = skillGroups[i];
+            const ctx = `base.yml characterCreation.skillGroups[${i}]`;
+            for (let j = 0; j < group.options.length; j++) {
+                if (!skills.hasSkill(group.options[j])) {
+                    errors.push(`${ctx} ("${group.label}"): options[${j}] "${group.options[j]}" が skills.yml に存在しません`);
+                }
+            }
+            if (group.pick > group.options.length) {
+                errors.push(`${ctx} ("${group.label}"): pick ${group.pick} が選択肢数 ${group.options.length} を超えています`);
+            }
+        }
+
         // base.yml floors → enemies.yml / traps.yml / item_modifiers.yml
         for (const [floorKey, rawConfig] of base.getRawFloorConfigs()) {
             for (const entry of rawConfig.enemies ?? []) {

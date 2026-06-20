@@ -80,7 +80,7 @@ BaseLoader ───────── 独自実装（fetch / parse / formula �
 | `floorDisplayFormula` | 任意 | `null`（=内部フロア値そのまま） | 表示用フロア数値を求める数式。利用可能変数 `currentFloor` / `goalFloor` / `maxFloor`（`maxFloor` は `goalFloor` の別名）。例 `'goalFloor - currentFloor + 1'`（脱出テーマで 10F→1F の降順表示）。結果は `Math.floor` で整数化のみ（下限クランプなし＝負値はそのまま表示）。**表示専用でゲームロジックには一切影響しない**（フロア構成参照・クリア判定・セーブ復元は内部フロア値を使用）。パース失敗時は warn して恒等にフォールバック |
 | `clearMessage` | 任意 | `'{floor}の階段を登り切った！クリア！'` | ゴール到達メッセージのテンプレート。`{floor}` は整形済みフロアラベルで置換。脱出/降下テーマで「登り切った」が不適切なとき差し替える。`BaseLoader.getClearMessage()` |
 | `playerInitialStats` | 任意 | 全ステータス `0` | `stats.yml` で定義した各ステータスの開始値（例: `life: 100`）。未記載ステータスは `0`。加えて `skills`（初期習得スキル名の配列）/ `items`（初期所持アイテム。文字列または `{ name, count }`）を指定可。`Player` のコンストラクタが `initializeLoadout()` で `BaseLoader.getPlayerInitialSkills()` / `getPlayerInitialItems()` を読み付与する。存在しないスキル/アイテム名・合計個数がインベントリ上限（`DEFAULT_INVENTORY_CAPACITY=20`）超過は `YamlCrossValidator` がエラー化。`BaseLoader.getPlayerInitialStat()` |
-| `characterCreation` | 任意 | `null`（無効＝固定スタート） | ゲーム開始時のキャラクターメイク（プリセット選択）。`{ prompt?, presets: [...] }`。`presets` が 1 件以上あると新規ゲーム開始時に `CharacterCreationDialog` を表示し、選んだプリセットを `playerInitialStats` に「ベース＋上書き」で合成（`stats` はキー単位上書き／`skills` は union／`items` は追記）。各プリセットは `{ label, description?, stats?, skills?, items? }`。ロード時・未定義時は非表示。stats キー・skill/item 名・合成後アイテム合計数（上限 20）は `YamlCrossValidator` が検証。`BaseLoader.hasCharacterCreation()` / `getCharacterPresets()` / `getCharacterCreationPrompt()`。フロー制御は `Game.runCharacterCreation()`、合成は `new Player(creationChoices)` |
+| `characterCreation` | 任意 | `null`（無効＝固定スタート） | ゲーム開始時のキャラクターメイク。`{ prompt?, presets?, skillGroups? }`。`presets` または `skillGroups` が 1 件以上あると新規ゲーム開始時に `CharacterCreationDialog`（ウィザード）を表示する。**presets**: 選んだプリセットを `playerInitialStats` に「ベース＋上書き」で合成（`stats` はキー単位上書き／`skills` は union／`items` は追記）。各プリセットは `{ label, description?, stats?, skills?, items? }`。**skillGroups**: 各グループ `{ label, description?, pick, options }` から `pick` 個ちょうどを選んで習得（選んだスキルはプリセット/初期スキルに union）。`description` 未設定なら選択画面で説明文を省略。ロード時・未定義時は非表示。stats キー・skill/item 名・合成後アイテム合計数（上限 20）・`pick ≤ options 数` は `YamlCrossValidator` が検証。`BaseLoader.hasCharacterCreation()` / `getCharacterPresets()` / `getSkillGroups()` / `getCharacterCreationPrompt()`。フロー制御は `Game.runCharacterCreation()`、合成は `new Player(creationChoices)` |
 | `defaultDamageStat` | **必須** | — | プレイヤー死亡判定・トラップダメージ等のデフォルト対象ステータス名（通常 `life`） |
 | `defaultEnemyDamageStat` | 任意 | `defaultDamageStat` | 敵側のダメージ対象 |
 | `regenerate` | 任意 | `[]`（自動回復なし） | 一定ターンごとの自動回復ルール配列。各要素 `{ target, turn, formula }`。後述「自動回復 (`regenerate`)」参照 |
@@ -366,6 +366,7 @@ autoSpawner:
 - `base.yml` の `scheduledEvents[].event` と `effects.yml` の `onExpire` が `events.yml` に存在し、かつ `action` / `random_outcome` 形式（`choices` 不可）であるか
 - `base.yml` の `playerInitialStats.skills[]` が `skills.yml` に、`playerInitialStats.items[]` が `items.yml` に存在し、初期アイテム合計数が `DEFAULT_INVENTORY_CAPACITY`（20）以下であるか
 - `base.yml` の `characterCreation.presets[]` の各 `stats` キーが `stats.yml`、`skills[]` が `skills.yml`、`items[]` が `items.yml` に存在し、合成後アイテム合計数（`playerInitialStats.items` ＋プリセット）が `DEFAULT_INVENTORY_CAPACITY`（20）以下であるか
+- `base.yml` の `characterCreation.skillGroups[]` の各 `options[]` が `skills.yml` に存在し、`pick` が選択肢数以下であるか
 - `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` 要素が `effects.yml` に存在するか
 - `base.yml` のオプションフィールド欠落（フォールバック適用のお知らせ）
 

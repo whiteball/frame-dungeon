@@ -295,7 +295,10 @@ playerInitialStats:
 | キー | 型 | 説明 |
 | --- | --- | --- |
 | `prompt` | string | ダイアログ見出し（任意）。未指定なら既定文言 |
-| `presets` | array | プリセット定義の配列。1 件以上で機能有効。各要素は下表 |
+| `presets` | array | プリセット定義の配列。各要素は下表 |
+| `skillGroups` | array | スキルグループ定義の配列。各要素は後述「スキルグループ」表 |
+
+`presets` / `skillGroups` のいずれかが 1 件以上あればキャラメイクが有効になります。
 
 プリセット 1 件のキー：
 
@@ -323,6 +326,32 @@ characterCreation:
     - label: 冒険者                        # stats 省略＝playerInitialStats そのまま
       skills: [self_heal]
       items: [potion]
+```
+
+**スキルグループ（`skillGroups`）**: プリセット選択の後に、グループごとの選択ステップがウィザードで順に表示されます。各グループの選択肢から `pick` 個ちょうどを選んで習得し、選んだスキルはプリセット/`playerInitialStats` のスキルに union（重複除外）で追加されます。
+
+スキルグループ 1 件のキー：
+
+| キー | 型 | 説明 |
+| --- | --- | --- |
+| `label` | string | グループ名（必須。空なら無視） |
+| `description` | string | 選択時に表示する説明文（任意。複数行はブロックスカラー `\|` 可）。**未設定なら選択画面で説明文を省略** |
+| `pick` | number | 選択個数（1 以上・`options` 数以下。未指定は 1）。`options` 数を超えると起動時にバリデーションエラー |
+| `options` | string[] | 選択肢スキル名（`skills.yml` の `name`）。重複は除外。存在しない名前は起動時にバリデーションエラー |
+
+選択肢には各スキルの `label` と `description`（`skills.yml`）が表示されます。
+
+```yaml
+characterCreation:
+  # presets: [...]   # 省略可（skillGroups だけでも有効）
+  skillGroups:
+    - label: 得意武芸
+      description: 最も得意とする戦技を 1 つ選びなさい。
+      pick: 1
+      options: [double_attack, magic_arrow, critical_strike]
+    - label: 心得          # description 省略 → 説明文は表示されない
+      pick: 2
+      options: [self_heal, meditate, scan_room, toxic_dart]
 ```
 
 | `defaultDamageStat` | string | ✅ | プレイヤーの死亡判定・トラップダメージ等の既定対象ステータス（通常 `life`） |
@@ -1082,6 +1111,7 @@ floors:
 - `base.yml` の `scheduledEvents[].event` と `effects.yml` の `onExpire` が `events.yml` に存在し、かつ `action` / `random_outcome` 形式（`choices` 不可）か
 - `base.yml` の `playerInitialStats.skills` が `skills.yml`、`playerInitialStats.items` が `items.yml` に存在し、初期アイテム合計数がインベントリ上限（20）以下か
 - `base.yml` の `characterCreation.presets[]` の `stats` キーが `stats.yml`、`skills` が `skills.yml`、`items` が `items.yml` に存在し、合成後アイテム合計数（`playerInitialStats.items` ＋プリセット）が上限（20）以下か
+- `base.yml` の `characterCreation.skillGroups[]` の `options` が `skills.yml` に存在し、`pick` が選択肢数以下か
 - `enemies.yml` / `effects.yml` / `items.yml` の各 `resist[]` が `effects.yml` に存在するか
 
 > ステータス名は `stats.yml` を基準に検査されます。`base.yml` の `throwRange` のような stats.yml 非登録の派生キーは、検査対象から除外されています（装備の `throwRange` 等）。

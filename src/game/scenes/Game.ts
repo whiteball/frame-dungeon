@@ -11,7 +11,7 @@ import { GameDataLoader } from '../../lib/GameDataLoader';
 import { StatsLoader } from '../../lib/StatsLoader';
 import { SkillsLoader } from '../../lib/SkillsLoader';
 import { ItemsLoader } from '../../lib/ItemsLoader';
-import type { CharacterPreset } from '../../lib/BaseLoader';
+import type { CharacterPreset, SkillGroup } from '../../lib/BaseLoader';
 import type { TrapDefinition } from '../../lib/TrapsLoader';
 import { getFrontCandidates } from '../../lib/skills/TargetResolver';
 import { MapDirection, getDirectionOffset, rotateDirection } from '../../lib/map/MapDirection';
@@ -105,6 +105,7 @@ export class Game extends Scene {
     private runCharacterCreation(): Promise<PlayerCreationChoices | null> {
         const base = BaseLoader.getInstance();
         const presets = base.getCharacterPresets();
+        const skillGroups = base.getSkillGroups();
         const prompt = base.getCharacterCreationPrompt() ?? 'キャラクターを選択してください';
 
         return new Promise((resolve) => {
@@ -112,14 +113,18 @@ export class Game extends Scene {
                 EventBus.removeListener('character-creation-confirmed', onConfirm);
                 EventBus.removeListener('character-creation-cancelled', onCancel);
             };
-            const onConfirm = (index: number) => {
+            // payload: プリセット index（プリセット無しのデータでは null）と、
+            // 全スキルグループで選んだスキル名（フラット化済み）。
+            const onConfirm = (payload: { presetIndex: number | null; skills: string[] }) => {
                 cleanup();
-                const preset = presets[index];
-                if (!preset) { resolve(null); return; }
+                const preset = payload.presetIndex !== null ? presets[payload.presetIndex] : undefined;
+                // プリセットが定義されているのに不正 index が来たら中止扱い
+                if (presets.length > 0 && !preset) { resolve(null); return; }
+                const addSkills = [...(preset?.skills ?? []), ...payload.skills];
                 resolve({
-                    statOverrides: { ...preset.stats },
-                    addSkills: [...preset.skills],
-                    addItems: preset.items.map(i => ({ ...i })),
+                    statOverrides: preset ? { ...preset.stats } : undefined,
+                    addSkills,
+                    addItems: preset ? preset.items.map(i => ({ ...i })) : undefined,
                 });
             };
             const onCancel = () => {
@@ -131,8 +136,31 @@ export class Game extends Scene {
             EventBus.emit('open-character-creation', {
                 prompt,
                 presets: presets.map(p => this.buildPresetDisplay(p)),
+                skillGroups: skillGroups.map(g => this.buildSkillGroupDisplay(g)),
             });
         });
+    }
+
+    /**
+     * スキルグループを Vue ダイアログ表示用に整形する（loader 参照は scene 側に閉じる）。
+     * 各選択肢はスキルの name（emit 用）・label・description（skills.yml）を保持する。
+     */
+    private buildSkillGroupDisplay(group: SkillGroup): {
+        label: string;
+        description: string;
+        pick: number;
+        options: { name: string; label: string; description: string }[];
+    } {
+        const skillsLoader = SkillsLoader.getInstance();
+        const options = group.options.map(name => {
+            const def = skillsLoader.getSkill(name);
+            return {
+                name,
+                label: def?.label ?? name,
+                description: def?.description ?? '',
+            };
+        });
+        return { label: group.label, description: group.description, pick: group.pick, options };
     }
 
     /**

@@ -95,6 +95,31 @@ characterCreation:
         - self_heal
       items:
         - { name: potion, count: 1 }
+  # スキルグループ選択（任意）。各グループから pick 個ちょうどを選んで習得する。
+  # プリセット選択の後に、グループごとの選択ステップが順に表示される。
+  # 選んだスキルはプリセット/playerInitialStats のスキルに union（重複除外）で追加される。
+  #   - label:       グループ名（必須）
+  #   - description: 選択時に表示する説明文（任意）。未設定なら表示を省略
+  #   - pick:        選択個数（1 以上・options 数以下。未指定は 1）
+  #   - options:     選択肢スキル名（skills.yml の name）。存在チェックあり
+  skillGroups:
+    - label: 得意武芸
+      description: |
+        最も得意とする戦技を 1 つ選びなさい。
+        これがあなたの戦いの軸となる。
+      pick: 1
+      options:
+        - double_attack
+        - magic_arrow
+        - critical_strike
+    - label: 心得
+      # description 未設定 → ダイアログでは説明文を表示しない
+      pick: 2
+      options:
+        - self_heal
+        - meditate
+        - scan_room
+        - toxic_dart
 
 defaultDamageStat: life
 

@@ -145,6 +145,21 @@ export interface CharacterPreset {
     items: { name: string; count: number }[];
 }
 
+/**
+ * キャラクターメイクのスキルグループ（選択肢群）1 件。
+ * `options` のスキルから `pick` 個ちょうどを選んで習得する。
+ */
+export interface SkillGroup {
+    /** グループ名（UI 表示用） */
+    label: string;
+    /** グループの説明文（UI 表示用）。空文字なら表示を省略する */
+    description: string;
+    /** このグループから選択する個数（1 以上、options 数以下） */
+    pick: number;
+    /** 選択肢となるスキル名（`skills.yml` の name）の配列 */
+    options: string[];
+}
+
 export interface ResolvedFloorConfig {
     width: number;
     height: number;
@@ -230,6 +245,8 @@ export class BaseLoader {
     private characterCreationPrompt: string | null = null;
     /** キャラメイクのプリセット一覧。空ならキャラメイク無効（従来どおり固定スタート） */
     private characterPresets: CharacterPreset[] = [];
+    /** キャラメイクのスキルグループ一覧。各グループから pick 個を選んで習得する */
+    private skillGroups: SkillGroup[] = [];
     private _longStayMessages: string[] | null = null;
     private _longStayFactor: number = 4;
     /** アイテム投擲の射程（セル数）。0 以下なら無制限。装備/パッシブで延長される基準値 */
@@ -450,7 +467,7 @@ export class BaseLoader {
             }
 
             if (parsed.characterCreation && typeof parsed.characterCreation === 'object' && !Array.isArray(parsed.characterCreation)) {
-                const cc = parsed.characterCreation as { prompt?: unknown; presets?: unknown };
+                const cc = parsed.characterCreation as { prompt?: unknown; presets?: unknown; skillGroups?: unknown };
                 if (typeof cc.prompt === 'string' && cc.prompt.trim()) {
                     this.characterCreationPrompt = cc.prompt;
                 }
@@ -492,6 +509,27 @@ export class BaseLoader {
                             }
                         }
                         this.characterPresets.push({ label, description, stats, skills, items });
+                    }
+                }
+                if (Array.isArray(cc.skillGroups)) {
+                    for (const entry of cc.skillGroups) {
+                        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+                        const g = entry as { label?: unknown; description?: unknown; pick?: unknown; options?: unknown };
+                        const label = typeof g.label === 'string' && g.label.trim() ? g.label : '';
+                        if (!label) continue; // label 必須
+                        const description = typeof g.description === 'string' ? g.description : '';
+                        // pick は 1 以上の整数。未指定/不正は 1 にフォールバック
+                        const pick = typeof g.pick === 'number' && isFinite(g.pick) && g.pick >= 1
+                            ? Math.floor(g.pick)
+                            : 1;
+                        const options: string[] = [];
+                        if (Array.isArray(g.options)) {
+                            for (const o of g.options) {
+                                if (typeof o === 'string' && o && !options.includes(o)) options.push(o);
+                            }
+                        }
+                        if (options.length === 0) continue; // 選択肢が無いグループは無視
+                        this.skillGroups.push({ label, description, pick, options });
                     }
                 }
             }
@@ -679,9 +717,9 @@ export class BaseLoader {
         return this.playerInitialItems.reduce((sum, e) => sum + e.count, 0);
     }
 
-    /** キャラメイク（プリセット選択）が有効か（プリセットが 1 件以上定義されているか） */
+    /** キャラメイクが有効か（プリセットまたはスキルグループが 1 件以上定義されているか） */
     hasCharacterCreation(): boolean {
-        return this.characterPresets.length > 0;
+        return this.characterPresets.length > 0 || this.skillGroups.length > 0;
     }
 
     /** キャラメイクダイアログの見出し。未指定なら null（呼び出し側でフォールバック文言を使う） */
@@ -697,6 +735,16 @@ export class BaseLoader {
             stats: { ...p.stats },
             skills: [...p.skills],
             items: p.items.map(i => ({ ...i })),
+        }));
+    }
+
+    /** キャラメイクのスキルグループ一覧。コピー（options も複製）を返す */
+    getSkillGroups(): SkillGroup[] {
+        return this.skillGroups.map(g => ({
+            label: g.label,
+            description: g.description,
+            pick: g.pick,
+            options: [...g.options],
         }));
     }
 

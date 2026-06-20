@@ -22,6 +22,12 @@ type PresetDisplay = {
     skillLabels: string[];
     itemLabels: string[];
 };
+type SkillGroupDisplay = {
+    label: string;
+    description: string;
+    pick: number;
+    options: { name: string; label: string; description: string }[];
+};
 
 type SceneAction = { label: string, onClick: () => void, disabled?: boolean };
 type ListMode = 'item' | 'equip' | 'drop' | 'skill' | 'throw' | 'inventory';
@@ -137,10 +143,11 @@ const zipLoading = ref(false);
 const yamlValidationErrors = ref<string[]>([]);
 const yamlErrorVisible = ref(false);
 
-// キャラメイク（プリセット選択）
+// キャラメイク（プリセット選択＋スキルグループ選択）
 const characterCreationVisible = ref(false);
 const characterCreationPrompt = ref('');
 const characterCreationPresets = ref<PresetDisplay[]>([]);
+const characterCreationSkillGroups = ref<SkillGroupDisplay[]>([]);
 
 const emit = defineEmits(['current-active-scene']);
 
@@ -462,9 +469,10 @@ onMounted(() => {
         yamlErrorVisible.value = true;
     });
 
-    EventBus.on('open-character-creation', (data: { prompt: string; presets: PresetDisplay[] }) => {
+    EventBus.on('open-character-creation', (data: { prompt: string; presets: PresetDisplay[]; skillGroups: SkillGroupDisplay[] }) => {
         characterCreationPrompt.value = data.prompt;
         characterCreationPresets.value = data.presets;
+        characterCreationSkillGroups.value = data.skillGroups ?? [];
         characterCreationVisible.value = true;
     });
 
@@ -741,7 +749,8 @@ defineExpose({ scene, game });
             :visible="characterCreationVisible"
             :prompt="characterCreationPrompt"
             :presets="characterCreationPresets"
-            @confirm="(i: number) => { EventBus.emit('character-creation-confirmed', i); characterCreationVisible = false; }"
+            :skill-groups="characterCreationSkillGroups"
+            @confirm="(payload) => { EventBus.emit('character-creation-confirmed', payload); characterCreationVisible = false; }"
             @cancel="() => { EventBus.emit('character-creation-cancelled'); characterCreationVisible = false; }"
         />
     </div>
